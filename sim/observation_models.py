@@ -20,13 +20,14 @@ class Observation:
     physiology_aux: float | None
 
 
-def observe(state: OperatorState, difficulty: float, mode: str, rng: random.Random) -> Observation:
-    behavior_load = _clip(state.load + rng.gauss(0.0, 0.05))
-    behavior_oversight = _clip(state.oversight + rng.gauss(0.0, 0.05))
-    evidence = _clip(1.0 - difficulty + rng.gauss(0.0, 0.04))
+def observe(state: OperatorState, difficulty: float, mode: str, rng: random.Random, noise_scale: float = 1.0) -> Observation:
+    """Generate synthetic observations under a configurable noise level."""
+    behavior_load = _clip(state.load + rng.gauss(0.0, 0.05 * noise_scale))
+    behavior_oversight = _clip(state.oversight + rng.gauss(0.0, 0.05 * noise_scale))
+    evidence = _clip(1.0 - difficulty + rng.gauss(0.0, 0.04 * noise_scale))
 
     physiology = None
     if mode == "behavior_plus_physio":
-        physiology = _clip(0.6 * state.load + 0.4 * (1.0 - state.oversight) + rng.gauss(0.0, 0.08))
+        physiology = _clip(0.6 * state.load + 0.4 * (1.0 - state.oversight) + rng.gauss(0.0, 0.08 * noise_scale))
 
     return Observation(behavior_load_proxy=behavior_load, behavior_oversight_proxy=behavior_oversight, task_evidence=evidence, physiology_aux=physiology)
