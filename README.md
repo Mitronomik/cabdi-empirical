@@ -15,3 +15,13 @@ It does NOT establish real-world validation.
 pip install -r requirements.txt
 pytest -q
 python experiments/run_minimal_validation.py
+```
+
+## Outputs
+
+Running minimal validation writes:
+- `artifacts/minimal_first_validation/policy_metrics.csv`
+- `artifacts/minimal_first_validation/fd_admissibility.csv`
+- `artifacts/minimal_first_validation/step_logs.csv`
+- `artifacts/minimal_first_validation/catastrophic_risk_comparison.svg`
+- `reports/minimal_first_validation.md`

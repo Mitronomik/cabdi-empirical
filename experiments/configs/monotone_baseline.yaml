@@ -1,0 +1,2 @@
+policy: monotone-help
+formula: "help = 0.20 + 0.75 * behavior_load_proxy"

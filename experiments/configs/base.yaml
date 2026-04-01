@@ -1,0 +1,6 @@
+seed: 11
+episodes: 30
+horizon: 60
+observation_modes:
+  - behavior_only
+  - behavior_plus_physio
