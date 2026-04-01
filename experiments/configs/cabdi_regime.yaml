@@ -1,0 +1,5 @@
+policy: cabdi-regime-aware
+regimes:
+  - {name: low_load, condition: "load_proxy < 0.40", help: 0.45, verification: 0.20}
+  - {name: medium_load, condition: "0.40 <= load_proxy < 0.72", help: 0.85, verification: 0.22}
+  - {name: overload, condition: "load_proxy >= 0.72", help: 0.35, verification: 0.55}

@@ -1,0 +1,3 @@
+policy: static-help
+help_level: 0.55
+verification_depth: 0.20
