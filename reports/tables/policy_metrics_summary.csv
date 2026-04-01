@@ -1,0 +1,7 @@
+policy,observation_mode,accuracy,catastrophic_risk_proxy,commission_error_proxy,recovery_lag,compute_usage
+static-help,behavior_only,0.5356,1.0300,0.4206,1.8253,1800.0
+monotone-help,behavior_only,0.5994,0.9011,0.3511,1.7373,1800.0
+cabdi-regime-aware,behavior_only,0.4756,1.1400,0.0000,2.0566,1800.0
+static-help,behavior_plus_physio,0.5278,1.0300,0.4333,1.8240,1800.0
+monotone-help,behavior_plus_physio,0.6422,0.8233,0.3200,1.6263,1800.0
+cabdi-regime-aware,behavior_plus_physio,0.4589,1.2328,0.0000,2.1790,1800.0

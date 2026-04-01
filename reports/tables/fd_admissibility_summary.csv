@@ -1,0 +1,4 @@
+fd_model,one_step_prediction_error,rollout_error,local_gain_proxy,envelope_violation_rate,out_of_support_warning_rate,admitted
+linear_arx,0.036127,0.055119,0.612773,0.000000,0.000000,True
+piecewise_affine,0.035006,0.042037,0.705424,0.000000,0.000000,True
+constrained_narx,0.037856,0.045747,0.599311,0.000000,0.000000,True
