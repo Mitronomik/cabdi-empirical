@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from models.admissibility import AdmissibilityThresholds, evaluate_admissibility
+from models.admissibility import AdmissibilityThresholds
 from models.fd_arx import LinearARXFd
 from models.fd_narx import ConstrainedNARXFd
 from models.fd_piecewise_affine import PiecewiseAffineFd
@@ -145,15 +145,19 @@ def main() -> None:
     thresholds = AdmissibilityThresholds()
     fd_rows = []
     for name, model in fd_models.items():
-        fd_rows.append({"fd_model": name, **evaluate_admissibility(model, d_train, d_eval, a_eval, e_eval, thresholds)})
+        diagnostics = model.admissibility_check(d_train, d_eval, a_eval, e_eval, thresholds)
+        fd_rows.append({"fd_model": name, **diagnostics})
+
+    theorem_facing_fd_rows = [row for row in fd_rows if row["admitted"]]
 
     _write_csv(out_dir / "policy_metrics.csv", summary_rows)
     _write_csv(out_dir / "fd_admissibility.csv", fd_rows)
+    _write_csv(out_dir / "fd_theorem_facing.csv", theorem_facing_fd_rows)
     _write_csv(out_dir / "step_logs.csv", [asdict(r) for r in all_records])
     _write_simple_svg(out_dir / "catastrophic_risk_comparison.svg", summary_rows)
     _write_report(Path("reports/minimal_first_validation.md"), summary_rows, fd_rows, strongest_behavior_policy)
 
-    admitted = [r["fd_model"] for r in fd_rows if r["admitted"]]
+    admitted = [r["fd_model"] for r in theorem_facing_fd_rows]
     print(f"Wrote artifacts to: {out_dir}")
     print(f"Strongest behavior-only baseline: {strongest_behavior_policy}")
     print(f"Admitted F_d models: {admitted}")

@@ -26,6 +26,6 @@ This report summarizes a stylized simulation only. It does not establish real-wo
 ## F_d admissibility diagnostics
 | fd_model | one_step_prediction_error | rollout_error | local_gain_proxy | envelope_violation_rate | out_of_support_warning_rate | admitted |
 |---|---|---|---|---|---|---|
-| linear_arx | 0.03612749737217484 | 0.05511925338885432 | 0.6127735978036858 | 0.0 | 0.0 | True |
-| piecewise_affine | 0.03500610296141225 | 0.042036807083977515 | 0.705423936472952 | 0.0 | 0.0 | True |
+| linear_arx | 0.03612749810438948 | 0.05511923546880733 | 0.61277334777397 | 0.0 | 0.0 | True |
+| piecewise_affine | 0.035006078282948536 | 0.04203690324469844 | 0.7054235600658659 | 0.0 | 0.0 | True |
 | constrained_narx | 0.037856362187132744 | 0.045746862641398676 | 0.5993105614503704 | 0.0 | 0.0 | True |

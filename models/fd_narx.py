@@ -11,6 +11,8 @@ def _clip(x: float, lo: float = 0.0, hi: float = 1.0) -> float:
 
 @dataclass
 class ConstrainedNARXFd:
+    """Quadratic-feature NARX surrogate with L1-constrained dynamics."""
+
     coef_: list[float] | None = None
     max_l1: float = 2.0
 
@@ -33,9 +35,9 @@ class ConstrainedNARXFd:
                 coef[i] -= lr * grad[i]
             l1 = sum(abs(v) for v in coef[1:])
             if l1 > self.max_l1:
-                s = self.max_l1 / l1
+                scale = self.max_l1 / l1
                 for i in range(1, 10):
-                    coef[i] *= s
+                    coef[i] *= scale
         self.coef_ = coef
         return self
 
@@ -46,6 +48,8 @@ class ConstrainedNARXFd:
 
     def rollout(self, d0: float, a: list[float], e: list[float]) -> list[float]:
         out = [0.0 for _ in a]
+        if not out:
+            return out
         out[0] = d0
         for t in range(1, len(a)):
             out[t] = self.predict_one_step(out[t - 1], a[t - 1], e[t - 1])
@@ -54,3 +58,8 @@ class ConstrainedNARXFd:
     def local_gain_proxy(self) -> float:
         c = self.coef_ or [0.0] * 10
         return min(sum(abs(v) for v in c[1:4]) + 0.5 * sum(abs(v) for v in c[4:]), self.max_l1)
+
+    def admissibility_check(self, d_train: list[float], d_eval: list[float], a_eval: list[float], e_eval: list[float], thresholds):
+        from models.admissibility import evaluate_admissibility
+
+        return evaluate_admissibility(self, d_train, d_eval, a_eval, e_eval, thresholds)
