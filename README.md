@@ -22,6 +22,7 @@ python experiments/run_minimal_validation.py
 Running minimal validation writes:
 - `artifacts/minimal_first_validation/policy_metrics.csv`
 - `artifacts/minimal_first_validation/fd_admissibility.csv`
+- `artifacts/minimal_first_validation/fd_theorem_facing.csv` (admitted F_d only)
 - `artifacts/minimal_first_validation/step_logs.csv`
 - `artifacts/minimal_first_validation/catastrophic_risk_comparison.svg`
 - `reports/minimal_first_validation.md`

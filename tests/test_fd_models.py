@@ -1,5 +1,6 @@
 import random
 
+from models.admissibility import AdmissibilityThresholds
 from models.fd_arx import LinearARXFd
 from models.fd_narx import ConstrainedNARXFd
 from models.fd_piecewise_affine import PiecewiseAffineFd
@@ -26,3 +27,36 @@ def test_fd_models_fit_predict_rollout():
         assert 0.0 <= p <= 1.2
         assert len(r) == len(d)
         assert g >= 0.0
+
+
+def test_fd_models_emit_required_admissibility_diagnostics():
+    d, a, e = _data(n=120)
+    split = 80
+    d_train, a_train, e_train = d[:split], a[:split], e[:split]
+    d_eval, a_eval, e_eval = d[split:], a[split:], e[split:]
+
+    thresholds = AdmissibilityThresholds()
+    required = {
+        "one_step_prediction_error",
+        "rollout_error",
+        "local_gain_proxy",
+        "envelope_violation_rate",
+        "out_of_support_warning_rate",
+        "admitted",
+    }
+
+    for model in [LinearARXFd(), PiecewiseAffineFd(), ConstrainedNARXFd()]:
+        model.fit(d_train, a_train, e_train)
+        diagnostics = model.admissibility_check(d_train, d_eval, a_eval, e_eval, thresholds)
+        assert required.issubset(diagnostics.keys())
+        assert isinstance(diagnostics["admitted"], bool)
+
+
+def test_piecewise_affine_handles_single_regime_safely():
+    d = [0.5 for _ in range(20)]
+    a = [0.3 for _ in range(20)]
+    e = [0.2 for _ in range(20)]
+
+    model = PiecewiseAffineFd().fit(d, a, e)
+    pred = model.predict_one_step(0.5, 0.3, 0.2)
+    assert pred == pred  # not nan
