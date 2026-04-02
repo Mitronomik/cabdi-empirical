@@ -1,0 +1,15 @@
+{
+  "run_name": "toy_pilot_dry_run_v1",
+  "experiment_id": "toy_v1",
+  "task_family": "scam_not_scam",
+  "stimulus_path": "pilot/stimuli/scam_not_scam_demo.jsonl",
+  "seed": 20260402,
+  "n_sessions": 5,
+  "profile_mix": {
+    "mostly_compliant": 1,
+    "fast_noisy": 1,
+    "cautious_verifier": 1,
+    "advice_follower": 1,
+    "low_conf_override": 1
+  }
+}
