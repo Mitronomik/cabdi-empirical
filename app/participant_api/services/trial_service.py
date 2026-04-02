@@ -182,22 +182,32 @@ class TrialService:
 
     def _questionnaire_block_gate(self, session_id: str) -> str | None:
         rows = self.store.fetchall(
-            "SELECT block_id, COUNT(*) AS n_trials, SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) AS n_done FROM session_trials WHERE session_id = ? AND block_id != 'practice' GROUP BY block_id ORDER BY block_id",
+            """
+            SELECT
+                block_id,
+                COUNT(*) AS n_trials,
+                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS n_done
+            FROM session_trials
+            WHERE session_id = ? AND block_id != 'practice'
+            GROUP BY block_id
+            ORDER BY block_id
+            """,
             (session_id,),
         )
+
         for row in rows:
             if row["n_trials"] == row["n_done"]:
                 q = self.store.fetchone(
-                    "SELECT questionnaire_id FROM block_questionnaires WHERE session_id = ? AND block_id = ?",
+                    """
+                    SELECT questionnaire_id
+                    FROM block_questionnaires
+                    WHERE session_id = ? AND block_id = ?
+                    """,
                     (session_id, row["block_id"]),
                 )
                 if q is None:
-                    remaining = self.store.fetchone(
-                        "SELECT trial_id FROM session_trials WHERE session_id = ? AND block_id > ? AND status='pending' LIMIT 1",
-                        (session_id, row["block_id"]),
-                    )
-                    if remaining is not None:
-                        return str(row["block_id"])
+                    return str(row["block_id"])
+
         return None
 
     def _log_event(self, session_id: str, block_id: str, trial_id: str, event_type: str, payload: dict[str, Any]) -> None:
