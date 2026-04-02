@@ -65,7 +65,7 @@ def test_session_flow_happy_path_with_exports(tmp_path):
         assert submit_res.status_code == 200
         submitted += 1
 
-    assert submitted == 14
+    assert submitted == 54
     assert questionnaire_submitted == {"block_1", "block_2", "block_3"}
 
     export_res = client.get(f"/api/v1/exports/sessions/{session_id}")
@@ -73,4 +73,4 @@ def test_session_flow_happy_path_with_exports(tmp_path):
     export_data = export_res.json()
     assert "raw_event_log_jsonl" in export_data
     assert "trial_summary_csv" in export_data
-    assert export_data["participant_session_summary"]["n_trial_summaries"] == 14
+    assert export_data["participant_session_summary"]["n_trial_summaries"] == 54
