@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import { useLocale } from '../i18n/useLocale';
 import type { PolicyDecision, StimulusItem } from '../lib/types';
 
 interface Props {
@@ -25,29 +26,30 @@ export function AssistancePanel({
   verificationChecked,
   setVerificationChecked,
 }: Props) {
+  const { t } = useLocale();
   const [rationaleRevealed, setRationaleRevealed] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
 
-  const rationaleText = String(stimulus.payload.rationale ?? 'Model reasoning summary unavailable.');
-  const evidenceText = String(stimulus.payload.evidence ?? 'Evidence snippets are not available for this item.');
+  const rationaleText = String(stimulus.payload.rationale ?? t('assistance.defaultRationale'));
+  const evidenceText = String(stimulus.payload.evidence ?? t('assistance.defaultEvidence'));
 
   return (
     <aside className={densityClass(policyDecision.compression_mode)} aria-label="AI assistance panel">
-      <h3>AI Assistance</h3>
+      <h3>{t('assistance.title')}</h3>
       {policyDecision.show_prediction && (
         <p>
-          <strong>Prediction:</strong> {stimulus.model_prediction}
+          <strong>{t('assistance.prediction')}:</strong> {stimulus.model_prediction}
         </p>
       )}
       {policyDecision.show_confidence && (
         <p>
-          <strong>Model confidence:</strong> {stimulus.model_confidence}
+          <strong>{t('assistance.modelConfidence')}:</strong> {stimulus.model_confidence}
         </p>
       )}
 
       {policyDecision.show_rationale === 'inline' && (
         <p data-testid="rationale-inline">
-          <strong>Rationale:</strong> {rationaleText}
+          <strong>{t('assistance.rationale')}:</strong> {rationaleText}
         </p>
       )}
 
@@ -60,11 +62,11 @@ export function AssistancePanel({
               onReasonClick();
             }}
           >
-            Show rationale
+            {t('assistance.showRationale')}
           </button>
           {rationaleRevealed && (
             <p data-testid="rationale-on-click">
-              <strong>Rationale:</strong> {rationaleText}
+              <strong>{t('assistance.rationale')}:</strong> {rationaleText}
             </p>
           )}
         </div>
@@ -82,14 +84,14 @@ export function AssistancePanel({
               }
             }}
           >
-            {evidenceOpen ? 'Hide evidence' : 'Show evidence'}
+            {evidenceOpen ? t('assistance.hideEvidence') : t('assistance.showEvidence')}
           </button>
           {evidenceOpen && <p data-testid="evidence-content">{evidenceText}</p>}
         </div>
       )}
 
       {policyDecision.verification_mode === 'soft_prompt' && (
-        <p className="verify-hint">Reminder: the AI can be wrong. Verify before submitting.</p>
+        <p className="verify-hint">{t('assistance.verifyHint')}</p>
       )}
 
       {policyDecision.verification_mode === 'forced_checkbox' && (
@@ -99,13 +101,13 @@ export function AssistancePanel({
             checked={verificationChecked}
             onChange={(e) => setVerificationChecked(e.target.checked)}
           />
-          I reviewed the AI output and made an independent judgment.
+          {t('assistance.forcedCheckbox')}
         </label>
       )}
 
       {policyDecision.verification_mode === 'forced_second_look' && (
         <button type="button" onClick={() => setVerificationChecked(true)}>
-          Mark second look complete
+          {t('assistance.secondLook')}
         </button>
       )}
     </aside>

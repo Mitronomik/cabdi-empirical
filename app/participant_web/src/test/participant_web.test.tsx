@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { vi } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 
 import App from '../App';
 
@@ -61,13 +61,67 @@ function mockFetchSequence(sequence: Array<{ status: number; body: unknown }>) {
   return fetchMock;
 }
 
+afterEach(() => {
+  cleanup();
+  window.localStorage.clear();
+  vi.unstubAllGlobals();
+  Object.defineProperty(window.navigator, 'language', {
+    configurable: true,
+    value: 'en-US',
+  });
+});
+
 test('instructions screen renders', async () => {
   render(<App />);
   const user = userEvent.setup();
-  await user.click(screen.getByLabelText(/i consent/i));
+  await user.click(screen.getByLabelText(/i consent to participate/i));
   await user.click(screen.getByRole('button', { name: /continue/i }));
   expect(screen.getByRole('heading', { name: /instructions/i })).toBeInTheDocument();
   expect(screen.getByText(/ai can be wrong/i)).toBeInTheDocument();
+});
+
+test('language selector renders and switches onboarding copy', async () => {
+  render(<App />);
+  const user = userEvent.setup();
+
+  expect(screen.getByLabelText(/language switcher/i)).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: /consent/i })).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'RU' }));
+  expect(screen.getByRole('heading', { name: /согласие/i })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /продолжить/i })).toBeInTheDocument();
+});
+
+test('default language follows browser locale on first load', () => {
+  Object.defineProperty(window.navigator, 'language', {
+    configurable: true,
+    value: 'ru-RU',
+  });
+
+  render(<App />);
+  expect(screen.getByRole('heading', { name: /согласие/i })).toBeInTheDocument();
+});
+
+test('saved language in localStorage overrides browser locale', () => {
+  window.localStorage.setItem('participant_web.locale', 'en');
+  Object.defineProperty(window.navigator, 'language', {
+    configurable: true,
+    value: 'ru-RU',
+  });
+
+  render(<App />);
+  expect(screen.getByRole('heading', { name: /consent/i })).toBeInTheDocument();
+});
+
+test('selected language persists across remount', async () => {
+  const user = userEvent.setup();
+  const { unmount } = render(<App />);
+
+  await user.click(screen.getByRole('button', { name: 'RU' }));
+  expect(screen.getByRole('heading', { name: /согласие/i })).toBeInTheDocument();
+
+  unmount();
+  render(<App />);
+  expect(screen.getByRole('heading', { name: /согласие/i })).toBeInTheDocument();
 });
 
 test('trial screen renders consistent layout and assistance panel', async () => {
@@ -79,7 +133,7 @@ test('trial screen renders consistent layout and assistance panel', async () => 
 
   render(<App />);
   const user = userEvent.setup();
-  await user.click(screen.getByLabelText(/i consent/i));
+  await user.click(screen.getByLabelText(/i consent to participate/i));
   await user.click(screen.getByRole('button', { name: /continue/i }));
   await user.click(screen.getByRole('button', { name: /start practice/i }));
 
@@ -100,7 +154,7 @@ test('forced verification blocks submission until completed', async () => {
 
   render(<App />);
   const user = userEvent.setup();
-  await user.click(screen.getByLabelText(/i consent/i));
+  await user.click(screen.getByLabelText(/i consent to participate/i));
   await user.click(screen.getByRole('button', { name: /continue/i }));
   await user.click(screen.getByRole('button', { name: /start practice/i }));
 
@@ -129,7 +183,7 @@ test('rationale on-click mode works and evidence toggle works', async () => {
 
   render(<App />);
   const user = userEvent.setup();
-  await user.click(screen.getByLabelText(/i consent/i));
+  await user.click(screen.getByLabelText(/i consent to participate/i));
   await user.click(screen.getByRole('button', { name: /continue/i }));
   await user.click(screen.getByRole('button', { name: /start practice/i }));
 
@@ -154,7 +208,7 @@ test('block-end questionnaire submits and completion flow appears', async () => 
 
   render(<App />);
   const user = userEvent.setup();
-  await user.click(screen.getByLabelText(/i consent/i));
+  await user.click(screen.getByLabelText(/i consent to participate/i));
   await user.click(screen.getByRole('button', { name: /continue/i }));
   await user.click(screen.getByRole('button', { name: /start practice/i }));
 

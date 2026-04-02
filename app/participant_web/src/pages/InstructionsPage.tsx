@@ -1,3 +1,5 @@
+import { useLocale } from '../i18n/useLocale';
+
 interface Props {
   participantId: string;
   setParticipantId: (value: string) => void;
@@ -6,25 +8,27 @@ interface Props {
 }
 
 export function InstructionsPage({ participantId, setParticipantId, onStart, loading }: Props) {
+  const { t } = useLocale();
+
   return (
     <section className="card">
-      <h1>Instructions</h1>
+      <h1>{t('instructions.title')}</h1>
       <ul>
-        <li>You will classify cases as part of a research task.</li>
-        <li>AI assistance may be shown during some trials.</li>
-        <li>The AI can be wrong.</li>
-        <li>Do not blindly follow the AI recommendation.</li>
-        <li>You will complete practice trials before the main blocks.</li>
+        <li>{t('instructions.item.classify')}</li>
+        <li>{t('instructions.item.assistance')}</li>
+        <li>{t('instructions.item.aiWrong')}</li>
+        <li>{t('instructions.item.noBlindFollow')}</li>
+        <li>{t('instructions.item.practice')}</li>
       </ul>
-      <label htmlFor="participant-id">Participant ID</label>
+      <label htmlFor="participant-id">{t('instructions.participantIdLabel')}</label>
       <input
         id="participant-id"
         value={participantId}
         onChange={(e) => setParticipantId(e.target.value)}
-        placeholder="e.g., p_001"
+        placeholder={t('instructions.participantIdPlaceholder')}
       />
       <button type="button" disabled={!participantId || loading} onClick={onStart}>
-        Start practice
+        {t('instructions.startPractice')}
       </button>
     </section>
   );
