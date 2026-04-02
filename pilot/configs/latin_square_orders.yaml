@@ -1,0 +1,5 @@
+{
+  "order_1": ["static_help", "monotone_help", "cabdi_lite"],
+  "order_2": ["monotone_help", "cabdi_lite", "static_help"],
+  "order_3": ["cabdi_lite", "static_help", "monotone_help"]
+}
