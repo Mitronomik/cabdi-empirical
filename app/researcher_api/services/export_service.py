@@ -25,6 +25,7 @@ class AdminExportService:
                 "run_id": run_id,
                 "raw_event_log_jsonl": "",
                 "trial_summary_csv": "",
+                "block_questionnaire_csv": "",
                 "session_summary_csv": "",
                 "session_summary_json": [],
             }
@@ -41,6 +42,11 @@ class AdminExportService:
         )
         summary_rows = self.store.fetchall(
             f"SELECT summary_json FROM trial_summary_logs WHERE session_id IN ({placeholders}) ORDER BY session_id, trial_id",
+            tuple(session_ids),
+        )
+
+        questionnaire_rows = self.store.fetchall(
+            f"SELECT session_id, block_id, burden, trust, usefulness, submitted_at FROM block_questionnaires WHERE session_id IN ({placeholders}) ORDER BY session_id, block_id",
             tuple(session_ids),
         )
 
@@ -73,6 +79,7 @@ class AdminExportService:
             "run_id": run_id,
             "raw_event_log_jsonl": raw_event_log_jsonl,
             "trial_summary_csv": trial_summary_csv,
+            "block_questionnaire_csv": _to_csv(questionnaire_rows),
             "session_summary_csv": _to_csv(session_summary_rows),
             "session_summary_json": session_summary_rows,
         }

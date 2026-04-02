@@ -48,6 +48,17 @@ class ExportService:
             writer.writeheader()
             writer.writerows(csv_rows)
 
+        questionnaires = self.store.fetchall(
+            "SELECT session_id, block_id, burden, trust, usefulness, submitted_at FROM block_questionnaires WHERE session_id = ? ORDER BY block_id",
+            (session_id,),
+        )
+
+        q_buffer = io.StringIO()
+        if questionnaires:
+            q_writer = csv.DictWriter(q_buffer, fieldnames=list(questionnaires[0].keys()))
+            q_writer.writeheader()
+            q_writer.writerows(questionnaires)
+
         summary_json = {
             "session_id": session["session_id"],
             "participant_id": session["participant_id"],
@@ -61,4 +72,5 @@ class ExportService:
             "raw_event_log_jsonl": "\n".join(event_lines),
             "trial_summary_csv": csv_buffer.getvalue(),
             "participant_session_summary": summary_json,
+            "block_questionnaire_csv": q_buffer.getvalue(),
         }

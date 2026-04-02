@@ -73,4 +73,5 @@ def test_session_flow_happy_path_with_exports(tmp_path):
     export_data = export_res.json()
     assert "raw_event_log_jsonl" in export_data
     assert "trial_summary_csv" in export_data
+    assert "block_questionnaire_csv" in export_data
     assert export_data["participant_session_summary"]["n_trial_summaries"] == 54
