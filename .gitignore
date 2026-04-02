@@ -1,0 +1,27 @@
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Node
+node_modules/
+package-lock.json
+
+# Local DB / sessions
+pilot/sessions/
+*.sqlite3
+*.db
+
+# Local artifacts and generated reports
+artifacts/pilot_dry_run/
+artifacts/pilot_analysis_manual/
+
+# OS / editor junk
+.DS_Store
+.vscode/
+.idea/
+
+# Local scratch files
+smoke_session_flow.py
