@@ -26,3 +26,24 @@ Running minimal validation writes:
 - `artifacts/minimal_first_validation/step_logs.csv`
 - `artifacts/minimal_first_validation/catastrophic_risk_comparison.svg`
 - `reports/minimal_first_validation.md`
+
+## Local development
+
+For macOS local setup and launch workflows (synthetic + human-pilot services), use:
+
+- `docs/pilot/local_setup_mac.md`
+- `docs/pilot/runbook.md`
+- `docs/pilot/service_matrix.md`
+
+You can also use the root `Makefile` shortcuts:
+
+```bash
+make setup
+make test
+make validate
+make run-participant-api
+make run-researcher-api
+make run-participant-web
+make run-researcher-web
+make dry-run
+```
