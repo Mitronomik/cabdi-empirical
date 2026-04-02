@@ -18,6 +18,18 @@ or
 4. fail to support
 specific CABDI claims.
 
+## Dual-mode repository rule
+
+This repository must remain dual-mode:
+
+1. synthetic scaffold mode,
+2. human-pilot mode.
+
+Human-pilot mode must be added without breaking or replacing the synthetic scaffold.
+
+Both modes should reuse the same CABDI policy family logic where practical.
+Do not fork policy semantics into unrelated synthetic and UI-specific versions.
+
 ## Scientific stance
 
 Treat all simulations as synthetic falsification scaffolds, not real-world validation.
