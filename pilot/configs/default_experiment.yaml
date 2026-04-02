@@ -1,0 +1,13 @@
+{
+  "experiment_id": "pilot_scam_not_scam_v1",
+  "task_family": "scam_not_scam",
+  "n_blocks": 3,
+  "trials_per_block": 4,
+  "practice_trials": 2,
+  "conditions": ["static_help", "monotone_help", "cabdi_lite"],
+  "block_order_strategy": "latin_square",
+  "budget_matching_mode": "matched_extra_steps",
+  "risk_proxy_mode": "pre_render_risk_bucket",
+  "self_confidence_scale": "0_100_integer",
+  "block_questionnaires": ["nasa_tlx_short", "trust_short"]
+}

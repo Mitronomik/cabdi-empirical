@@ -1,0 +1,14 @@
+{
+  "static_help": {
+    "ui_help_level": "fixed",
+    "ui_verification_level": "fixed"
+  },
+  "monotone_help": {
+    "ui_help_level": "escalating",
+    "ui_verification_level": "escalating"
+  },
+  "cabdi_lite": {
+    "ui_help_level": "regime_aware_non_monotone",
+    "ui_verification_level": "targeted_extreme"
+  }
+}
