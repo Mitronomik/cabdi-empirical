@@ -75,6 +75,32 @@ Use or extend these directories:
 
 Do not place substantial new experimental code in docs/ or legacy_seed/.
 
+## Codex standing instructions for human-pilot mode
+
+For work related to the real-task toy pilot / human-pilot mode, also follow:
+
+- `docs/pilot/codex_master_prompt.md`
+
+That document defines the detailed implementation program for:
+- dual-mode architecture,
+- preserving the synthetic scaffold,
+- one shared policy engine,
+- human-pilot mode restricted to adjudicable observable targets,
+- implementation order:
+  1. schemas
+  2. policy runtime
+  3. API
+  4. participant UI
+  5. researcher/admin UI
+  6. analysis
+  7. dry-run QA
+
+Unless explicitly instructed otherwise:
+- do not build a separate standalone repo,
+- do not move policy logic into the frontend,
+- do not broaden human-pilot mode into physiology validation,
+- do not present pilot outputs as whole-framework validation.
+
 ## Reduced slow routing model F_d
 
 A central goal of this repository is to operationalize the reduced slow routing model family F_d.
