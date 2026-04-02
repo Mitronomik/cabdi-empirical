@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { AssistancePanel } from '../components/AssistancePanel';
+import { useLocale } from '../i18n/useLocale';
 import type { TrialPayload } from '../lib/types';
 
 interface Props {
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export function TrialPage({ trial, completedTrials, totalTrials, loading, onSubmit }: Props) {
+  const { t } = useLocale();
   const [selectedResponse, setSelectedResponse] = useState<string>('');
   const [selfConfidence, setSelfConfidence] = useState<number>(50);
   const [reasonClicked, setReasonClicked] = useState(false);
@@ -40,7 +42,7 @@ export function TrialPage({ trial, completedTrials, totalTrials, loading, onSubm
     <section className="trial-shell" data-testid="trial-layout">
       <header>
         <p>
-          Trial {Math.min(completedTrials + 1, totalTrials)} / {totalTrials}
+          {t('trial.progressLabel')} {Math.min(completedTrials + 1, totalTrials)} / {totalTrials}
         </p>
         <div className="progress-track" aria-label="progress">
           <div className="progress-fill" style={{ width: `${progressPct}%` }} />
@@ -49,9 +51,11 @@ export function TrialPage({ trial, completedTrials, totalTrials, loading, onSubm
 
       <div className="trial-grid">
         <article className="card stimulus-card">
-          <h2>Case</h2>
-          <p>{String(trial.stimulus.payload.prompt ?? 'No prompt provided.')}</p>
-          <small>Block: {trial.block_id}</small>
+          <h2>{t('trial.caseTitle')}</h2>
+          <p>{String(trial.stimulus.payload.prompt ?? t('trial.noPrompt'))}</p>
+          <small>
+            {t('trial.blockLabel')}: {trial.block_id}
+          </small>
         </article>
 
         <AssistancePanel
@@ -65,7 +69,7 @@ export function TrialPage({ trial, completedTrials, totalTrials, loading, onSubm
       </div>
 
       <section className="card">
-        <h3>Your decision</h3>
+        <h3>{t('trial.decisionTitle')}</h3>
         <div className="button-row">
           {responseOptions.map((option) => (
             <button
@@ -81,7 +85,9 @@ export function TrialPage({ trial, completedTrials, totalTrials, loading, onSubm
 
         {selectedResponse && (
           <>
-            <label htmlFor="confidence">Self-confidence ({selfConfidence})</label>
+            <label htmlFor="confidence">
+              {t('trial.selfConfidence')} ({selfConfidence})
+            </label>
             <input
               id="confidence"
               type="range"
@@ -107,7 +113,7 @@ export function TrialPage({ trial, completedTrials, totalTrials, loading, onSubm
             })
           }
         >
-          Submit trial
+          {t('trial.submit')}
         </button>
       </section>
     </section>

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 
+import { LanguageSwitcher } from './components/LanguageSwitcher';
 import { useParticipantFlow } from './hooks/useParticipantFlow';
+import { LocaleProvider, useLocale } from './i18n/useLocale';
 import { BlockQuestionnairePage } from './pages/BlockQuestionnairePage';
 import { CompletionPage } from './pages/CompletionPage';
 import { ConsentPage } from './pages/ConsentPage';
@@ -9,9 +11,10 @@ import { TrialPage } from './pages/TrialPage';
 
 import './styles.css';
 
-export default function App() {
+function AppBody() {
   const [consentChecked, setConsentChecked] = useState(false);
   const [participantId, setParticipantId] = useState('p_001');
+  const { t } = useLocale();
 
   const {
     stage,
@@ -30,11 +33,12 @@ export default function App() {
 
   return (
     <main className="app-shell">
+      <LanguageSwitcher />
       {error && (
         <section className="card error">
           <p>{error}</p>
           <button type="button" onClick={retryCurrent}>
-            Retry
+            {t('error.retry')}
           </button>
         </section>
       )}
@@ -76,5 +80,13 @@ export default function App() {
 
       {stage === 'completion' && <CompletionPage completionCode={completionCode} />}
     </main>
+  );
+}
+
+export default function App() {
+  return (
+    <LocaleProvider>
+      <AppBody />
+    </LocaleProvider>
   );
 }

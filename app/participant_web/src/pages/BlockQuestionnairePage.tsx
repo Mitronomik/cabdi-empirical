@@ -1,5 +1,7 @@
 import { useState } from 'react';
 
+import { useLocale } from '../i18n/useLocale';
+
 interface Props {
   blockId: string;
   onSubmit: (payload: { burden: number; trust: number; usefulness: number }) => void;
@@ -7,6 +9,7 @@ interface Props {
 }
 
 export function BlockQuestionnairePage({ blockId, onSubmit, loading }: Props) {
+  const { t } = useLocale();
   const [mentalDemand, setMentalDemand] = useState(50);
   const [effort, setEffort] = useState(50);
   const [frustration, setFrustration] = useState(50);
@@ -15,22 +18,34 @@ export function BlockQuestionnairePage({ blockId, onSubmit, loading }: Props) {
 
   return (
     <section className="card">
-      <h2>Block questionnaire ({blockId})</h2>
-      <p>Rate each item from 0 to 100.</p>
+      <h2>
+        {t('questionnaire.title')} ({blockId})
+      </h2>
+      <p>{t('questionnaire.rateItems')}</p>
 
-      <label>Burden: mental demand ({mentalDemand})</label>
+      <label>
+        {t('questionnaire.burdenMental')} ({mentalDemand})
+      </label>
       <input type="range" min={0} max={100} value={mentalDemand} onChange={(e) => setMentalDemand(Number(e.target.value))} />
 
-      <label>Burden: effort ({effort})</label>
+      <label>
+        {t('questionnaire.burdenEffort')} ({effort})
+      </label>
       <input type="range" min={0} max={100} value={effort} onChange={(e) => setEffort(Number(e.target.value))} />
 
-      <label>Burden: frustration ({frustration})</label>
+      <label>
+        {t('questionnaire.burdenFrustration')} ({frustration})
+      </label>
       <input type="range" min={0} max={100} value={frustration} onChange={(e) => setFrustration(Number(e.target.value))} />
 
-      <label>Trust / reliance ({trust})</label>
+      <label>
+        {t('questionnaire.trust')} ({trust})
+      </label>
       <input type="range" min={0} max={100} value={trust} onChange={(e) => setTrust(Number(e.target.value))} />
 
-      <label>Usefulness ({usefulness})</label>
+      <label>
+        {t('questionnaire.usefulness')} ({usefulness})
+      </label>
       <input type="range" min={0} max={100} value={usefulness} onChange={(e) => setUsefulness(Number(e.target.value))} />
 
       <button
@@ -44,7 +59,7 @@ export function BlockQuestionnairePage({ blockId, onSubmit, loading }: Props) {
           })
         }
       >
-        Submit questionnaire
+        {t('questionnaire.submit')}
       </button>
     </section>
   );

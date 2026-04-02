@@ -7,12 +7,32 @@ import {
   submitBlockQuestionnaire,
   submitTrial,
 } from '../lib/api';
+import { detectLocale } from '../i18n/locale';
+import { messages, type Locale } from '../i18n/messages';
 import type { QuestionnairePayload, TrialPayload } from '../lib/types';
 
 type Stage = 'consent' | 'instructions' | 'trial' | 'questionnaire' | 'completion';
 
 const DEFAULT_EXPERIMENT_ID = 'pilot_scam_not_scam_v1';
 const TOTAL_TRIALS = 54;
+
+function getCurrentLocale(): Locale {
+  return detectLocale();
+}
+
+function localizedError(
+  key:
+    | 'error.loadNextTrial'
+    | 'error.startSession'
+    | 'error.missingSessionState'
+    | 'error.submitTrial'
+    | 'error.missingQuestionnaireState'
+    | 'error.submitQuestionnaire'
+    | 'error.missingSessionStateShort',
+) {
+  const locale = getCurrentLocale();
+  return messages[locale][key];
+}
 
 export function useParticipantFlow() {
   const [stage, setStage] = useState<Stage>('consent');
@@ -53,7 +73,7 @@ export function useParticipantFlow() {
         setStage('questionnaire');
         setCurrentTrial(null);
       } else {
-        setError('Could not load the next trial. Please retry.');
+        setError(localizedError('error.loadNextTrial'));
       }
     } finally {
       setLoading(false);
@@ -69,7 +89,7 @@ export function useParticipantFlow() {
       await startSession(created.session_id);
       await loadNextTrial(created.session_id);
     } catch {
-      setError('Unable to start session. Please retry.');
+      setError(localizedError('error.startSession'));
       setLoading(false);
     }
   }
@@ -82,7 +102,7 @@ export function useParticipantFlow() {
     verificationCompleted: boolean;
   }) {
     if (!sessionId || !currentTrial) {
-      setError('Missing session state. Please restart this participant run.');
+      setError(localizedError('error.missingSessionState'));
       return;
     }
 
@@ -101,14 +121,14 @@ export function useParticipantFlow() {
       setCompletedTrials((count) => count + 1);
       await loadNextTrial(sessionId);
     } catch {
-      setError('Could not submit trial. Please retry submit.');
+      setError(localizedError('error.submitTrial'));
       setLoading(false);
     }
   }
 
   async function submitQuestionnaire(payload: QuestionnairePayload) {
     if (!sessionId || !questionnaireBlockId) {
-      setError('Missing session state for questionnaire. Please restart this participant run.');
+      setError(localizedError('error.missingQuestionnaireState'));
       return;
     }
 
@@ -119,7 +139,7 @@ export function useParticipantFlow() {
       setQuestionnaireBlockId(null);
       await loadNextTrial(sessionId);
     } catch {
-      setError('Could not submit questionnaire. Please retry.');
+      setError(localizedError('error.submitQuestionnaire'));
       setLoading(false);
     }
   }
@@ -136,6 +156,7 @@ export function useParticipantFlow() {
     beginSession,
     submitCurrentTrial,
     submitQuestionnaire,
-    retryCurrent: () => (sessionId ? loadNextTrial(sessionId) : setError('Missing session state.')),
+    retryCurrent: () =>
+      sessionId ? loadNextTrial(sessionId) : setError(localizedError('error.missingSessionStateShort')),
   };
 }

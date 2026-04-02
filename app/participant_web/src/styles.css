@@ -13,6 +13,28 @@ body {
   max-width: 960px;
   margin: 0 auto;
   padding: 24px;
+  position: relative;
+}
+
+.language-switcher {
+  position: absolute;
+  top: 8px;
+  right: 24px;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.language-switcher button {
+  border: none;
+  padding: 2px 4px;
+  font-size: 0.85rem;
+}
+
+.language-switcher button.active {
+  font-weight: 700;
+  text-decoration: underline;
 }
 
 .card,
