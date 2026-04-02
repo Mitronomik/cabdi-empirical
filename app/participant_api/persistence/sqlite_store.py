@@ -34,6 +34,7 @@ class SQLiteStore:
                     session_id TEXT PRIMARY KEY,
                     participant_id TEXT NOT NULL,
                     experiment_id TEXT NOT NULL,
+                    run_id TEXT,
                     assigned_order TEXT NOT NULL,
                     stimulus_set_map TEXT NOT NULL,
                     current_block_index INTEGER NOT NULL,
@@ -89,8 +90,35 @@ class SQLiteStore:
                     submitted_at TEXT NOT NULL,
                     UNIQUE(session_id, block_id)
                 );
+
+                CREATE TABLE IF NOT EXISTS researcher_stimulus_sets (
+                    stimulus_set_id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    task_family TEXT NOT NULL,
+                    source_format TEXT NOT NULL,
+                    n_items INTEGER NOT NULL,
+                    created_at TEXT NOT NULL,
+                    items_json TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS researcher_runs (
+                    run_id TEXT PRIMARY KEY,
+                    run_name TEXT NOT NULL,
+                    experiment_id TEXT NOT NULL,
+                    task_family TEXT NOT NULL,
+                    config_json TEXT NOT NULL,
+                    stimulus_set_ids_json TEXT NOT NULL,
+                    notes TEXT,
+                    created_at TEXT NOT NULL
+                );
                 """
             )
+            self._ensure_column(conn, "participant_sessions", "run_id", "TEXT")
+
+    def _ensure_column(self, conn: sqlite3.Connection, table_name: str, column_name: str, column_type: str) -> None:
+        columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()}
+        if column_name not in columns:
+            conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
 
     def fetchone(self, query: str, params: tuple[Any, ...]) -> dict[str, Any] | None:
         with self.connect() as conn:
