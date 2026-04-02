@@ -48,4 +48,5 @@ def test_run_exports_include_expected_sections(tmp_path):
     body = exports_res.json()
     assert "raw_event_log_jsonl" in body
     assert "trial_summary_csv" in body
+    assert "block_questionnaire_csv" in body
     assert "session_summary_json" in body
