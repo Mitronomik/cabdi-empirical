@@ -20,10 +20,10 @@ export interface NextTrialResponseCompleted {
   status: 'completed';
 }
 
-export async function createSession(experimentId: string, participantId: string): Promise<{ session_id: string }> {
+export async function createSession(experimentId: string, participantId: string, language: "en" | "ru"): Promise<{ session_id: string }> {
   return request('/api/v1/sessions', {
     method: 'POST',
-    body: JSON.stringify({ experiment_id: experimentId, participant_id: participantId }),
+    body: JSON.stringify({ experiment_id: experimentId, participant_id: participantId, language }),
   });
 }
 

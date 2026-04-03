@@ -24,7 +24,19 @@ class SessionService:
     def __init__(self, store: SQLiteStore) -> None:
         self.store = store
 
-    def create_session(self, experiment_id: str, participant_id: str, run_id: str | None = None) -> dict[str, Any]:
+    @staticmethod
+    def _normalize_language(language: str | None) -> str:
+        if language in {"en", "ru"}:
+            return language
+        return "en"
+
+    def create_session(
+        self,
+        experiment_id: str,
+        participant_id: str,
+        run_id: str | None = None,
+        language: str | None = None,
+    ) -> dict[str, Any]:
         experiment = load_experiment_config(DEFAULT_EXPERIMENT_PATH)
         if experiment_id != "toy_v1" and experiment_id != experiment.experiment_id:
             raise ValueError(f"Unsupported experiment_id: {experiment_id}")
@@ -38,6 +50,8 @@ class SessionService:
         stimuli = load_stimulus_bank(DEFAULT_STIMULI_PATH)
         order_id, assigned_order = assign_order_id(participant_id, experiment.experiment_id)
         session_id = f"sess_{uuid4().hex[:12]}"
+        normalized_language = self._normalize_language(language)
+
         session = ParticipantSession(
             session_id=session_id,
             participant_id=participant_id,
@@ -50,14 +64,15 @@ class SessionService:
             started_at=_now_iso(),
             completed_at=None,
             device_info={},
+            language=normalized_language,
         )
 
         self.store.execute(
             """
             INSERT INTO participant_sessions(
                 session_id, participant_id, experiment_id, run_id, assigned_order, stimulus_set_map,
-                current_block_index, current_trial_index, status, started_at, completed_at, device_info
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                current_block_index, current_trial_index, status, started_at, completed_at, device_info, language
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 session.session_id,
@@ -72,6 +87,7 @@ class SessionService:
                 session.started_at,
                 session.completed_at,
                 dumps(session.device_info),
+                session.language,
             ),
         )
 
@@ -107,7 +123,7 @@ class SessionService:
             trial_rows,
         )
 
-        return {"session_id": session_id, "status": "created", "assigned_order": order_id, "run_id": run_id}
+        return {"session_id": session_id, "status": "created", "assigned_order": order_id, "run_id": run_id, "language": session.language}
 
     def start_session(self, session_id: str) -> dict[str, Any]:
         session = self.get_session(session_id)
@@ -125,6 +141,7 @@ class SessionService:
             raise KeyError("session not found")
         row["stimulus_set_map"] = loads(row["stimulus_set_map"])
         row["device_info"] = loads(row["device_info"])
+        row["language"] = row.get("language") or "en"
         return row
 
     def update_progress(self, session_id: str) -> None:

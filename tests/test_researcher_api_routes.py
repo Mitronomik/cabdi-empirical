@@ -44,7 +44,7 @@ def test_create_run_and_session_monitor_and_diagnostics(tmp_path):
 
     session_res = participant.post(
         "/api/v1/sessions",
-        json={"experiment_id": "toy_v1", "participant_id": "p_admin_1", "run_id": run_id},
+        json={"experiment_id": "toy_v1", "participant_id": "p_admin_1", "run_id": run_id, "language": "ru"},
     )
     assert session_res.status_code == 200
 
@@ -52,6 +52,7 @@ def test_create_run_and_session_monitor_and_diagnostics(tmp_path):
     assert sessions_res.status_code == 200
     sessions_body = sessions_res.json()
     assert sessions_body["counts"]["created"] >= 1
+    assert sessions_body["sessions"][0]["language"] == "ru"
 
     diagnostics_res = researcher.get(f"/admin/api/v1/runs/{run_id}/diagnostics")
     assert diagnostics_res.status_code == 200

@@ -39,7 +39,7 @@ def test_run_exports_include_expected_sections(tmp_path):
     run_id = _bootstrap_run(researcher)
     create_session = participant.post(
         "/api/v1/sessions",
-        json={"experiment_id": "toy_v1", "participant_id": "p_export_1", "run_id": run_id},
+        json={"experiment_id": "toy_v1", "participant_id": "p_export_1", "run_id": run_id, "language": "ru"},
     )
     assert create_session.status_code == 200
 
@@ -50,3 +50,4 @@ def test_run_exports_include_expected_sections(tmp_path):
     assert "trial_summary_csv" in body
     assert "block_questionnaire_csv" in body
     assert "session_summary_json" in body
+    assert body["session_summary_json"][0]["language"] == "ru"

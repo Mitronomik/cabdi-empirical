@@ -75,3 +75,19 @@ def test_session_flow_happy_path_with_exports(tmp_path):
     assert "trial_summary_csv" in export_data
     assert "block_questionnaire_csv" in export_data
     assert export_data["participant_session_summary"]["n_trial_summaries"] == 54
+    assert export_data["participant_session_summary"]["language"] == "en"
+
+
+def test_session_creation_stores_language_metadata(tmp_path):
+    client = _make_client(tmp_path)
+
+    create_res = client.post(
+        "/api/v1/sessions",
+        json={"experiment_id": "toy_v1", "participant_id": "p_ru", "language": "ru"},
+    )
+    assert create_res.status_code == 200
+    session_id = create_res.json()["session_id"]
+
+    export_res = client.get(f"/api/v1/exports/sessions/{session_id}")
+    assert export_res.status_code == 200
+    assert export_res.json()["participant_session_summary"]["language"] == "ru"

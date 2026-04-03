@@ -124,6 +124,7 @@ class ParticipantSession:
     started_at: str
     completed_at: str | None
     device_info: dict[str, Any]
+    language: str = "en"
 
     def validate(self) -> None:
         _require(bool(self.session_id), "session_id must be non-empty")
@@ -132,6 +133,7 @@ class ParticipantSession:
         _require(self.current_block_index >= 0, "current_block_index must be >= 0")
         _require(self.current_trial_index >= 0, "current_trial_index must be >= 0")
         datetime.fromisoformat(self.started_at)
+        _require(self.language in {"en", "ru"}, "language must be en or ru")
         if self.completed_at:
             datetime.fromisoformat(self.completed_at)
 
