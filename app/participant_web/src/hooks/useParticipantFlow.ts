@@ -14,6 +14,7 @@ import type { QuestionnairePayload, TrialPayload } from '../lib/types';
 type Stage = 'consent' | 'instructions' | 'trial' | 'questionnaire' | 'completion';
 
 const DEFAULT_EXPERIMENT_ID = 'pilot_scam_not_scam_v1';
+const DEFAULT_RUN_ID = import.meta.env.VITE_PARTICIPANT_RUN_ID ?? 'run_local_dev';
 const TOTAL_TRIALS = 54;
 
 function getCurrentLocale(): Locale {
@@ -84,7 +85,7 @@ export function useParticipantFlow() {
     setLoading(true);
     setError(null);
     try {
-      const created = await createSession(DEFAULT_EXPERIMENT_ID, participantId, detectLocale());
+      const created = await createSession(DEFAULT_EXPERIMENT_ID, participantId, DEFAULT_RUN_ID, detectLocale());
       setSessionId(created.session_id);
       await startSession(created.session_id);
       await loadNextTrial(created.session_id);

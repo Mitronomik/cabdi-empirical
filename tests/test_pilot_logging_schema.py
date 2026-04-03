@@ -7,7 +7,35 @@ import json
 from fastapi.testclient import TestClient
 
 from app.participant_api.main import create_app
+from app.researcher_api.main import create_app as create_researcher_app
 from packages.logging_schema.pilot_logs import TrialEventLog, TrialSummaryLog
+
+
+def _bootstrap_run(tmp_path) -> str:
+    db_path = str(tmp_path / "pilot.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    payload = (
+        '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"text":"a"},'
+        '"true_label":"scam","difficulty_prior":"low","model_prediction":"scam","model_confidence":"high",'
+        '"model_correct":true,"eligible_sets":["demo"]}\n'
+    )
+    upload = researcher.post(
+        "/admin/api/v1/stimuli/upload",
+        files={"file": ("stimuli.jsonl", payload, "application/json")},
+        data={"name": "set1", "source_format": "jsonl"},
+    )
+    stimulus_set_id = upload.json()["stimulus_set_id"]
+    run = researcher.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "logging test run",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"mode": "test"},
+            "stimulus_set_ids": [stimulus_set_id],
+        },
+    )
+    return run.json()["run_id"]
 
 
 def test_trial_event_log_accepts_supported_event_types():
@@ -59,8 +87,10 @@ def test_trial_summary_log_completeness_and_roundtrip():
 
 
 def test_completed_trials_have_summary_rows_and_required_fields(tmp_path):
-    client = TestClient(create_app(str(tmp_path / "pilot.sqlite3")))
-    created = client.post("/api/v1/sessions", json={"experiment_id": "toy_v1", "participant_id": "p_log"}).json()
+    db_path = str(tmp_path / "pilot.sqlite3")
+    run_id = _bootstrap_run(tmp_path)
+    client = TestClient(create_app(db_path))
+    created = client.post("/api/v1/sessions", json={"experiment_id": "toy_v1", "participant_id": "p_log", "run_id": run_id}).json()
     session_id = created["session_id"]
     client.post(f"/api/v1/sessions/{session_id}/start")
 

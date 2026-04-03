@@ -91,6 +91,7 @@ def test_serialization_roundtrip_for_shared_schemas():
         session_id="sess_1",
         participant_id="p_1",
         experiment_id="pilot_scam_not_scam_v1",
+        run_id="run_1",
         assigned_order="order_1",
         stimulus_set_map={"block_1": "A"},
         current_block_index=0,

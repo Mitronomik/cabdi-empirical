@@ -34,18 +34,20 @@ class SessionService:
         self,
         experiment_id: str,
         participant_id: str,
-        run_id: str | None = None,
+        run_id: str,
         language: str | None = None,
     ) -> dict[str, Any]:
         experiment = load_experiment_config(DEFAULT_EXPERIMENT_PATH)
         if experiment_id != "toy_v1" and experiment_id != experiment.experiment_id:
             raise ValueError(f"Unsupported experiment_id: {experiment_id}")
-        if run_id is not None:
-            run = self.store.fetchone("SELECT run_id, experiment_id FROM researcher_runs WHERE run_id = ?", (run_id,))
-            if run is None:
-                raise ValueError(f"Unknown run_id: {run_id}")
-            if run["experiment_id"] != experiment_id:
-                raise ValueError("run_id and experiment_id mismatch")
+        if not run_id.strip():
+            raise ValueError("run_id is required")
+
+        run = self.store.fetchone("SELECT run_id, experiment_id FROM researcher_runs WHERE run_id = ?", (run_id,))
+        if run is None:
+            raise ValueError(f"Unknown run_id: {run_id}")
+        if run["experiment_id"] != experiment_id:
+            raise ValueError("run_id and experiment_id mismatch")
 
         stimuli = load_stimulus_bank(DEFAULT_STIMULI_PATH)
         order_id, assigned_order = assign_order_id(participant_id, experiment.experiment_id)
@@ -56,6 +58,7 @@ class SessionService:
             session_id=session_id,
             participant_id=participant_id,
             experiment_id=experiment_id,
+            run_id=run_id,
             assigned_order=order_id,
             stimulus_set_map={"default": "demo"},
             current_block_index=-1,
@@ -78,7 +81,7 @@ class SessionService:
                 session.session_id,
                 session.participant_id,
                 session.experiment_id,
-                run_id,
+                session.run_id,
                 session.assigned_order,
                 dumps(session.stimulus_set_map),
                 session.current_block_index,
@@ -123,7 +126,7 @@ class SessionService:
             trial_rows,
         )
 
-        return {"session_id": session_id, "status": "created", "assigned_order": order_id, "run_id": run_id, "language": session.language}
+        return {"session_id": session_id, "status": "created", "assigned_order": order_id, "run_id": session.run_id, "language": session.language}
 
     def start_session(self, session_id: str) -> dict[str, Any]:
         session = self.get_session(session_id)

@@ -100,6 +100,7 @@ uvicorn app.researcher_api.main:app --reload --host 127.0.0.1 --port 8001
 Participant web:
 ```bash
 cd app/participant_web
+export VITE_PARTICIPANT_RUN_ID=<run_id_from_researcher_ui_or_api>
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 

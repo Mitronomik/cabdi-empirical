@@ -144,6 +144,7 @@ test('session creation sends selected participant language', async () => {
   const firstCall = fetchMock.mock.calls[0];
   expect(firstCall[0]).toContain('/api/v1/sessions');
   expect(String((firstCall[1] as RequestInit).body)).toContain('"language":"ru"');
+  expect(String((firstCall[1] as RequestInit).body)).toContain('"run_id":"run_local_dev"');
 });
 test('trial screen renders consistent layout and assistance panel', async () => {
   mockFetchSequence([
