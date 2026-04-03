@@ -78,7 +78,7 @@ class RunService:
     def list_run_sessions(self, run_id: str) -> dict[str, Any]:
         self.get_run(run_id)
         rows = self.store.fetchall(
-            "SELECT session_id, participant_id, experiment_id, status, started_at, completed_at FROM participant_sessions WHERE run_id = ? ORDER BY started_at",
+            "SELECT session_id, participant_id, experiment_id, status, started_at, completed_at, COALESCE(language, 'en') AS language FROM participant_sessions WHERE run_id = ? ORDER BY started_at",
             (run_id,),
         )
         counts = {"created": 0, "in_progress": 0, "completed": 0, "abandoned": 0}

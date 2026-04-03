@@ -42,7 +42,8 @@ class SQLiteStore:
                     status TEXT NOT NULL,
                     started_at TEXT NOT NULL,
                     completed_at TEXT,
-                    device_info TEXT NOT NULL
+                    device_info TEXT NOT NULL,
+                    language TEXT NOT NULL DEFAULT "en"
                 );
 
                 CREATE TABLE IF NOT EXISTS session_trials (
@@ -114,6 +115,7 @@ class SQLiteStore:
                 """
             )
             self._ensure_column(conn, "participant_sessions", "run_id", "TEXT")
+            self._ensure_column(conn, "participant_sessions", "language", "TEXT NOT NULL DEFAULT 'en'")
 
     def _ensure_column(self, conn: sqlite3.Connection, table_name: str, column_name: str, column_type: str) -> None:
         columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()}

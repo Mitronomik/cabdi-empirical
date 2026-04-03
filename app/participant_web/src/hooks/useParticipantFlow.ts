@@ -84,7 +84,7 @@ export function useParticipantFlow() {
     setLoading(true);
     setError(null);
     try {
-      const created = await createSession(DEFAULT_EXPERIMENT_ID, participantId);
+      const created = await createSession(DEFAULT_EXPERIMENT_ID, participantId, detectLocale());
       setSessionId(created.session_id);
       await startSession(created.session_id);
       await loadNextTrial(created.session_id);

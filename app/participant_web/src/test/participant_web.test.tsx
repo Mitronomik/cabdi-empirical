@@ -124,6 +124,27 @@ test('selected language persists across remount', async () => {
   expect(screen.getByRole('heading', { name: /согласие/i })).toBeInTheDocument();
 });
 
+
+
+test('session creation sends selected participant language', async () => {
+  const fetchMock = mockFetchSequence([
+    { status: 200, body: { session_id: 'sess_1' } },
+    { status: 200, body: { session_id: 'sess_1', status: 'in_progress' } },
+    { status: 200, body: makeTrial() },
+  ]);
+
+  render(<App />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: 'RU' }));
+  await user.click(screen.getByLabelText(/я согласен/i));
+  await user.click(screen.getByRole('button', { name: /продолжить/i }));
+  await user.click(screen.getByRole('button', { name: /начать тренировку/i }));
+
+  expect(fetchMock).toHaveBeenCalled();
+  const firstCall = fetchMock.mock.calls[0];
+  expect(firstCall[0]).toContain('/api/v1/sessions');
+  expect(String((firstCall[1] as RequestInit).body)).toContain('"language":"ru"');
+});
 test('trial screen renders consistent layout and assistance panel', async () => {
   mockFetchSequence([
     { status: 200, body: { session_id: 'sess_1' } },

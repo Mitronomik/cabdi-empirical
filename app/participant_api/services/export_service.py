@@ -64,6 +64,7 @@ class ExportService:
             "participant_id": session["participant_id"],
             "experiment_id": session["experiment_id"],
             "status": session["status"],
+            "language": session.get("language") or "en",
             "n_events": len(event_lines),
             "n_trial_summaries": len(csv_rows),
         }
