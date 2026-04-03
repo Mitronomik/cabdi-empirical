@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -18,7 +18,9 @@ describe('researcher web shell', () => {
     render(<App />);
     expect(screen.getByText('CABDI Researcher Admin (MVP)')).toBeInTheDocument();
     expect(screen.getByLabelText(/language switcher/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Upload' })).toBeInTheDocument();
+
+    const nav = screen.getByRole('navigation');
+    expect(within(nav).getByRole('button', { name: 'Upload' })).toBeInTheDocument();
   });
 
   it('switches UI copy when locale changes', async () => {
