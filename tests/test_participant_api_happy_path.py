@@ -3,12 +3,40 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from app.participant_api.main import create_app
+from app.researcher_api.main import create_app as create_researcher_app
 
 
 def _make_client(tmp_path):
     db_path = tmp_path / "pilot_api.sqlite3"
     app = create_app(str(db_path))
     return TestClient(app)
+
+
+def _bootstrap_run(tmp_path) -> str:
+    db_path = str(tmp_path / "pilot_api.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    payload = (
+        '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"text":"a"},'
+        '"true_label":"scam","difficulty_prior":"low","model_prediction":"scam","model_confidence":"high",'
+        '"model_correct":true,"eligible_sets":["demo"]}\n'
+    )
+    upload = researcher.post(
+        "/admin/api/v1/stimuli/upload",
+        files={"file": ("stimuli.jsonl", payload, "application/json")},
+        data={"name": "set1", "source_format": "jsonl"},
+    )
+    stimulus_set_id = upload.json()["stimulus_set_id"]
+    run = researcher.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "participant test run",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"mode": "test"},
+            "stimulus_set_ids": [stimulus_set_id],
+        },
+    )
+    return run.json()["run_id"]
 
 
 def test_health_endpoint(tmp_path):
@@ -20,10 +48,11 @@ def test_health_endpoint(tmp_path):
 
 def test_session_flow_happy_path_with_exports(tmp_path):
     client = _make_client(tmp_path)
+    run_id = _bootstrap_run(tmp_path)
 
     create_res = client.post(
         "/api/v1/sessions",
-        json={"experiment_id": "toy_v1", "participant_id": "p_001"},
+        json={"experiment_id": "toy_v1", "participant_id": "p_001", "run_id": run_id},
     )
     assert create_res.status_code == 200
     session_id = create_res.json()["session_id"]
@@ -80,10 +109,11 @@ def test_session_flow_happy_path_with_exports(tmp_path):
 
 def test_session_creation_stores_language_metadata(tmp_path):
     client = _make_client(tmp_path)
+    run_id = _bootstrap_run(tmp_path)
 
     create_res = client.post(
         "/api/v1/sessions",
-        json={"experiment_id": "toy_v1", "participant_id": "p_ru", "language": "ru"},
+        json={"experiment_id": "toy_v1", "participant_id": "p_ru", "run_id": run_id, "language": "ru"},
     )
     assert create_res.status_code == 200
     session_id = create_res.json()["session_id"]
@@ -91,3 +121,12 @@ def test_session_creation_stores_language_metadata(tmp_path):
     export_res = client.get(f"/api/v1/exports/sessions/{session_id}")
     assert export_res.status_code == 200
     assert export_res.json()["participant_session_summary"]["language"] == "ru"
+
+
+def test_session_creation_requires_run_id(tmp_path):
+    client = _make_client(tmp_path)
+    create_res = client.post(
+        "/api/v1/sessions",
+        json={"experiment_id": "toy_v1", "participant_id": "p_missing_run"},
+    )
+    assert create_res.status_code == 422

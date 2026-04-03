@@ -116,6 +116,7 @@ class ParticipantSession:
     session_id: str
     participant_id: str
     experiment_id: str
+    run_id: str
     assigned_order: str
     stimulus_set_map: dict[str, str]
     current_block_index: int
@@ -130,6 +131,7 @@ class ParticipantSession:
         _require(bool(self.session_id), "session_id must be non-empty")
         _require(bool(self.participant_id), "participant_id must be non-empty")
         _require(bool(self.experiment_id), "experiment_id must be non-empty")
+        _require(bool(self.run_id), "run_id must be non-empty")
         _require(self.current_block_index >= 0, "current_block_index must be >= 0")
         _require(self.current_trial_index >= 0, "current_trial_index must be >= 0")
         datetime.fromisoformat(self.started_at)

@@ -11,7 +11,7 @@ router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
 class CreateSessionRequest(BaseModel):
     experiment_id: str
     participant_id: str
-    run_id: str | None = None
+    run_id: str
     language: Literal["en", "ru"] | None = None
 
 

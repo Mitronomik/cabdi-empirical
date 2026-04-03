@@ -34,7 +34,7 @@ class SQLiteStore:
                     session_id TEXT PRIMARY KEY,
                     participant_id TEXT NOT NULL,
                     experiment_id TEXT NOT NULL,
-                    run_id TEXT,
+                    run_id TEXT NOT NULL,
                     assigned_order TEXT NOT NULL,
                     stimulus_set_map TEXT NOT NULL,
                     current_block_index INTEGER NOT NULL,
