@@ -93,7 +93,7 @@ def test_live_routing_uses_prior_persisted_summaries_only(tmp_path):
     assert submit.status_code == 200
 
     second_trial = client.get(f"/api/v1/sessions/{session_id}/next-trial").json()
-    assert second_trial["policy_decision"]["risk_bucket"] == "moderate"
+    assert second_trial["policy_decision"]["risk_bucket"] == "extreme"
 
     second_row = client.app.state.store.fetchone(
         "SELECT pre_render_features_json FROM session_trials WHERE trial_id = ?",
@@ -102,7 +102,7 @@ def test_live_routing_uses_prior_persisted_summaries_only(tmp_path):
     second_features = loads(second_row["pre_render_features_json"])
     assert second_features["recent_error_count_last_3"] == 1
     assert second_features["recent_blind_accept_count_last_3"] == 1
-    assert second_features["recent_latency_z_bucket"] == "medium"
+    assert second_features["recent_latency_z_bucket"] == "high"
     assert second_features["prior_completed_trials_considered"] == 1
 
 
@@ -110,3 +110,49 @@ def test_latency_bucket_fallback_is_deterministic_for_missing_or_sparse_inputs()
     assert _latency_bucket_from_summaries([]) == "medium"
     assert _latency_bucket_from_summaries([{"reaction_time_ms": None}]) == "medium"
     assert _latency_bucket_from_summaries([{"reaction_time_ms": "bad"}, {"reaction_time_ms": 1000}]) == "medium"
+    assert _latency_bucket_from_summaries([{"reaction_time_ms": 700}]) == "low"
+    assert _latency_bucket_from_summaries([{"reaction_time_ms": 2000}]) == "high"
+
+
+def test_event_trace_complements_summary_for_blind_accept_and_error_flags(tmp_path):
+    db_path = str(tmp_path / "pilot_lagged.sqlite3")
+    client = TestClient(create_app(db_path))
+    run_slug = _bootstrap_small_run(tmp_path)
+
+    created = client.post("/api/v1/sessions", json={"run_slug": run_slug})
+    session_id = created.json()["session_id"]
+    client.post(f"/api/v1/sessions/{session_id}/start")
+
+    first_trial = client.get(f"/api/v1/sessions/{session_id}/next-trial").json()
+    submit = client.post(
+        f"/api/v1/sessions/{session_id}/trials/{first_trial['trial_id']}/submit",
+        json={
+            "human_response": first_trial["stimulus"]["model_prediction"],
+            "reaction_time_ms": 600,
+            "self_confidence": 55,
+            "reason_clicked": False,
+            "evidence_opened": False,
+            "verification_completed": False,
+            "event_trace": [
+                {"event_type": "trial_completed", "payload": {"reaction_time_ms": 2300}},
+                {"event_type": "verification_checked", "payload": {"value": True}},
+            ],
+        },
+    )
+    assert submit.status_code == 200
+
+    # Corrupt summary row to force event-informed fallback path.
+    client.app.state.store.execute(
+        "UPDATE trial_summary_logs SET summary_json = ? WHERE session_id = ? AND trial_id = ?",
+        ("{}", session_id, first_trial["trial_id"]),
+    )
+
+    second_trial = client.get(f"/api/v1/sessions/{session_id}/next-trial").json()
+    second_row = client.app.state.store.fetchone(
+        "SELECT pre_render_features_json FROM session_trials WHERE trial_id = ?",
+        (second_trial["trial_id"],),
+    )
+    second_features = loads(second_row["pre_render_features_json"])
+    assert second_features["recent_error_count_last_3"] == 1
+    assert second_features["recent_blind_accept_count_last_3"] == 0
+    assert second_features["recent_latency_z_bucket"] == "low"
