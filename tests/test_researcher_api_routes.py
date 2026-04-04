@@ -43,6 +43,14 @@ def test_create_run_and_session_monitor_and_diagnostics(tmp_path):
     run_id = create_run.json()["run_id"]
     assert create_run.json()["public_slug"] == "run-alpha"
 
+    list_runs_res = researcher.get("/admin/api/v1/runs")
+    assert list_runs_res.status_code == 200
+    assert list_runs_res.json()[0]["run_id"] == run_id
+
+    list_stimuli_res = researcher.get("/admin/api/v1/stimuli")
+    assert list_stimuli_res.status_code == 200
+    assert list_stimuli_res.json()[0]["stimulus_set_id"] == stimulus_set_id
+
     session_res = participant.post(
         "/api/v1/sessions",
         json={"experiment_id": "toy_v1", "participant_id": "p_admin_1", "run_id": run_id, "language": "ru"},

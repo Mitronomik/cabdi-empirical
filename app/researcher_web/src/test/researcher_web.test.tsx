@@ -21,6 +21,7 @@ describe('researcher web shell', () => {
 
     const nav = screen.getByRole('navigation');
     expect(within(nav).getByRole('button', { name: 'Upload' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Load Recent' })).toBeInTheDocument();
   });
 
   it('switches UI copy when locale changes', async () => {
@@ -60,5 +61,15 @@ describe('researcher web shell', () => {
     });
     render(<App />);
     expect(screen.getByText('Панель исследователя CABDI (MVP)')).toBeInTheDocument();
+  });
+
+  it('uses current pilot defaults in run builder', async () => {
+    render(<App />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Run Builder' }));
+
+    expect(screen.getByDisplayValue('pilot_scam_not_scam_v1')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('scam_not_scam')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Load Recent' })).toBeInTheDocument();
   });
 });
