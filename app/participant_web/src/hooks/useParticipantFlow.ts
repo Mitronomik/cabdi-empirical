@@ -16,6 +16,14 @@ import type { QuestionnairePayload, TrialPayload } from '../lib/types';
 
 type Stage = 'consent' | 'instructions' | 'trial' | 'questionnaire' | 'awaiting_final_submit' | 'completion';
 
+interface PublicRunInfo {
+  run_slug: string;
+  public_title: string;
+  public_description?: string;
+  launchable: boolean;
+  run_status: string;
+}
+
 function getCurrentLocale(): Locale {
   return detectLocale();
 }
@@ -30,14 +38,41 @@ function localizedError(
     | 'error.submitQuestionnaire'
     | 'error.missingSessionStateShort'
     | 'error.finalSubmit'
-    | 'error.runSlugRequired',
+    | 'error.runSlugRequired'
+    | 'error.runSlugInvalid'
+    | 'error.runNotOpen',
 ) {
   const locale = getCurrentLocale();
   return messages[locale][key];
 }
 
-function detailError(detail: unknown): string | null {
-  return typeof detail === 'string' ? detail : null;
+function resolveRunSlugFromUrl(): string {
+  const params = new URLSearchParams(window.location.search);
+  const fromQuery = params.get('run_slug') ?? params.get('run');
+  if (fromQuery && fromQuery.trim()) {
+    return fromQuery.trim();
+  }
+  const match = window.location.pathname.match(/\/(?:r|run|join)\/([^/]+)/i);
+  if (match?.[1]) {
+    return decodeURIComponent(match[1]).trim();
+  }
+  return (import.meta.env.VITE_PARTICIPANT_RUN_SLUG ?? '').trim();
+}
+
+function toFriendlyError(detail: unknown): string {
+  if (typeof detail !== 'string') {
+    return localizedError('error.startSession');
+  }
+  if (detail.includes('Unknown run_slug')) {
+    return localizedError('error.runSlugInvalid');
+  }
+  if (detail.includes('run_slug is required')) {
+    return localizedError('error.runSlugRequired');
+  }
+  if (detail.includes('not launchable')) {
+    return localizedError('error.runNotOpen');
+  }
+  return detail;
 }
 
 function resumeStorageKey(runSlug: string): string {
@@ -49,36 +84,32 @@ export function useParticipantFlow() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [currentTrial, setCurrentTrial] = useState<TrialPayload | null>(null);
   const [questionnaireBlockId, setQuestionnaireBlockId] = useState<string | null>(null);
-  const [completedTrials, setCompletedTrials] = useState(0);
-  const [totalTrials, setTotalTrials] = useState(1);
+  const [progress, setProgress] = useState({ completedTrials: 0, totalTrials: 0, currentOrdinal: 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [completionCode, setCompletionCode] = useState<string | null>(null);
-  const [runSlug, setRunSlug] = useState(() => {
-    const fromUrl = new URLSearchParams(window.location.search).get('run_slug');
-    if (fromUrl && fromUrl.trim()) {
-      return fromUrl.trim();
-    }
-    return import.meta.env.VITE_PARTICIPANT_RUN_SLUG ?? '';
-  });
+  const [runSlug] = useState(resolveRunSlugFromUrl);
+  const [publicRun, setPublicRun] = useState<PublicRunInfo | null>(null);
 
   const trialStartMsRef = useRef<number>(0);
 
-  const progress = useMemo(() => ({
-    completedTrials,
-    totalTrials: Math.max(totalTrials, completedTrials + 1),
-    currentOrdinal: Math.min(completedTrials + 1, Math.max(totalTrials, completedTrials + 1)),
-  }), [completedTrials, totalTrials]);
+  const onboardingReady = useMemo(() => Boolean(runSlug.trim()), [runSlug]);
+
+  function setProgressFromResponse(next: TrialPayload | { progress?: { completed_trials: number; total_trials: number; current_ordinal: number } }) {
+    if (!('progress' in next) || !next.progress) return;
+    setProgress({
+      completedTrials: Number(next.progress.completed_trials ?? 0),
+      totalTrials: Number(next.progress.total_trials ?? 0),
+      currentOrdinal: Number(next.progress.current_ordinal ?? 0),
+    });
+  }
 
   async function loadNextTrial(activeSessionId: string) {
     setLoading(true);
     setError(null);
     try {
       const next = await fetchNextTrial(activeSessionId);
-      if ('progress' in next && next.progress) {
-        setCompletedTrials(Number(next.progress.completed_trials ?? 0));
-        setTotalTrials(Math.max(1, Number(next.progress.total_trials ?? 1)));
-      }
+      setProgressFromResponse(next);
       if ('status' in next && next.status === 'awaiting_final_submit') {
         setStage('awaiting_final_submit');
         setCurrentTrial(null);
@@ -107,37 +138,52 @@ export function useParticipantFlow() {
     }
   }
 
-  async function beginSession(activeRunSlug: string) {
-    const normalizedRunSlug = activeRunSlug.trim();
-    if (!normalizedRunSlug) {
+  async function loadPublicRunInfo() {
+    if (!runSlug.trim()) {
+      setError(localizedError('error.runSlugRequired'));
+      return;
+    }
+    try {
+      const info = await fetchPublicRun(runSlug);
+      setPublicRun(info);
+      if (!info.launchable) {
+        setError(localizedError('error.runNotOpen'));
+      }
+    } catch (err: unknown) {
+      const e = err as { detail?: unknown };
+      setError(toFriendlyError(e.detail));
+    }
+  }
+
+  async function beginSession() {
+    if (!runSlug.trim()) {
       setError(localizedError('error.runSlugRequired'));
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      await fetchPublicRun(normalizedRunSlug);
-      const savedResumeToken = window.localStorage.getItem(resumeStorageKey(normalizedRunSlug));
+      const runInfo = publicRun ?? (await fetchPublicRun(runSlug));
+      setPublicRun(runInfo);
+      const savedResumeToken = window.localStorage.getItem(resumeStorageKey(runSlug));
       let resumeTokenForCreate: string | null = null;
       if (savedResumeToken) {
-        const resumeInfo = await fetchResumeInfo(normalizedRunSlug, savedResumeToken);
+        const resumeInfo = await fetchResumeInfo(runSlug, savedResumeToken);
         if (resumeInfo.resume_status === 'resumable') {
           resumeTokenForCreate = savedResumeToken;
         }
         if (resumeInfo.resume_status === 'finalized') {
-          window.localStorage.removeItem(resumeStorageKey(normalizedRunSlug));
+          window.localStorage.removeItem(resumeStorageKey(runSlug));
         }
       }
-      const created = await createSession(normalizedRunSlug, detectLocale(), resumeTokenForCreate);
+      const created = await createSession(runSlug, detectLocale(), resumeTokenForCreate);
       setSessionId(created.session_id);
-      setCompletedTrials(0);
-      setTotalTrials(1);
-      window.localStorage.setItem(resumeStorageKey(normalizedRunSlug), created.resume_token);
+      window.localStorage.setItem(resumeStorageKey(runSlug), created.resume_token);
       await startSession(created.session_id);
       await loadNextTrial(created.session_id);
     } catch (err: unknown) {
       const e = err as { detail?: unknown };
-      setError(detailError(e.detail) ?? localizedError('error.startSession'));
+      setError(toFriendlyError(e.detail));
       setLoading(false);
     }
   }
@@ -166,7 +212,6 @@ export function useParticipantFlow() {
         evidence_opened: params.evidenceOpened,
         verification_completed: params.verificationCompleted,
       });
-      setCompletedTrials((count) => count + 1);
       await loadNextTrial(sessionId);
     } catch {
       setError(localizedError('error.submitTrial'));
@@ -223,8 +268,10 @@ export function useParticipantFlow() {
     error,
     completionCode,
     runSlug,
-    setRunSlug,
+    publicRun,
+    onboardingReady,
     setStage,
+    loadPublicRunInfo,
     beginSession,
     submitCurrentTrial,
     submitQuestionnaire,

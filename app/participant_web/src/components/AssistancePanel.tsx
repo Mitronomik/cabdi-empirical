@@ -18,6 +18,21 @@ function densityClass(compressionMode: PolicyDecision['compression_mode']): stri
   return 'panel density-none';
 }
 
+function mapOptionLabel(raw: string, t: (key: string) => string): string {
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === 'scam') return t('trial.response.scam');
+  if (normalized === 'not_scam') return t('trial.response.notScam');
+  return raw;
+}
+
+function mapConfidenceLabel(raw: string, t: (key: string) => string): string {
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === 'low') return t('assistance.confidence.low');
+  if (normalized === 'medium') return t('assistance.confidence.medium');
+  if (normalized === 'high') return t('assistance.confidence.high');
+  return raw;
+}
+
 export function AssistancePanel({
   policyDecision,
   stimulus,
@@ -38,12 +53,14 @@ export function AssistancePanel({
       <h3>{t('assistance.title')}</h3>
       {policyDecision.show_prediction && (
         <p>
-          <strong>{t('assistance.prediction')}:</strong> {stimulus.model_prediction}
+          <strong>{t('assistance.prediction')}:</strong>{' '}
+          {mapOptionLabel(stimulus.model_prediction, t as unknown as (key: string) => string)}
         </p>
       )}
       {policyDecision.show_confidence && (
         <p>
-          <strong>{t('assistance.modelConfidence')}:</strong> {stimulus.model_confidence}
+          <strong>{t('assistance.modelConfidence')}:</strong>{' '}
+          {mapConfidenceLabel(stimulus.model_confidence, t as unknown as (key: string) => string)}
         </p>
       )}
 

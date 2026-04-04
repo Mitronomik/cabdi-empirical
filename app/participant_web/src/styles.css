@@ -5,21 +5,21 @@
 
 body {
   margin: 0;
-  background: #f6f7f9;
+  background: #f4f6fb;
   color: #1f2937;
 }
 
 .app-shell {
-  max-width: 960px;
+  max-width: 920px;
   margin: 0 auto;
-  padding: 24px;
+  padding: 20px 16px 40px;
   position: relative;
 }
 
 .language-switcher {
   position: absolute;
   top: 8px;
-  right: 24px;
+  right: 16px;
   display: inline-flex;
   gap: 6px;
   align-items: center;
@@ -40,9 +40,14 @@ body {
 .card,
 .panel {
   background: #fff;
-  border: 1px solid #d5dbe3;
-  border-radius: 8px;
+  border: 1px solid #d6dde8;
+  border-radius: 10px;
   padding: 16px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+.card + .card {
+  margin-top: 12px;
 }
 
 .error {
@@ -53,6 +58,10 @@ body {
 .trial-shell {
   display: grid;
   gap: 12px;
+}
+
+.progress-card p {
+  margin: 0 0 8px;
 }
 
 .progress-track {
@@ -70,13 +79,21 @@ body {
 
 .trial-grid {
   display: grid;
-  grid-template-columns: 1fr 320px;
+  grid-template-columns: 1fr minmax(260px, 320px);
   gap: 12px;
 }
 
 @media (max-width: 860px) {
   .trial-grid {
     grid-template-columns: 1fr;
+  }
+
+  .app-shell {
+    padding-top: 44px;
+  }
+
+  .language-switcher {
+    right: 12px;
   }
 }
 
@@ -90,8 +107,8 @@ body {
 button {
   border: 1px solid #bcc7d7;
   background: #fff;
-  border-radius: 6px;
-  padding: 8px 10px;
+  border-radius: 8px;
+  padding: 10px 12px;
   cursor: pointer;
 }
 
@@ -103,6 +120,10 @@ button.selected {
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+input[type='range'] {
+  width: 100%;
 }
 
 .density-medium {
@@ -119,11 +140,17 @@ input,
 small,
 p,
 li {
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
-.verify-hint {
+.verify-hint,
+.reassurance {
   background: #f8fafc;
   border-left: 3px solid #94a3b8;
   padding: 8px;
+  border-radius: 4px;
+}
+
+.muted {
+  color: #475569;
 }

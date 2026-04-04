@@ -9,6 +9,8 @@ export type MessageKey =
   | 'trial.progressAria'
   | 'assistance.panelAria'
   | 'error.runSlugRequired'
+  | 'error.runSlugInvalid'
+  | 'error.runNotOpen'
   | 'error.retry'
   | 'error.loadNextTrial'
   | 'error.startSession'
@@ -18,29 +20,40 @@ export type MessageKey =
   | 'error.submitQuestionnaire'
   | 'error.missingSessionStateShort'
   | 'error.finalSubmit'
+  | 'entry.title'
+  | 'entry.missingRun'
+  | 'entry.contactCoordinator'
   | 'consent.title'
   | 'consent.description'
   | 'consent.checkbox'
   | 'common.continue'
   | 'instructions.title'
+  | 'instructions.defaultRunTitle'
   | 'instructions.item.classify'
   | 'instructions.item.assistance'
   | 'instructions.item.aiWrong'
   | 'instructions.item.noBlindFollow'
   | 'instructions.item.practice'
-  | 'instructions.runSlugLabel'
-  | 'instructions.runSlugPlaceholder'
+  | 'instructions.resumeHint'
+  | 'instructions.starting'
   | 'instructions.startPractice'
   | 'trial.progressLabel'
+  | 'trial.resumeHint'
   | 'trial.caseTitle'
   | 'trial.noPrompt'
-  | 'trial.blockLabel'
   | 'trial.decisionTitle'
   | 'trial.selfConfidence'
   | 'trial.submit'
+  | 'trial.response.scam'
+  | 'trial.response.notScam'
+  | 'trial.response.yes'
+  | 'trial.response.no'
   | 'assistance.title'
   | 'assistance.prediction'
   | 'assistance.modelConfidence'
+  | 'assistance.confidence.low'
+  | 'assistance.confidence.medium'
+  | 'assistance.confidence.high'
   | 'assistance.rationale'
   | 'assistance.defaultRationale'
   | 'assistance.defaultEvidence'
@@ -60,6 +73,7 @@ export type MessageKey =
   | 'questionnaire.submit'
   | 'finalSubmit.title'
   | 'finalSubmit.ready'
+  | 'finalSubmit.progress'
   | 'finalSubmit.note'
   | 'finalSubmit.button'
   | 'finalSubmit.submitting'
@@ -75,50 +89,61 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
     'lang.switcherLabel': 'Language switcher',
     'trial.progressAria': 'progress',
     'assistance.panelAria': 'AI assistance panel',
-    'error.runSlugRequired': 'Run slug is required.',
-    'error.retry': 'Retry',
-    'error.loadNextTrial': 'Could not load the next trial. Please retry.',
-    'error.startSession': 'Unable to start session. Please retry.',
-    'error.missingSessionState': 'Missing session state. Please restart this participant run.',
-    'error.submitTrial': 'Could not submit trial. Please retry submit.',
-    'error.missingQuestionnaireState':
-      'Missing session state for questionnaire. Please restart this participant run.',
-    'error.submitQuestionnaire': 'Could not submit questionnaire. Please retry.',
-    'error.missingSessionStateShort': 'Missing session state.',
-    'error.finalSubmit': 'Could not finalize session. Please retry final submit.',
+    'error.runSlugRequired': 'This study link is incomplete. Please use the full invitation link.',
+    'error.runSlugInvalid': 'This study link could not be found. Please check your invitation link.',
+    'error.runNotOpen': 'This study is currently unavailable. Please contact the study coordinator.',
+    'error.retry': 'Try again',
+    'error.loadNextTrial': 'We could not load the next step. Please try again.',
+    'error.startSession': 'Unable to start the study right now. Please try again.',
+    'error.missingSessionState': 'We lost your session state. Please restart from your invitation link.',
+    'error.submitTrial': 'Your response could not be submitted. Please try again.',
+    'error.missingQuestionnaireState': 'Questionnaire state is missing. Please restart from your invitation link.',
+    'error.submitQuestionnaire': 'Questionnaire submission failed. Please try again.',
+    'error.missingSessionStateShort': 'Session state is missing.',
+    'error.finalSubmit': 'Final submission failed. Please try again.',
+    'entry.title': 'Study link needed',
+    'entry.missingRun': 'To begin, open the invitation link provided by the study team.',
+    'entry.contactCoordinator': 'If this keeps happening, contact your study coordinator.',
     'consent.title': 'Consent',
-    'consent.description':
-      'This is a research task. Your responses will be recorded for pilot research purposes.',
+    'consent.description': 'This is a research task. Your responses will be recorded for pilot research purposes.',
     'consent.checkbox': 'I consent to participate in this research task.',
     'common.continue': 'Continue',
-    'instructions.title': 'Instructions',
-    'instructions.item.classify': 'You will classify cases as part of a research task.',
-    'instructions.item.assistance': 'AI assistance may be shown during some trials.',
+    'instructions.title': 'Before you begin',
+    'instructions.defaultRunTitle': 'Pilot study',
+    'instructions.item.classify': 'You will review brief cases and choose the best label.',
+    'instructions.item.assistance': 'AI assistance may be shown for some cases.',
     'instructions.item.aiWrong': 'The AI can be wrong.',
-    'instructions.item.noBlindFollow': 'Do not blindly follow the AI recommendation.',
-    'instructions.item.practice': 'You will complete practice trials before the main blocks.',
-    'instructions.runSlugLabel': 'Run link slug',
-    'instructions.runSlugPlaceholder': 'e.g., spring-2026-cohort-a',
-    'instructions.startPractice': 'Start practice',
-    'trial.progressLabel': 'Trial',
+    'instructions.item.noBlindFollow': 'Make your own judgment and avoid blindly following AI output.',
+    'instructions.item.practice': 'You will complete a short practice section first.',
+    'instructions.resumeHint': 'If you are interrupted, your progress is saved and you can continue later.',
+    'instructions.starting': 'Starting...',
+    'instructions.startPractice': 'Start study',
+    'trial.progressLabel': 'Progress',
+    'trial.resumeHint': 'Progress is saved automatically.',
     'trial.caseTitle': 'Case',
     'trial.noPrompt': 'No prompt provided.',
-    'trial.blockLabel': 'Block',
-    'trial.decisionTitle': 'Your decision',
-    'trial.selfConfidence': 'Self-confidence',
-    'trial.submit': 'Submit trial',
-    'assistance.title': 'AI Assistance',
-    'assistance.prediction': 'Prediction',
-    'assistance.modelConfidence': 'Model confidence',
-    'assistance.rationale': 'Rationale',
-    'assistance.defaultRationale': 'Model reasoning summary unavailable.',
-    'assistance.defaultEvidence': 'Evidence snippets are not available for this item.',
-    'assistance.showRationale': 'Show rationale',
-    'assistance.showEvidence': 'Show evidence',
-    'assistance.hideEvidence': 'Hide evidence',
-    'assistance.verifyHint': 'Reminder: the AI can be wrong. Verify before submitting.',
-    'assistance.forcedCheckbox': 'I reviewed the AI output and made an independent judgment.',
-    'assistance.secondLook': 'Mark second look complete',
+    'trial.decisionTitle': 'Your response',
+    'trial.selfConfidence': 'How confident are you?',
+    'trial.submit': 'Submit response',
+    'trial.response.scam': 'Scam',
+    'trial.response.notScam': 'Not a scam',
+    'trial.response.yes': 'Yes',
+    'trial.response.no': 'No',
+    'assistance.title': 'AI assistance',
+    'assistance.prediction': 'AI suggestion',
+    'assistance.modelConfidence': 'AI confidence',
+    'assistance.confidence.low': 'Low',
+    'assistance.confidence.medium': 'Medium',
+    'assistance.confidence.high': 'High',
+    'assistance.rationale': 'Why the AI suggested this',
+    'assistance.defaultRationale': 'No rationale was provided for this case.',
+    'assistance.defaultEvidence': 'No supporting evidence was provided for this case.',
+    'assistance.showRationale': 'Show why',
+    'assistance.showEvidence': 'Show details',
+    'assistance.hideEvidence': 'Hide details',
+    'assistance.verifyHint': 'Reminder: AI may be wrong. Verify before you submit.',
+    'assistance.forcedCheckbox': 'I reviewed the AI output and made my own decision.',
+    'assistance.secondLook': 'I completed a second look',
     'questionnaire.title': 'Block questionnaire',
     'questionnaire.rateItems': 'Rate each item from 0 to 100.',
     'questionnaire.burdenMental': 'Burden: mental demand',
@@ -126,70 +151,79 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
     'questionnaire.burdenFrustration': 'Burden: frustration',
     'questionnaire.trust': 'Trust / reliance',
     'questionnaire.usefulness': 'Usefulness',
-    'questionnaire.submit': 'Submit questionnaire',
-    'finalSubmit.title': 'Final submit required',
-    'finalSubmit.ready': 'All required trials and questionnaires are complete.',
-    'finalSubmit.note': 'Use final submit to finalize your session and unlock completion.',
+    'questionnaire.submit': 'Continue',
+    'finalSubmit.title': 'Final confirmation required',
+    'finalSubmit.ready': 'You have finished all required steps.',
+    'finalSubmit.progress': 'Completed trials',
+    'finalSubmit.note': 'Select Final submit to lock your responses and complete the study.',
     'finalSubmit.button': 'Final submit',
     'finalSubmit.submitting': 'Submitting...',
-    'completion.title': 'Complete',
-    'completion.thanks': 'Thank you for participating in this pilot research task.',
-    'completion.done': 'Your session is complete.',
+    'completion.title': 'Study complete',
+    'completion.thanks': 'Thank you for your participation.',
+    'completion.done': 'Your responses were saved successfully.',
     'completion.code': 'Completion code',
   },
   ru: {
     'lang.en': 'EN',
     'lang.ru': 'RU',
-
     'lang.switcherLabel': 'Переключатель языка',
     'trial.progressAria': 'прогресс',
     'assistance.panelAria': 'Панель помощи ИИ',
-    'error.runSlugRequired': 'Требуется slug запуска.',
+    'error.runSlugRequired': 'Ссылка на исследование неполная. Откройте полную ссылку-приглашение.',
+    'error.runSlugInvalid': 'Не удалось найти это исследование. Проверьте ссылку-приглашение.',
+    'error.runNotOpen': 'Исследование сейчас недоступно. Свяжитесь с координатором.',
     'error.retry': 'Повторить',
-    'error.loadNextTrial': 'Не удалось загрузить следующий раунд. Пожалуйста, попробуйте снова.',
-    'error.startSession': 'Не удалось начать сессию. Пожалуйста, попробуйте снова.',
-    'error.missingSessionState': 'Состояние сессии отсутствует. Пожалуйста, перезапустите участие.',
-    'error.submitTrial': 'Не удалось отправить ответ. Пожалуйста, повторите отправку.',
-    'error.missingQuestionnaireState':
-      'Состояние сессии для анкеты отсутствует. Пожалуйста, перезапустите участие.',
-    'error.submitQuestionnaire': 'Не удалось отправить анкету. Пожалуйста, попробуйте снова.',
+    'error.loadNextTrial': 'Не удалось загрузить следующий шаг. Повторите попытку.',
+    'error.startSession': 'Сейчас не удалось начать исследование. Повторите попытку.',
+    'error.missingSessionState': 'Состояние сессии потеряно. Перезапустите по ссылке-приглашению.',
+    'error.submitTrial': 'Не удалось отправить ответ. Повторите попытку.',
+    'error.missingQuestionnaireState': 'Состояние анкеты отсутствует. Перезапустите по ссылке-приглашению.',
+    'error.submitQuestionnaire': 'Не удалось отправить анкету. Повторите попытку.',
     'error.missingSessionStateShort': 'Состояние сессии отсутствует.',
-    'error.finalSubmit': 'Не удалось завершить сессию. Пожалуйста, повторите финальную отправку.',
+    'error.finalSubmit': 'Не удалось выполнить финальную отправку. Повторите попытку.',
+    'entry.title': 'Нужна ссылка на исследование',
+    'entry.missingRun': 'Чтобы начать, откройте ссылку-приглашение от исследовательской команды.',
+    'entry.contactCoordinator': 'Если проблема повторяется, свяжитесь с координатором исследования.',
     'consent.title': 'Согласие',
-    'consent.description':
-      'Это исследовательское задание. Ваши ответы будут записаны для пилотного исследования.',
+    'consent.description': 'Это исследовательское задание. Ваши ответы будут записаны для пилотного исследования.',
     'consent.checkbox': 'Я согласен(на) участвовать в этом исследовательском задании.',
     'common.continue': 'Продолжить',
-    'instructions.title': 'Инструкция',
-    'instructions.item.classify': 'Вам предстоит классифицировать кейсы в рамках исследовательской задачи.',
-    'instructions.item.assistance': 'В некоторых раундах может показываться помощь ИИ.',
+    'instructions.title': 'Перед началом',
+    'instructions.defaultRunTitle': 'Пилотное исследование',
+    'instructions.item.classify': 'Вам нужно просматривать короткие кейсы и выбирать лучший вариант ответа.',
+    'instructions.item.assistance': 'Для некоторых кейсов будет показана помощь ИИ.',
     'instructions.item.aiWrong': 'ИИ может ошибаться.',
-    'instructions.item.noBlindFollow': 'Не следуйте рекомендации ИИ вслепую.',
-    'instructions.item.practice':
-      'Перед основными блоками вы пройдёте тренировочные раунды.',
-    'instructions.runSlugLabel': 'Публичный slug запуска',
-    'instructions.runSlugPlaceholder': 'например, spring-2026-cohort-a',
-    'instructions.startPractice': 'Начать тренировку',
-    'trial.progressLabel': 'Раунд',
+    'instructions.item.noBlindFollow': 'Принимайте собственное решение и не следуйте ИИ вслепую.',
+    'instructions.item.practice': 'Сначала будет короткая тренировочная часть.',
+    'instructions.resumeHint': 'Если вас прервут, прогресс сохранится, и вы сможете продолжить позже.',
+    'instructions.starting': 'Запуск...',
+    'instructions.startPractice': 'Начать исследование',
+    'trial.progressLabel': 'Прогресс',
+    'trial.resumeHint': 'Прогресс сохраняется автоматически.',
     'trial.caseTitle': 'Кейс',
     'trial.noPrompt': 'Текст задания не предоставлен.',
-    'trial.blockLabel': 'Блок',
-    'trial.decisionTitle': 'Ваше решение',
-    'trial.selfConfidence': 'Уверенность в ответе',
+    'trial.decisionTitle': 'Ваш ответ',
+    'trial.selfConfidence': 'Насколько вы уверены?',
     'trial.submit': 'Отправить ответ',
+    'trial.response.scam': 'Мошенничество',
+    'trial.response.notScam': 'Не мошенничество',
+    'trial.response.yes': 'Да',
+    'trial.response.no': 'Нет',
     'assistance.title': 'Помощь ИИ',
-    'assistance.prediction': 'Прогноз',
-    'assistance.modelConfidence': 'Уверенность модели',
-    'assistance.rationale': 'Обоснование',
-    'assistance.defaultRationale': 'Краткое обоснование модели недоступно.',
-    'assistance.defaultEvidence': 'Фрагменты доказательств для этого кейса недоступны.',
-    'assistance.showRationale': 'Показать обоснование',
-    'assistance.showEvidence': 'Показать доказательства',
-    'assistance.hideEvidence': 'Скрыть доказательства',
+    'assistance.prediction': 'Подсказка ИИ',
+    'assistance.modelConfidence': 'Уверенность ИИ',
+    'assistance.confidence.low': 'Низкая',
+    'assistance.confidence.medium': 'Средняя',
+    'assistance.confidence.high': 'Высокая',
+    'assistance.rationale': 'Почему ИИ так считает',
+    'assistance.defaultRationale': 'Для этого кейса обоснование не предоставлено.',
+    'assistance.defaultEvidence': 'Для этого кейса подтверждающие детали не предоставлены.',
+    'assistance.showRationale': 'Показать почему',
+    'assistance.showEvidence': 'Показать детали',
+    'assistance.hideEvidence': 'Скрыть детали',
     'assistance.verifyHint': 'Напоминание: ИИ может ошибаться. Проверьте ответ перед отправкой.',
-    'assistance.forcedCheckbox':
-      'Я проверил(а) вывод ИИ и принял(а) независимое решение.',
-    'assistance.secondLook': 'Отметить повторную проверку',
+    'assistance.forcedCheckbox': 'Я проверил(а) вывод ИИ и принял(а) собственное решение.',
+    'assistance.secondLook': 'Я выполнил(а) повторную проверку',
     'questionnaire.title': 'Анкета по блоку',
     'questionnaire.rateItems': 'Оцените каждый пункт от 0 до 100.',
     'questionnaire.burdenMental': 'Нагрузка: умственное напряжение',
@@ -197,15 +231,16 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
     'questionnaire.burdenFrustration': 'Нагрузка: фрустрация',
     'questionnaire.trust': 'Доверие / опора на ИИ',
     'questionnaire.usefulness': 'Полезность',
-    'questionnaire.submit': 'Отправить анкету',
-    'finalSubmit.title': 'Требуется финальная отправка',
-    'finalSubmit.ready': 'Все обязательные раунды и анкеты завершены.',
-    'finalSubmit.note': 'Выполните финальную отправку, чтобы завершить сессию и открыть экран завершения.',
+    'questionnaire.submit': 'Продолжить',
+    'finalSubmit.title': 'Нужно финальное подтверждение',
+    'finalSubmit.ready': 'Вы завершили все обязательные шаги.',
+    'finalSubmit.progress': 'Завершено раундов',
+    'finalSubmit.note': 'Нажмите «Финальная отправка», чтобы зафиксировать ответы и завершить исследование.',
     'finalSubmit.button': 'Финальная отправка',
     'finalSubmit.submitting': 'Отправка...',
-    'completion.title': 'Завершено',
-    'completion.thanks': 'Спасибо за участие в этом пилотном исследовательском задании.',
-    'completion.done': 'Ваша сессия завершена.',
+    'completion.title': 'Исследование завершено',
+    'completion.thanks': 'Спасибо за участие.',
+    'completion.done': 'Ваши ответы успешно сохранены.',
     'completion.code': 'Код завершения',
   },
 };

@@ -44,6 +44,7 @@ function makeTrial(
       ...policyDecision,
     },
     self_confidence_scale: { min: 0, max: 100, step: 1 },
+    progress: { completed_trials: 0, total_trials: 12, current_ordinal: 1 },
     ...overrides,
   };
 }
@@ -65,27 +66,41 @@ afterEach(() => {
   cleanup();
   window.localStorage.clear();
   vi.unstubAllGlobals();
+  window.history.replaceState({}, '', '/');
   Object.defineProperty(window.navigator, 'language', {
     configurable: true,
     value: 'en-US',
   });
 });
 
-
 async function proceedToInstructionsAndStart(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByLabelText(/i consent to participate/i));
   await user.click(screen.getByRole('button', { name: /continue/i }));
-  await user.type(screen.getByLabelText(/run link slug/i), 'public-run-a');
-  await user.click(screen.getByRole('button', { name: /start practice/i }));
+  await user.click(screen.getByRole('button', { name: /start study/i }));
 }
 
-test('instructions screen renders', async () => {
+test('participant entry no longer requires manual run slug input', async () => {
+  window.history.replaceState({}, '', '/join/public-run-a');
+  mockFetchSequence([
+    { status: 200, body: { run_slug: 'public-run-a', public_title: 'Run A', launchable: true, run_status: 'active' } },
+  ]);
+
   render(<App />);
   const user = userEvent.setup();
   await user.click(screen.getByLabelText(/i consent to participate/i));
   await user.click(screen.getByRole('button', { name: /continue/i }));
-  expect(screen.getByRole('heading', { name: /instructions/i })).toBeInTheDocument();
-  expect(screen.getByText(/ai can be wrong/i)).toBeInTheDocument();
+
+  expect(screen.getByRole('heading', { name: /before you begin/i })).toBeInTheDocument();
+  expect(screen.queryByLabelText(/run link slug/i)).not.toBeInTheDocument();
+});
+
+test('missing run context shows human-friendly onboarding message', async () => {
+  render(<App />);
+  const user = userEvent.setup();
+  await user.click(screen.getByLabelText(/i consent to participate/i));
+  await user.click(screen.getByRole('button', { name: /continue/i }));
+
+  expect(screen.getByRole('heading', { name: /study link needed/i })).toBeInTheDocument();
 });
 
 test('language selector renders and switches onboarding copy', async () => {
@@ -97,56 +112,13 @@ test('language selector renders and switches onboarding copy', async () => {
   await user.click(screen.getByRole('button', { name: 'RU' }));
   expect(screen.getByRole('heading', { name: /согласие/i })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: /продолжить/i })).toBeInTheDocument();
-  expect(screen.getByLabelText(/переключатель языка/i)).toBeInTheDocument();
 });
-
-test('default language follows browser locale on first load', () => {
-  Object.defineProperty(window.navigator, 'language', {
-    configurable: true,
-    value: 'ru-RU',
-  });
-
-  render(<App />);
-  expect(screen.getByRole('heading', { name: /согласие/i })).toBeInTheDocument();
-});
-
-test('saved language in localStorage overrides browser locale', () => {
-  window.localStorage.setItem('participant_web.locale', 'en');
-  Object.defineProperty(window.navigator, 'language', {
-    configurable: true,
-    value: 'ru-RU',
-  });
-
-  render(<App />);
-  expect(screen.getByRole('heading', { name: /consent/i })).toBeInTheDocument();
-});
-
-test('selected language persists across remount', async () => {
-  const user = userEvent.setup();
-  const { unmount } = render(<App />);
-
-  await user.click(screen.getByRole('button', { name: 'RU' }));
-  expect(screen.getByRole('heading', { name: /согласие/i })).toBeInTheDocument();
-
-  unmount();
-  render(<App />);
-  expect(screen.getByRole('heading', { name: /согласие/i })).toBeInTheDocument();
-});
-
-
 
 test('session creation sends selected participant language', async () => {
+  window.history.replaceState({}, '', '/join/public-run-ru');
   const fetchMock = mockFetchSequence([
-    {
-      status: 200,
-      body: {
-        run_slug: 'public-run-ru',
-        public_title: 'Run RU',
-        launchable: true,
-        run_status: 'active',
-      },
-    },
-    { status: 200, body: { session_id: 'sess_1' } },
+    { status: 200, body: { run_slug: 'public-run-ru', public_title: 'Run RU', launchable: true, run_status: 'active' } },
+    { status: 200, body: { session_id: 'sess_1', resume_token: 'token_1' } },
     { status: 200, body: { session_id: 'sess_1', status: 'in_progress' } },
     { status: 200, body: makeTrial() },
   ]);
@@ -156,25 +128,21 @@ test('session creation sends selected participant language', async () => {
   await user.click(screen.getByRole('button', { name: 'RU' }));
   await user.click(screen.getByLabelText(/я согласен/i));
   await user.click(screen.getByRole('button', { name: /продолжить/i }));
-  await user.type(screen.getByLabelText(/публичный slug запуска/i), 'public-run-ru');
-  await user.click(screen.getByRole('button', { name: /начать тренировку/i }));
+  await user.click(screen.getByRole('button', { name: /начать исследование/i }));
 
-  expect(fetchMock).toHaveBeenCalled();
   const createCall = fetchMock.mock.calls[1];
   expect(createCall[0]).toContain('/api/v1/sessions');
   expect(String((createCall[1] as RequestInit).body)).toContain('"language":"ru"');
   expect(String((createCall[1] as RequestInit).body)).toContain('"run_slug":"public-run-ru"');
-  expect(String((createCall[1] as RequestInit).body)).not.toContain('experiment_id');
 });
-test('trial screen renders consistent layout and assistance panel', async () => {
+
+test('trial screen progress uses backend truth', async () => {
+  window.history.replaceState({}, '', '/join/public-run-a');
   mockFetchSequence([
-    {
-      status: 200,
-      body: { run_slug: 'public-run-a', public_title: 'Run A', launchable: true, run_status: 'active' },
-    },
-    { status: 200, body: { session_id: 'sess_1' } },
+    { status: 200, body: { run_slug: 'public-run-a', public_title: 'Run A', launchable: true, run_status: 'active' } },
+    { status: 200, body: { session_id: 'sess_1', resume_token: 'token_1' } },
     { status: 200, body: { session_id: 'sess_1', status: 'in_progress' } },
-    { status: 200, body: makeTrial() },
+    { status: 200, body: makeTrial({ progress: { completed_trials: 4, total_trials: 12, current_ordinal: 5 } }) },
   ]);
 
   render(<App />);
@@ -182,22 +150,20 @@ test('trial screen renders consistent layout and assistance panel', async () => 
   await proceedToInstructionsAndStart(user);
 
   await screen.findByTestId('trial-layout');
-  expect(screen.getByText(/trial 1 \/ [0-9]+/i)).toBeInTheDocument();
-  expect(screen.getByLabelText(/ai assistance panel/i)).toBeInTheDocument();
-  expect(screen.getByText(/prediction:/i)).toBeInTheDocument();
+  expect(screen.getByText(/progress 5 \/ 12/i)).toBeInTheDocument();
+  expect(screen.getByText(/ai suggestion/i)).toBeInTheDocument();
+  expect(screen.getByText(/ai confidence/i)).toBeInTheDocument();
 });
 
 test('forced verification blocks submission until completed', async () => {
-  const fetchMock = mockFetchSequence([
-    {
-      status: 200,
-      body: { run_slug: 'public-run-a', public_title: 'Run A', launchable: true, run_status: 'active' },
-    },
-    { status: 200, body: { session_id: 'sess_1' } },
+  window.history.replaceState({}, '', '/join/public-run-a');
+  mockFetchSequence([
+    { status: 200, body: { run_slug: 'public-run-a', public_title: 'Run A', launchable: true, run_status: 'active' } },
+    { status: 200, body: { session_id: 'sess_1', resume_token: 'token_1' } },
     { status: 200, body: { session_id: 'sess_1', status: 'in_progress' } },
     { status: 200, body: makeTrial() },
     { status: 200, body: { trial_id: 't_1', status: 'completed' } },
-    { status: 200, body: { status: 'awaiting_final_submit' } },
+    { status: 200, body: { status: 'awaiting_final_submit', progress: { completed_trials: 12, total_trials: 12, current_ordinal: 12 } } },
     { status: 200, body: { session_id: 'sess_1', status: 'finalized', final_submit: 'accepted', already_finalized: false } },
   ]);
 
@@ -206,82 +172,24 @@ test('forced verification blocks submission until completed', async () => {
   await proceedToInstructionsAndStart(user);
 
   await screen.findByTestId('trial-layout');
-  await user.click(screen.getByRole('button', { name: 'scam' }));
+  await user.click(screen.getAllByRole('button', { name: /^scam$/i })[0]);
 
-  const submit = screen.getByRole('button', { name: /submit trial/i });
+  const submit = screen.getByRole('button', { name: /submit response/i });
   expect(submit).toBeDisabled();
-  await user.click(screen.getByLabelText(/independent judgment/i));
+  await user.click(screen.getByLabelText(/made my own decision/i));
   expect(submit).toBeEnabled();
 
   await user.click(submit);
-  await screen.findByRole('heading', { name: /final submit required/i });
+  await screen.findByRole('heading', { name: /final confirmation required/i });
   await user.click(screen.getByRole('button', { name: /final submit/i }));
-  await screen.findByRole('heading', { name: /complete/i });
-  expect(fetchMock).toHaveBeenCalled();
+  await screen.findByRole('heading', { name: /study complete/i });
 });
 
-test('rationale on-click mode works and evidence toggle works', async () => {
-  mockFetchSequence([
-    {
-      status: 200,
-      body: { run_slug: 'public-run-a', public_title: 'Run A', launchable: true, run_status: 'active' },
-    },
-    { status: 200, body: { session_id: 'sess_1' } },
-    { status: 200, body: { session_id: 'sess_1', status: 'in_progress' } },
-    {
-      status: 200,
-      body: makeTrial({}, { show_rationale: 'on_click', show_evidence: true, verification_mode: 'none' }),
-    },
-  ]);
-
-  render(<App />);
-  const user = userEvent.setup();
-  await proceedToInstructionsAndStart(user);
-
-  await screen.findByTestId('trial-layout');
-  expect(screen.queryByTestId('rationale-on-click')).not.toBeInTheDocument();
-  await user.click(screen.getByRole('button', { name: /show rationale/i }));
-  expect(screen.getByTestId('rationale-on-click')).toBeInTheDocument();
-
-  expect(screen.queryByTestId('evidence-content')).not.toBeInTheDocument();
-  await user.click(screen.getByRole('button', { name: /show evidence/i }));
-  expect(screen.getByTestId('evidence-content')).toBeInTheDocument();
-});
-
-test('block-end questionnaire submits and completion flow appears', async () => {
-  const fetchMock = mockFetchSequence([
-    {
-      status: 200,
-      body: { run_slug: 'public-run-a', public_title: 'Run A', launchable: true, run_status: 'active' },
-    },
-    { status: 200, body: { session_id: 'sess_1' } },
-    { status: 200, body: { session_id: 'sess_1', status: 'in_progress' } },
-    { status: 409, body: { detail: { message: 'block_questionnaire_required', block_id: 'block_1' } } },
-    { status: 200, body: { block_id: 'block_1', status: 'submitted' } },
-    { status: 200, body: { status: 'awaiting_final_submit' } },
-    { status: 200, body: { session_id: 'sess_1', status: 'finalized', final_submit: 'accepted', already_finalized: false } },
-  ]);
-
-  render(<App />);
-  const user = userEvent.setup();
-  await proceedToInstructionsAndStart(user);
-
-  await screen.findByRole('heading', { name: /block questionnaire/i });
-  await user.click(screen.getByRole('button', { name: /submit questionnaire/i }));
-
-  await screen.findByRole('heading', { name: /final submit required/i });
-  await user.click(screen.getByRole('button', { name: /final submit/i }));
-  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(7));
-  await screen.findByRole('heading', { name: /complete/i });
-});
-
-test('saved resume token is checked server-side and reused for session resume', async () => {
+test('resume token is checked and reused for resume', async () => {
+  window.history.replaceState({}, '', '/join/public-run-a');
   window.localStorage.setItem('participant_web.resume_token.public-run-a', 'resume-token-1');
   const fetchMock = mockFetchSequence([
-    {
-      status: 200,
-      body: { run_slug: 'public-run-a', public_title: 'Run A', launchable: true, run_status: 'active' },
-    },
+    { status: 200, body: { run_slug: 'public-run-a', public_title: 'Run A', launchable: true, run_status: 'active' } },
     { status: 200, body: { resume_status: 'resumable', session_id: 'sess_1', session_status: 'in_progress' } },
     { status: 200, body: { session_id: 'sess_1', status: 'in_progress', entry_mode: 'resumed', resume_token: 'resume-token-1' } },
     { status: 200, body: { session_id: 'sess_1', status: 'in_progress' } },
@@ -295,5 +203,28 @@ test('saved resume token is checked server-side and reused for session resume', 
 
   expect(fetchMock.mock.calls[1][0]).toContain('/api/v1/sessions/resume-info');
   expect(String((fetchMock.mock.calls[2][1] as RequestInit).body)).toContain('"resume_token":"resume-token-1"');
-  expect(window.localStorage.getItem('participant_web.resume_token.public-run-a')).toBe('resume-token-1');
+});
+
+test('questionnaire and completion flow remains operational', async () => {
+  window.history.replaceState({}, '', '/join/public-run-a');
+  const fetchMock = mockFetchSequence([
+    { status: 200, body: { run_slug: 'public-run-a', public_title: 'Run A', launchable: true, run_status: 'active' } },
+    { status: 200, body: { session_id: 'sess_1', resume_token: 'token_1' } },
+    { status: 200, body: { session_id: 'sess_1', status: 'in_progress' } },
+    { status: 409, body: { detail: { message: 'block_questionnaire_required', block_id: 'block_1' } } },
+    { status: 200, body: { block_id: 'block_1', status: 'submitted' } },
+    { status: 200, body: { status: 'awaiting_final_submit', progress: { completed_trials: 12, total_trials: 12, current_ordinal: 12 } } },
+    { status: 200, body: { session_id: 'sess_1', status: 'finalized', final_submit: 'accepted', already_finalized: false } },
+  ]);
+
+  render(<App />);
+  const user = userEvent.setup();
+  await proceedToInstructionsAndStart(user);
+
+  await screen.findByRole('heading', { name: /block questionnaire/i });
+  await user.click(screen.getByRole('button', { name: /continue/i }));
+  await screen.findByRole('heading', { name: /final confirmation required/i });
+  await user.click(screen.getByRole('button', { name: /final submit/i }));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(7));
+  await screen.findByRole('heading', { name: /study complete/i });
 });

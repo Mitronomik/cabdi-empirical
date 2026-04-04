@@ -1,18 +1,21 @@
 import { useLocale } from '../i18n/useLocale';
 
 interface Props {
-  runSlug: string;
-  setRunSlug: (value: string) => void;
-  onStart: () => void;
+  runTitle: string;
+  runDescription?: string | null;
   loading: boolean;
+  runReady: boolean;
+  onStart: () => void;
 }
 
-export function InstructionsPage({ runSlug, setRunSlug, onStart, loading }: Props) {
+export function InstructionsPage({ runTitle, runDescription, loading, runReady, onStart }: Props) {
   const { t } = useLocale();
 
   return (
     <section className="card">
       <h1>{t('instructions.title')}</h1>
+      <p className="muted">{runTitle}</p>
+      {runDescription ? <p>{runDescription}</p> : null}
       <ul>
         <li>{t('instructions.item.classify')}</li>
         <li>{t('instructions.item.assistance')}</li>
@@ -20,15 +23,9 @@ export function InstructionsPage({ runSlug, setRunSlug, onStart, loading }: Prop
         <li>{t('instructions.item.noBlindFollow')}</li>
         <li>{t('instructions.item.practice')}</li>
       </ul>
-      <label htmlFor="run-slug">{t('instructions.runSlugLabel')}</label>
-      <input
-        id="run-slug"
-        value={runSlug}
-        onChange={(e) => setRunSlug(e.target.value)}
-        placeholder={t('instructions.runSlugPlaceholder')}
-      />
-      <button type="button" disabled={!runSlug || loading} onClick={onStart}>
-        {t('instructions.startPractice')}
+      <p className="reassurance">{t('instructions.resumeHint')}</p>
+      <button type="button" disabled={!runReady || loading} onClick={onStart}>
+        {loading ? t('instructions.starting') : t('instructions.startPractice')}
       </button>
     </section>
   );
