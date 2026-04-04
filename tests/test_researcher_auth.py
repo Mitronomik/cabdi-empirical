@@ -35,6 +35,17 @@ def test_researcher_routes_require_auth_and_login_logout_cycle(tmp_path) -> None
     assert unauthorized_again.status_code == 401
 
 
+def test_researcher_tampered_session_cookie_fails_cleanly(tmp_path) -> None:
+    db_path = str(tmp_path / "pilot.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    login = researcher.post("/admin/api/v1/auth/login", json={"username": "admin", "password": "admin1234"})
+    assert login.status_code == 200
+
+    tampered = researcher.get("/admin/api/v1/auth/me", headers={"Cookie": "researcher_session=tampered.token"})
+    assert tampered.status_code == 401
+    assert tampered.json()["detail"] == "Invalid or expired researcher session"
+
+
 def test_participant_public_routes_stay_public_and_researcher_docs_disabled(tmp_path) -> None:
     db_path = str(tmp_path / "pilot.sqlite3")
     participant = TestClient(create_participant_app(db_path))

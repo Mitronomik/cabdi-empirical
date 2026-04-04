@@ -41,6 +41,10 @@ def test_researcher_staging_requires_explicit_secure_config(monkeypatch: pytest.
         create_researcher_app(str(tmp_path / "pilot.sqlite3"))
 
     monkeypatch.setenv("PILOT_RESEARCHER_SESSION_SECRET", "a" * 48)
+    with pytest.raises(RuntimeError, match="PILOT_RESEARCHER_COOKIE_SECURE"):
+        create_researcher_app(str(tmp_path / "pilot.sqlite3"))
+
+    monkeypatch.setenv("PILOT_RESEARCHER_COOKIE_SECURE", "true")
     app = create_researcher_app(str(tmp_path / "pilot.sqlite3"))
     assert app.state.researcher_cookie_secure is True
 
@@ -48,6 +52,32 @@ def test_researcher_staging_requires_explicit_secure_config(monkeypatch: pytest.
 def test_researcher_cookie_secure_defaults_false_in_local(tmp_path) -> None:
     app = create_researcher_app(str(tmp_path / "pilot.sqlite3"))
     assert app.state.researcher_cookie_secure is False
+
+
+def test_researcher_staging_rejects_insecure_session_secret(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    monkeypatch.setenv("PILOT_ENV", "staging")
+    monkeypatch.setenv("PILOT_RESEARCHER_CORS_ORIGINS", "https://researcher.example.org")
+    monkeypatch.setenv("PILOT_DB_URL", "postgresql://staging-user:staging-pass@db:5432/cabdi")
+    monkeypatch.setenv("PILOT_RESEARCHER_PASSWORD", "strong-pass")
+    monkeypatch.setenv("PILOT_RESEARCHER_COOKIE_SECURE", "true")
+    monkeypatch.setenv("PILOT_RESEARCHER_SESSION_SECRET", "dev-only-insecure-session-secret-change-me")
+
+    with pytest.raises(RuntimeError, match="PILOT_RESEARCHER_SESSION_SECRET is insecure"):
+        create_researcher_app(str(tmp_path / "pilot.sqlite3"))
+
+
+def test_researcher_staging_rejects_default_like_bootstrap_password(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    monkeypatch.setenv("PILOT_ENV", "staging")
+    monkeypatch.setenv("PILOT_RESEARCHER_CORS_ORIGINS", "https://researcher.example.org")
+    monkeypatch.setenv("PILOT_DB_URL", "postgresql://staging-user:staging-pass@db:5432/cabdi")
+    monkeypatch.setenv("PILOT_RESEARCHER_COOKIE_SECURE", "true")
+    monkeypatch.setenv("PILOT_RESEARCHER_SESSION_SECRET", "a" * 48)
+    monkeypatch.setenv("PILOT_RESEARCHER_PASSWORD", "admin1234")
+
+    with pytest.raises(RuntimeError, match="PILOT_RESEARCHER_PASSWORD is too weak"):
+        create_researcher_app(str(tmp_path / "pilot.sqlite3"))
 
 
 def test_participant_cors_origins_are_environment_driven(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:

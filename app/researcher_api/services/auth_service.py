@@ -24,6 +24,17 @@ class AuthService:
     """Minimal researcher/admin identity and password auth service."""
 
     HASH_ITERATIONS = 210_000
+    LOCAL_DEFAULT_BOOTSTRAP_PASSWORD = "admin1234"
+    WEAK_BOOTSTRAP_PASSWORDS = {
+        "admin",
+        "admin123",
+        "admin1234",
+        "changeme",
+        "change-me",
+        "password",
+        "password123",
+        "researcher",
+    }
 
     def __init__(self, store: PilotStore) -> None:
         self._store = store
@@ -42,7 +53,12 @@ class AuthService:
                 raise RuntimeError(
                     "Researcher auth bootstrap requires PILOT_RESEARCHER_PASSWORD in production-like mode."
                 )
-            password = "admin1234"
+            password = self.LOCAL_DEFAULT_BOOTSTRAP_PASSWORD
+        elif env_mode in {"prod", "production", "staging"} and self._is_weak_bootstrap_password(password):
+            raise RuntimeError(
+                "PILOT_RESEARCHER_PASSWORD is too weak for production-like mode. "
+                "Set a non-default bootstrap password with at least 10 characters."
+            )
 
         self._store.execute(
             """
@@ -56,6 +72,12 @@ class AuthService:
                 datetime.now(timezone.utc).isoformat(),
             ),
         )
+
+    def _is_weak_bootstrap_password(self, password: str) -> bool:
+        normalized = password.strip().lower()
+        if len(password) < 10:
+            return True
+        return normalized in self.WEAK_BOOTSTRAP_PASSWORDS
 
     def authenticate(self, username: str, password: str) -> AuthenticatedUser | None:
         row = self._store.fetchone(
