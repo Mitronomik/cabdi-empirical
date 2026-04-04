@@ -28,6 +28,16 @@ export async function createRun(payload: Record<string, unknown>) {
   return res.json()
 }
 
+export async function apiPost<T>(path: string, payload?: Record<string, unknown>): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: payload ? JSON.stringify(payload) : undefined,
+  })
+  if (!res.ok) throw new Error(await parseError(res))
+  return res.json()
+}
+
 export async function uploadStimuli(form: FormData) {
   const res = await fetch(`${BASE}/admin/api/v1/stimuli/upload`, { method: 'POST', body: form })
   if (!res.ok) throw new Error(await parseError(res))
@@ -40,6 +50,22 @@ export function listStimuli() {
 
 export function listRuns() {
   return apiGet<Array<Record<string, unknown>>>('/admin/api/v1/runs')
+}
+
+export function getRun(runId: string) {
+  return apiGet<Record<string, unknown>>(`/admin/api/v1/runs/${runId}`)
+}
+
+export function activateRun(runId: string) {
+  return apiPost<Record<string, unknown>>(`/admin/api/v1/runs/${runId}/activate`)
+}
+
+export function pauseRun(runId: string) {
+  return apiPost<Record<string, unknown>>(`/admin/api/v1/runs/${runId}/pause`)
+}
+
+export function closeRun(runId: string) {
+  return apiPost<Record<string, unknown>>(`/admin/api/v1/runs/${runId}/close`)
 }
 
 export function getRunBuilderDefaults() {

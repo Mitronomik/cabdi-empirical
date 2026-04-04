@@ -23,11 +23,21 @@ class AdminExportService:
         if not session_ids:
             return {
                 "run_id": run_id,
+                "export_state": "empty",
+                "message": "No sessions for this run yet. Start participant sessions before exporting.",
                 "raw_event_log_jsonl": "",
                 "trial_summary_csv": "",
                 "block_questionnaire_csv": "",
                 "session_summary_csv": "",
                 "session_summary_json": [],
+                "analysis_ready_csv": "",
+                "available_outputs": {
+                    "raw_event_log_jsonl": False,
+                    "trial_summary_csv": False,
+                    "block_questionnaire_csv": False,
+                    "session_summary_csv": False,
+                    "analysis_ready_csv": False,
+                },
             }
 
         placeholders = ",".join("?" for _ in session_ids)
@@ -75,13 +85,24 @@ class AdminExportService:
             session_row["run_id"] = run_id
             session_summary_rows.append(session_row)
 
+        analysis_ready_csv = trial_summary_csv
         return {
             "run_id": run_id,
+            "export_state": "available",
+            "message": "Run exports are available.",
             "raw_event_log_jsonl": raw_event_log_jsonl,
             "trial_summary_csv": trial_summary_csv,
             "block_questionnaire_csv": _to_csv(questionnaire_rows),
             "session_summary_csv": _to_csv(session_summary_rows),
             "session_summary_json": session_summary_rows,
+            "analysis_ready_csv": analysis_ready_csv,
+            "available_outputs": {
+                "raw_event_log_jsonl": bool(raw_event_log_jsonl),
+                "trial_summary_csv": bool(trial_summary_csv),
+                "block_questionnaire_csv": bool(questionnaire_rows),
+                "session_summary_csv": bool(session_summary_rows),
+                "analysis_ready_csv": bool(analysis_ready_csv),
+            },
         }
 
 

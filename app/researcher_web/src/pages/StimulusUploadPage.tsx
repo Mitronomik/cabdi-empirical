@@ -8,15 +8,15 @@ export function StimulusUploadPage() {
   const [error, setError] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [recentSets, setRecentSets] = useState<Array<Record<string, unknown>>>([]);
+  const [sets, setSets] = useState<Array<Record<string, unknown>>>([]);
   const { t } = useLocale();
 
-  async function loadRecent() {
+  async function loadLibrary() {
     try {
       setLoading(true);
       setError('');
       const items = await listStimuli();
-      setRecentSets(items.slice(0, 5));
+      setSets(items);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -25,7 +25,7 @@ export function StimulusUploadPage() {
   }
 
   useEffect(() => {
-    void loadRecent();
+    void loadLibrary();
   }, []);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -34,11 +34,10 @@ export function StimulusUploadPage() {
     setResult(null);
     try {
       setIsUploading(true);
-      const formEl = e.currentTarget;
-      const form = new FormData(formEl);
+      const form = new FormData(e.currentTarget);
       const json = await uploadStimuli(form);
       setResult(json);
-      await loadRecent();
+      await loadLibrary();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -59,37 +58,64 @@ export function StimulusUploadPage() {
         <button type="submit" disabled={isUploading}>
           {isUploading ? 'Uploading...' : t('upload.submit')}
         </button>
-        <button type="button" onClick={loadRecent} disabled={loading}>
+        <button type="button" onClick={loadLibrary} disabled={loading}>
           {t('upload.loadRecent')}
         </button>
       </form>
+
       {loading ? <p>Loading stimulus library...</p> : null}
       {error ? <p role="alert">{error}</p> : null}
+
       {result ? (
         <div>
           <h3>Upload result</h3>
-          <p>status: {String(result.validation_status ?? (result.ok ? 'valid' : 'invalid'))}</p>
+          <p>validation_status: {String(result.validation_status ?? (result.ok ? 'valid' : 'invalid'))}</p>
           <p>stimulus_set_id: {String(result.stimulus_set_id ?? 'n/a')}</p>
+          <p>task_family: {String(result.task_family ?? 'n/a')}</p>
+          <p>source_format: {String(result.source_format ?? 'n/a')}</p>
           <p>n_items: {String(result.n_items ?? 0)}</p>
-          {Array.isArray(result.warnings) && result.warnings.length > 0 ? (
-            <p>warnings: {JSON.stringify(result.warnings)}</p>
-          ) : null}
-          {Array.isArray(result.errors) && result.errors.length > 0 ? <p>errors: {JSON.stringify(result.errors)}</p> : null}
+          <p>payload_schema_version: {String(result.payload_schema_version ?? 'n/a')}</p>
+          {Array.isArray(result.warnings) && result.warnings.length > 0 ? <pre>warnings: {JSON.stringify(result.warnings, null, 2)}</pre> : null}
+          {Array.isArray(result.errors) && result.errors.length > 0 ? <pre>errors: {JSON.stringify(result.errors, null, 2)}</pre> : null}
           {Array.isArray(result.preview_rows) && result.preview_rows.length > 0 ? (
-            <pre>{JSON.stringify(result.preview_rows, null, 2)}</pre>
+            <>
+              <p>preview_rows:</p>
+              <pre>{JSON.stringify(result.preview_rows, null, 2)}</pre>
+            </>
           ) : null}
         </div>
       ) : null}
+
       <h3>{t('upload.recentTitle')}</h3>
-      {!loading && recentSets.length === 0 ? <p>No stimulus banks yet. Upload a bank to continue.</p> : null}
-      <ul>
-        {recentSets.map((setItem) => (
-          <li key={String(setItem.stimulus_set_id)}>
-            {String(setItem.stimulus_set_id)} · {String(setItem.name)} · {String(setItem.task_family)} (
-            {String(setItem.n_items)})
-          </li>
-        ))}
-      </ul>
+      {!loading && sets.length === 0 ? <p>No stimulus banks yet. Upload a bank to continue.</p> : null}
+      {sets.length > 0 ? (
+        <table>
+          <thead>
+            <tr>
+              <th>stimulus_set_id</th>
+              <th>name</th>
+              <th>task_family</th>
+              <th>source_format</th>
+              <th>n_items</th>
+              <th>validation_status</th>
+              <th>payload_schema_version</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sets.map((setItem) => (
+              <tr key={String(setItem.stimulus_set_id)}>
+                <td>{String(setItem.stimulus_set_id)}</td>
+                <td>{String(setItem.name)}</td>
+                <td>{String(setItem.task_family)}</td>
+                <td>{String(setItem.source_format)}</td>
+                <td>{String(setItem.n_items)}</td>
+                <td>{String(setItem.validation_status)}</td>
+                <td>{String(setItem.payload_schema_version ?? 'n/a')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
     </section>
   );
 }
