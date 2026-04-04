@@ -43,7 +43,7 @@ def build_trial_plan(
                 "trial_index": trial_index,
                 "condition": "static_help",
                 "stimulus": stim.to_dict(),
-                "pre_render_features": _base_features(stim, rng),
+                "pre_render_features": _base_features(stim),
             }
         )
 
@@ -59,17 +59,14 @@ def build_trial_plan(
                     "trial_index": trial_index,
                     "condition": condition,
                     "stimulus": stim.to_dict(),
-                    "pre_render_features": _base_features(stim, rng),
+                    "pre_render_features": _base_features(stim),
                 }
             )
     return plan
 
 
-def _base_features(stimulus: StimulusItem, rng: random.Random) -> dict[str, Any]:
+def _base_features(stimulus: StimulusItem) -> dict[str, Any]:
     return {
         "model_confidence": stimulus.model_confidence,
         "difficulty_prior": stimulus.difficulty_prior,
-        "recent_error_count_last_3": 0,
-        "recent_blind_accept_count_last_3": 0,
-        "recent_latency_z_bucket": rng.choice(["low", "medium", "high"]),
     }

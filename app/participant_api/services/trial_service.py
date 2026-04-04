@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import math
 from typing import Any
 from uuid import uuid4
 
@@ -66,6 +67,12 @@ class TrialService:
             policy_decision = loads(trial["policy_decision_json"])
             risk_bucket = trial["risk_bucket"]
         else:
+            base_features = loads(trial["pre_render_features_json"])
+            lagged_features = self._lagged_features_from_prior_trials(
+                session_id=session_id,
+                current_trial_id=trial["trial_id"],
+            )
+            pre_render_features = {**base_features, **lagged_features}
             context = TrialContext(
                 session_id=session_id,
                 participant_id=session["participant_id"],
@@ -73,13 +80,17 @@ class TrialService:
                 block_id=trial["block_id"],
                 trial_id=trial["trial_id"],
                 stimulus=stimulus,
-                recent_history={},
-                pre_render_features=loads(trial["pre_render_features_json"]),
+                recent_history={"lagged_window_size": lagged_features["prior_completed_trials_considered"]},
+                pre_render_features=pre_render_features,
             )
             risk_bucket, policy_decision = render_policy_decision(context)
             self.store.execute(
-                "UPDATE session_trials SET risk_bucket = ?, policy_decision_json = ?, served_at = ? WHERE trial_id = ?",
-                (risk_bucket, dumps(policy_decision), _now_iso(), trial["trial_id"]),
+                """
+                UPDATE session_trials
+                SET pre_render_features_json = ?, risk_bucket = ?, policy_decision_json = ?, served_at = ?
+                WHERE trial_id = ?
+                """,
+                (dumps(pre_render_features), risk_bucket, dumps(policy_decision), _now_iso(), trial["trial_id"]),
             )
             self._log_event(
                 session_id=session_id,
@@ -267,6 +278,58 @@ class TrialService:
 
         return None
 
+    def _lagged_features_from_prior_trials(self, session_id: str, current_trial_id: str) -> dict[str, Any]:
+        """Derive lagged routing features from prior completed trials in this session.
+
+        Operational semantics:
+        - Window: most recent up to 3 *completed* trials before current trial serving.
+        - error: summary.correct_or_not is explicitly False.
+        - blind acceptance: accepted_model_advice=True and model_correct_or_not=False.
+        - latency bucket: z-bucket from prior reaction_time_ms values only; falls back
+          deterministically to "medium" for sparse or degenerate latency history.
+        """
+        rows = self.store.fetchall(
+            """
+            SELECT st.trial_id, tsl.summary_json
+            FROM session_trials st
+            LEFT JOIN trial_summary_logs tsl
+              ON tsl.session_id = st.session_id AND tsl.trial_id = st.trial_id
+            WHERE st.session_id = ?
+              AND st.status = 'completed'
+              AND st.completed_at IS NOT NULL
+              AND st.trial_id != ?
+            ORDER BY st.completed_at DESC
+            LIMIT 3
+            """,
+            (session_id, current_trial_id),
+        )
+
+        summaries: list[dict[str, Any]] = []
+        for row in rows:
+            if not row["summary_json"]:
+                continue
+            try:
+                parsed = loads(row["summary_json"])
+            except Exception:
+                continue
+            if isinstance(parsed, dict):
+                summaries.append(parsed)
+
+        recent_error_count = sum(1 for summary in summaries if summary.get("correct_or_not") is False)
+        recent_blind_accept_count = sum(
+            1
+            for summary in summaries
+            if summary.get("accepted_model_advice") is True and summary.get("model_correct_or_not") is False
+        )
+        latency_bucket = _latency_bucket_from_summaries(summaries)
+
+        return {
+            "recent_error_count_last_3": recent_error_count,
+            "recent_blind_accept_count_last_3": recent_blind_accept_count,
+            "recent_latency_z_bucket": latency_bucket,
+            "prior_completed_trials_considered": len(summaries),
+        }
+
     def _log_event(self, session_id: str, block_id: str, trial_id: str, event_type: str, payload: dict[str, Any]) -> None:
         event = TrialEventLog(
             event_id=f"evt_{uuid4().hex[:14]}",
@@ -300,3 +363,34 @@ def _shown_components(policy_decision: dict[str, Any]) -> list[str]:
     if policy_decision["show_evidence"]:
         components.append("evidence")
     return components
+
+
+def _latency_bucket_from_summaries(summaries: list[dict[str, Any]]) -> str:
+    latencies: list[int] = []
+    for summary in summaries:
+        value = summary.get("reaction_time_ms")
+        if value is None:
+            continue
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            continue
+        if parsed >= 0:
+            latencies.append(parsed)
+
+    if len(latencies) < 2:
+        return "medium"
+
+    latest_latency = latencies[0]
+    mean_latency = sum(latencies) / len(latencies)
+    variance = sum((item - mean_latency) ** 2 for item in latencies) / len(latencies)
+    std_dev = math.sqrt(variance)
+    if std_dev == 0:
+        return "medium"
+
+    z_score = (latest_latency - mean_latency) / std_dev
+    if z_score >= 0.5:
+        return "high"
+    if z_score <= -0.5:
+        return "low"
+    return "medium"
