@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from app.participant_api.main import create_app as create_participant_app
+from app.participant_api.persistence.sqlite_store import dumps
 from app.researcher_api.main import create_app as create_researcher_app
 
 
@@ -21,6 +22,30 @@ def _upload_stimulus(client: TestClient) -> str:
     assert res.json()["ok"] is True
     assert res.json()["validation_status"] == "valid"
     return res.json()["stimulus_set_id"]
+
+
+def _complete_one_non_practice_trial(participant: TestClient, session_id: str) -> str:
+    assert participant.post(f"/api/v1/sessions/{session_id}/start").status_code == 200
+    for _ in range(12):
+        trial_res = participant.get(f"/api/v1/sessions/{session_id}/next-trial")
+        assert trial_res.status_code == 200
+        trial = trial_res.json()
+        if trial.get("no_more_trials"):
+            break
+        assert participant.post(
+            f"/api/v1/sessions/{session_id}/trials/{trial['trial_id']}/submit",
+            json={
+                "human_response": trial["stimulus"]["model_prediction"],
+                "reaction_time_ms": 1200,
+                "self_confidence": 60,
+                "reason_clicked": False,
+                "evidence_opened": False,
+                "verification_completed": False,
+            },
+        ).status_code == 200
+        if trial["block_id"] != "practice":
+            return str(trial["trial_id"])
+    raise AssertionError("Failed to complete a non-practice trial")
 
 
 def test_create_run_and_session_monitor_and_diagnostics(tmp_path):
@@ -260,3 +285,138 @@ def test_run_diagnostics_and_exports_share_run_scoped_truth(tmp_path):
     assert d_body["session_counts"]["awaiting_final_submit"] == 1
     assert d_body["session_counts"]["finalized"] == 1
     assert len(e_body["session_summary_json"]) == 2
+
+
+def test_budget_diagnostics_detect_display_and_interaction_drift(tmp_path):
+    db_path = str(tmp_path / "pilot.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    participant = TestClient(create_participant_app(db_path))
+    stimulus_set_id = _upload_stimulus(researcher)
+    run_res = researcher.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "budget-drift run",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"n_blocks": 3},
+            "stimulus_set_ids": [stimulus_set_id],
+        },
+    )
+    run_id = run_res.json()["run_id"]
+    run_slug = run_res.json()["public_slug"]
+    assert researcher.post(f"/admin/api/v1/runs/{run_id}/activate").status_code == 200
+
+    session_id = participant.post(
+        "/api/v1/sessions",
+        json={"participant_id": "p_budget", "run_slug": run_slug},
+    ).json()["session_id"]
+    trial_id = _complete_one_non_practice_trial(participant, session_id)
+    participant.app.state.store.execute(
+        "UPDATE session_trials SET policy_decision_json = ?, risk_bucket = ? WHERE trial_id = ?",
+        (
+            dumps(
+                {
+                    "condition": "static_help",
+                    "risk_bucket": "low",
+                    "show_prediction": True,
+                    "show_confidence": True,
+                    "show_rationale": "inline",
+                    "show_evidence": True,
+                    "verification_mode": "forced_checkbox",
+                    "compression_mode": "none",
+                    "max_extra_steps": 2,
+                    "ui_help_level": "fixed",
+                    "ui_verification_level": "fixed",
+                    "budget_signature": {
+                        "shown_components_count": 4,
+                        "text_tokens_shown": 80,
+                        "evidence_available_count": 1,
+                        "max_extra_steps": 2,
+                    },
+                }
+            ),
+            "low",
+            trial_id,
+        ),
+    )
+    participant.app.state.store.execute(
+        "UPDATE trial_summary_logs SET summary_json = ? WHERE session_id = ? AND trial_id = ?",
+        (
+            dumps(
+                {
+                    "participant_id": "p_budget",
+                    "session_id": session_id,
+                    "experiment_id": "toy_v1",
+                    "condition": "static_help",
+                    "stimulus_id": "s1",
+                    "task_family": "scam_detection",
+                    "true_label": "scam",
+                    "human_response": "scam",
+                    "correct_or_not": True,
+                    "model_prediction": "scam",
+                    "model_confidence": "high",
+                    "model_correct_or_not": True,
+                    "risk_bucket": "low",
+                    "shown_help_level": "fixed",
+                    "shown_verification_level": "fixed",
+                    "shown_components": ["prediction", "confidence", "rationale", "evidence"],
+                    "accepted_model_advice": True,
+                    "overrode_model": False,
+                    "verification_required": True,
+                    "verification_completed": True,
+                    "reason_clicked": True,
+                    "evidence_opened": True,
+                    "reaction_time_ms": 1200,
+                    "self_confidence": 70,
+                }
+            ),
+            session_id,
+            trial_id,
+        ),
+    )
+
+    diagnostics = researcher.get(f"/admin/api/v1/runs/{run_id}/diagnostics")
+    assert diagnostics.status_code == 200
+    body = diagnostics.json()
+    kinds = {flag["kind"] for flag in body["budget_tolerance_flags"]}
+    assert "text_tolerance_exceeded" in kinds
+    assert "display_tolerance_exceeded" in kinds
+    assert "interaction_tolerance_exceeded" in kinds
+    assert "hard_cap_exceeded" in kinds
+    assert "budget_observed_by_condition" in body
+    assert "budget_reference_by_condition" in body
+
+
+def test_budget_diagnostics_warn_on_incomplete_basis(tmp_path):
+    db_path = str(tmp_path / "pilot.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    participant = TestClient(create_participant_app(db_path))
+    stimulus_set_id = _upload_stimulus(researcher)
+    run_res = researcher.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "budget-incomplete run",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"n_blocks": 3},
+            "stimulus_set_ids": [stimulus_set_id],
+        },
+    )
+    run_id = run_res.json()["run_id"]
+    run_slug = run_res.json()["public_slug"]
+    assert researcher.post(f"/admin/api/v1/runs/{run_id}/activate").status_code == 200
+    session_id = participant.post(
+        "/api/v1/sessions",
+        json={"participant_id": "p_incomplete", "run_slug": run_slug},
+    ).json()["session_id"]
+    _complete_one_non_practice_trial(participant, session_id)
+    participant.app.state.store.execute(
+        "UPDATE session_trials SET policy_decision_json = NULL WHERE session_id = ? AND block_id != 'practice' AND status = 'completed'",
+        (session_id,),
+    )
+
+    diagnostics = researcher.get(f"/admin/api/v1/runs/{run_id}/diagnostics")
+    assert diagnostics.status_code == 200
+    body = diagnostics.json()
+    assert any(flag["kind"] == "insufficient_budget_data" for flag in body["budget_tolerance_flags"])
+    assert any("Budget diagnostics are incomplete" in warning for warning in body["warnings"])

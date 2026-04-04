@@ -75,8 +75,8 @@ def compare_budget_to_reference(
             )
             continue
 
-        text_obs = float(obs["mean_text_tokens_shown"])
-        text_ref = float(ref["mean_text_tokens_shown"])
+        text_obs = float(obs.get("mean_text_tokens_shown", 0.0))
+        text_ref = float(ref.get("mean_text_tokens_shown", 0.0))
         if text_ref > 0 and abs(text_obs - text_ref) / text_ref > tol_text:
             flags.append(
                 {
@@ -88,8 +88,21 @@ def compare_budget_to_reference(
                 }
             )
 
-        step_obs = float(obs["mean_realized_extra_steps"])
-        step_ref = float(ref["mean_realized_extra_steps"])
+        comp_obs = float(obs.get("mean_shown_components_count", 0.0))
+        comp_ref = float(ref.get("mean_shown_components_count", 0.0))
+        if comp_ref > 0 and abs(comp_obs - comp_ref) / comp_ref > tol_text:
+            flags.append(
+                {
+                    "condition": condition,
+                    "severity": "warning",
+                    "kind": "display_tolerance_exceeded",
+                    "observed": comp_obs,
+                    "reference": comp_ref,
+                }
+            )
+
+        step_obs = float(obs.get("mean_realized_extra_steps", 0.0))
+        step_ref = float(ref.get("mean_realized_extra_steps", 0.0))
         denom = step_ref if step_ref > 0 else 1.0
         if abs(step_obs - step_ref) / denom > tol_interaction:
             flags.append(
@@ -102,13 +115,13 @@ def compare_budget_to_reference(
                 }
             )
 
-        if float(obs["max_extra_steps_per_trial"]) > hard_max_extra_steps_per_trial:
+        if float(obs.get("max_extra_steps_per_trial", 0.0)) > hard_max_extra_steps_per_trial:
             flags.append(
                 {
                     "condition": condition,
                     "severity": "error",
                     "kind": "hard_cap_exceeded",
-                    "observed": float(obs["max_extra_steps_per_trial"]),
+                    "observed": float(obs.get("max_extra_steps_per_trial", 0.0)),
                     "cap": hard_max_extra_steps_per_trial,
                 }
             )

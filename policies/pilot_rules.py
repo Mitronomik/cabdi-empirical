@@ -163,6 +163,26 @@ def _policy_decision_by_condition(condition: str, risk_bucket: RiskBucket) -> di
     raise ValueError(f"Unknown pilot policy condition: {condition}")
 
 
+def expected_budget_signature(condition: str, risk_bucket: RiskBucket) -> dict[str, int]:
+    """Return the contract budget signature for a condition/risk pair."""
+    decision_kwargs = _policy_decision_by_condition(condition, risk_bucket)
+    shown_components_count = sum(
+        int(flag)
+        for flag in [
+            decision_kwargs["show_prediction"],
+            decision_kwargs["show_confidence"],
+            decision_kwargs["show_rationale"] != "none",
+            decision_kwargs["show_evidence"],
+        ]
+    )
+    return {
+        "shown_components_count": shown_components_count,
+        "text_tokens_shown": int(20 * shown_components_count),
+        "evidence_available_count": int(decision_kwargs["show_evidence"]),
+        "max_extra_steps": int(decision_kwargs["max_extra_steps"]),
+    }
+
+
 def build_policy_decision(
     trial_context: TrialContext,
     trial_risk_state: TrialRiskState,
@@ -180,22 +200,7 @@ def build_policy_decision(
     condition_spec = condition_map[trial_context.condition]
     decision_kwargs = _policy_decision_by_condition(trial_context.condition, trial_risk_state.risk_bucket)
 
-    shown_components_count = sum(
-        int(flag)
-        for flag in [
-            decision_kwargs["show_prediction"],
-            decision_kwargs["show_confidence"],
-            decision_kwargs["show_rationale"] != "none",
-            decision_kwargs["show_evidence"],
-        ]
-    )
-
-    budget_signature = {
-        "shown_components_count": shown_components_count,
-        "text_tokens_shown": int(20 * shown_components_count),
-        "evidence_available_count": int(decision_kwargs["show_evidence"]),
-        "max_extra_steps": decision_kwargs["max_extra_steps"],
-    }
+    budget_signature = expected_budget_signature(trial_context.condition, trial_risk_state.risk_bucket)
     if budget_overrides:
         budget_signature = replace_budget_signature(budget_signature, budget_overrides)
 

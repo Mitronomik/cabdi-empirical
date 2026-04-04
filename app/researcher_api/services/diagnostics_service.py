@@ -10,6 +10,7 @@ from app.researcher_api.services.run_data_service import RunDataService
 from packages.shared_types.pilot_types import RiskBucket
 from policies.budget_checks import compare_budget_to_reference, summarize_budgets_by_condition
 from policies.contracts import BudgetTrace
+from policies.pilot_rules import expected_budget_signature
 
 _CORE_SUMMARY_FIELDS = [
     "participant_id",
@@ -93,7 +94,10 @@ class DiagnosticsService:
             for (condition, block_id), (wrong, total) in model_wrong_counts.items()
         }
 
-        budget_flags = self._budget_flags(run_data.trial_rows)
+        budget_observed, budget_reference, budget_flags = self._budget_diagnostics(
+            run_data.trial_rows,
+            run_data.trial_summary_rows,
+        )
         n_trials = max(len(parsed_summaries), 1)
         warnings = []
         if len(parsed_summaries) != len(
@@ -106,6 +110,8 @@ class DiagnosticsService:
             warnings.append(f"Missing core log fields detected: {missing_core_fields_count}")
         if len(parsed_summaries) == 0 and len(run_data.trial_rows) > 0:
             warnings.append("No trial summaries logged for this run yet")
+        if any(flag["kind"] in {"missing_reference", "insufficient_budget_data"} for flag in budget_flags):
+            warnings.append("Budget diagnostics are incomplete; matched-budget interpretation is unresolved for this run")
 
         return {
             "run_id": run_id,
@@ -120,17 +126,43 @@ class DiagnosticsService:
             "reason_click_rate": reason_count / n_trials,
             "evidence_open_rate": evidence_count / n_trials,
             "block_order_distribution": dict(block_order_distribution),
+            "budget_observed_by_condition": budget_observed,
+            "budget_reference_by_condition": budget_reference,
             "budget_tolerance_flags": budget_flags,
             "warnings": warnings,
         }
 
-    def _budget_flags(self, trial_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _budget_diagnostics(
+        self,
+        trial_rows: list[dict[str, Any]],
+        trial_summary_rows: list[dict[str, Any]],
+    ) -> tuple[dict[str, dict[str, float]], dict[str, dict[str, float]], list[dict[str, Any]]]:
         traces: list[BudgetTrace] = []
+        reference_traces: list[BudgetTrace] = []
+        flags: list[dict[str, Any]] = []
+        summary_by_trial = {
+            (str(row.get("session_id", "")), str(row.get("trial_id", ""))): row for row in trial_summary_rows
+        }
         for row in trial_rows:
+            if row.get("block_id") == "practice" or row.get("status") != "completed":
+                continue
             decision_payload = row.get("policy_decision_json")
             if not decision_payload:
+                flags.append(
+                    {
+                        "condition": row.get("condition", "unknown"),
+                        "severity": "warning",
+                        "kind": "insufficient_budget_data",
+                        "message": "Missing policy_decision_json for completed trial",
+                        "session_id": row.get("session_id"),
+                        "trial_id": row.get("trial_id"),
+                    }
+                )
                 continue
             decision = loads(decision_payload)
+            summary = summary_by_trial.get((row["session_id"], row["trial_id"]), {})
+            realized_extra_steps = int(bool(summary.get("reason_clicked"))) + int(bool(summary.get("evidence_opened")))
+            verification_actions = int(bool(summary.get("verification_completed")))
             traces.append(
                 BudgetTrace(
                     condition=row["condition"],
@@ -139,21 +171,51 @@ class DiagnosticsService:
                     shown_text_tokens=int(decision["budget_signature"].get("text_tokens_shown", 0)),
                     evidence_available=int(decision["budget_signature"].get("evidence_available_count", 0)),
                     max_extra_steps=int(decision["budget_signature"].get("max_extra_steps", 0)),
-                    realized_extra_steps=0,
-                    verification_actions=0,
+                    realized_extra_steps=realized_extra_steps + verification_actions,
+                    verification_actions=verification_actions,
                     block_id=row["block_id"],
                 )
             )
+            try:
+                risk_bucket = RiskBucket(str(row.get("risk_bucket") or decision["risk_bucket"]))
+                ref_signature = expected_budget_signature(row["condition"], risk_bucket)
+                reference_traces.append(
+                    BudgetTrace(
+                        condition=row["condition"],
+                        risk_bucket=risk_bucket,
+                        shown_components_count=int(ref_signature["shown_components_count"]),
+                        shown_text_tokens=int(ref_signature["text_tokens_shown"]),
+                        evidence_available=int(ref_signature["evidence_available_count"]),
+                        max_extra_steps=int(ref_signature["max_extra_steps"]),
+                        realized_extra_steps=int(ref_signature["max_extra_steps"]),
+                        verification_actions=0,
+                        block_id=row["block_id"],
+                    )
+                )
+            except (KeyError, ValueError):
+                flags.append(
+                    {
+                        "condition": row.get("condition", "unknown"),
+                        "severity": "warning",
+                        "kind": "missing_reference",
+                        "message": "No condition/risk reference available for trial",
+                        "session_id": row.get("session_id"),
+                        "trial_id": row.get("trial_id"),
+                    }
+                )
 
         if not traces:
-            return []
+            return {}, {}, flags
 
         observed = summarize_budgets_by_condition(traces)
-        reference = {condition: dict(metrics) for condition, metrics in observed.items()}
-        return compare_budget_to_reference(
-            observed=observed,
-            reference=reference,
-            text_budget_tolerance_pct=20.0,
-            interaction_budget_tolerance_pct=20.0,
-            hard_max_extra_steps_per_trial=1,
+        reference = summarize_budgets_by_condition(reference_traces) if reference_traces else {}
+        flags.extend(
+            compare_budget_to_reference(
+                observed=observed,
+                reference=reference,
+                text_budget_tolerance_pct=20.0,
+                interaction_budget_tolerance_pct=20.0,
+                hard_max_extra_steps_per_trial=1,
+            )
         )
+        return observed, reference, flags

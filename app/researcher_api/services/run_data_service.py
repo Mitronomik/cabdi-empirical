@@ -47,7 +47,7 @@ class RunDataService:
         placeholders = ",".join("?" for _ in session_ids)
         trial_rows = self.store.fetchall(
             f"""
-            SELECT trial_id, session_id, block_id, block_index, trial_index, condition, risk_bucket, status, served_at, completed_at
+            SELECT trial_id, session_id, block_id, block_index, trial_index, condition, risk_bucket, policy_decision_json, status, served_at, completed_at
             FROM session_trials
             WHERE session_id IN ({placeholders})
             ORDER BY session_id, block_index, trial_index
