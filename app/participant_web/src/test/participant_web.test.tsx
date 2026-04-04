@@ -181,7 +181,7 @@ test('trial screen renders consistent layout and assistance panel', async () => 
   await proceedToInstructionsAndStart(user);
 
   await screen.findByTestId('trial-layout');
-  expect(screen.getByText(/trial 1 \/ 54/i)).toBeInTheDocument();
+  expect(screen.getByText(/trial 1 \/ [0-9]+/i)).toBeInTheDocument();
   expect(screen.getByLabelText(/ai assistance panel/i)).toBeInTheDocument();
   expect(screen.getByText(/prediction:/i)).toBeInTheDocument();
 });

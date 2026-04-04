@@ -35,12 +35,13 @@ class TrialService:
 
     def next_trial(self, session_id: str) -> dict[str, Any] | None:
         session = self.session_service.get_session(session_id)
+        progress = self._progress(session_id)
         if session["status"] in {SESSION_STATUS_AWAITING_FINAL_SUBMIT, SESSION_STATUS_FINALIZED, "completed"}:
-            return {"status": session["status"], "session_id": session_id, "no_more_trials": True}
+            return {"status": session["status"], "session_id": session_id, "no_more_trials": True, "progress": progress}
         if session["status"] in {SESSION_STATUS_PAUSED, "abandoned"}:
-            return {"status": session["status"], "session_id": session_id}
+            return {"status": session["status"], "session_id": session_id, "progress": progress}
         if session["status"] not in {SESSION_STATUS_IN_PROGRESS, SESSION_STATUS_CREATED}:
-            return {"status": session["status"], "session_id": session_id}
+            return {"status": session["status"], "session_id": session_id, "progress": progress}
 
         blocked = self._questionnaire_block_gate(session_id)
         if blocked:
@@ -58,7 +59,7 @@ class TrialService:
         if trial is None:
             moved = self.session_service.mark_awaiting_final_submit_if_done(session_id)
             status = SESSION_STATUS_AWAITING_FINAL_SUBMIT if moved else self.session_service.get_session(session_id)["status"]
-            return {"status": status, "session_id": session_id, "no_more_trials": True}
+            return {"status": status, "session_id": session_id, "no_more_trials": True, "progress": self._progress(session_id)}
 
         stimulus = StimulusItem.from_dict(loads(trial["stimulus_json"]))
         if trial["policy_decision_json"]:
@@ -101,6 +102,21 @@ class TrialService:
             "stimulus": stimulus.to_dict(),
             "policy_decision": policy_decision,
             "self_confidence_scale": CONFIDENCE_SCALE,
+            "progress": progress,
+        }
+
+    def _progress(self, session_id: str) -> dict[str, int]:
+        total_row = self.store.fetchone("SELECT COUNT(*) AS n FROM session_trials WHERE session_id = ?", (session_id,))
+        completed_row = self.store.fetchone(
+            "SELECT COUNT(*) AS n FROM session_trials WHERE session_id = ? AND status = 'completed'",
+            (session_id,),
+        )
+        total = int(total_row["n"]) if total_row else 0
+        completed = int(completed_row["n"]) if completed_row else 0
+        return {
+            "total_trials": total,
+            "completed_trials": completed,
+            "current_ordinal": min(completed + 1, total) if total > 0 else 0,
         }
 
     def submit_trial(self, session_id: str, trial_id: str, payload: dict[str, Any]) -> dict[str, Any]:

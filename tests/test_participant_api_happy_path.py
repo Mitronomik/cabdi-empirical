@@ -170,7 +170,11 @@ def test_session_flow_happy_path_with_exports(tmp_path):
         assert submit_res.status_code == 200
         submitted += 1
 
-    assert submitted == 54
+    expected_total = client.app.state.store.fetchone(
+        "SELECT COUNT(*) AS n FROM session_trials WHERE session_id = ?",
+        (session_id,),
+    )["n"]
+    assert submitted == expected_total
     assert questionnaire_submitted == {"block_1", "block_2", "block_3"}
 
     export_res = client.get(f"/api/v1/exports/sessions/{session_id}")
@@ -179,7 +183,7 @@ def test_session_flow_happy_path_with_exports(tmp_path):
     assert "raw_event_log_jsonl" in export_data
     assert "trial_summary_csv" in export_data
     assert "block_questionnaire_csv" in export_data
-    assert export_data["participant_session_summary"]["n_trial_summaries"] == 54
+    assert export_data["participant_session_summary"]["n_trial_summaries"] == expected_total
     assert export_data["participant_session_summary"]["language"] == "en"
     assert export_data["participant_session_summary"]["status"] == "awaiting_final_submit"
 
@@ -523,6 +527,90 @@ def test_final_submit_unknown_session_returns_404(tmp_path):
     client = _make_client(tmp_path)
     res = client.post("/api/v1/sessions/sess_missing/final-submit")
     assert res.status_code == 404
+
+
+def test_live_session_creation_fails_for_non_executable_run_config_without_default_fallback(tmp_path):
+    client = _make_client(tmp_path)
+    run_slug = _bootstrap_run(tmp_path)
+
+    row = client.app.state.store.fetchone(
+        "SELECT run_id FROM researcher_runs WHERE public_slug = ?",
+        (run_slug,),
+    )
+    assert row is not None
+    client.app.state.store.execute(
+        "UPDATE researcher_runs SET config_json = ? WHERE run_id = ?",
+        (dumps({"mode": "broken"}), row["run_id"]),
+    )
+
+    res = client.post(
+        "/api/v1/sessions",
+        json={"participant_id": "p_non_exec", "run_slug": run_slug},
+    )
+    assert res.status_code == 400
+    assert "missing executable fields" in res.json()["detail"]
+
+
+def test_session_trial_shape_comes_from_run_config_json(tmp_path):
+    db_path = str(tmp_path / "pilot_api.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    _login_researcher(researcher)
+    client = _make_client(tmp_path)
+
+    payload = (
+        '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"title":"Case","body":"a"},'
+        '"true_label":"scam","difficulty_prior":"low","model_prediction":"scam","model_confidence":"high",'
+        '"model_correct":true,"eligible_sets":["demo"]}\n'
+    )
+    upload = researcher.post(
+        "/admin/api/v1/stimuli/upload",
+        files={"file": ("stimuli.jsonl", payload, "application/json")},
+        data={"name": "set1", "source_format": "jsonl"},
+    )
+    stimulus_set_id = upload.json()["stimulus_set_id"]
+    run = researcher.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "run cfg shape",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {
+                "execution": {
+                    "experiment_id": "toy_v1",
+                    "task_family": "scam_detection",
+                    "n_blocks": 1,
+                    "trials_per_block": 2,
+                    "practice_trials": 0,
+                    "conditions": ["static_help", "monotone_help", "cabdi_lite"],
+                    "block_order_strategy": "latin_square",
+                    "budget_matching_mode": "matched",
+                    "risk_proxy_mode": "pre_render_features_v1",
+                    "self_confidence_scale": "0_100_int",
+                    "block_questionnaires": ["burden", "trust", "usefulness"],
+                }
+            },
+            "stimulus_set_ids": [stimulus_set_id],
+        },
+    )
+    assert researcher.post(f"/admin/api/v1/runs/{run.json()['run_id']}/activate").status_code == 200
+
+    create_res = client.post(
+        "/api/v1/sessions",
+        json={"participant_id": "p_run_cfg", "run_slug": run.json()["public_slug"]},
+    )
+    assert create_res.status_code == 200
+    session_id = create_res.json()["session_id"]
+    assert client.post(f"/api/v1/sessions/{session_id}/start").status_code == 200
+    first = client.get(f"/api/v1/sessions/{session_id}/next-trial")
+    assert first.status_code == 200
+    assert first.json()["progress"]["total_trials"] == 2
+
+    trial_count = client.app.state.store.fetchone(
+        "SELECT COUNT(*) AS n FROM session_trials WHERE session_id = ?",
+        (session_id,),
+    )
+    assert trial_count is not None
+    assert trial_count["n"] == 2
 
 
 def test_session_creation_returns_resume_identity(tmp_path):

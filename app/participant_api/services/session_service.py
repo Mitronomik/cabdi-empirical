@@ -11,6 +11,7 @@ from uuid import uuid4
 from app.participant_api.persistence.sqlite_store import dumps, loads
 from app.participant_api.persistence.store_protocol import PilotStore
 from app.participant_api.services.randomization_service import assign_order_id, build_trial_plan
+from app.participant_api.services.run_config_service import resolve_execution_config_from_run
 from app.researcher_api.services.run_service import (
     RUN_STATUS_ACTIVE,
     RUN_STATUS_CLOSED,
@@ -18,9 +19,6 @@ from app.researcher_api.services.run_service import (
     RUN_STATUS_PAUSED,
 )
 from packages.shared_types.pilot_types import ParticipantSession, StimulusItem
-from pilot.config_loader import load_experiment_config
-
-DEFAULT_EXPERIMENT_PATH = "pilot/configs/default_experiment.yaml"
 SESSION_STATUS_CREATED = "created"
 SESSION_STATUS_IN_PROGRESS = "in_progress"
 SESSION_STATUS_PAUSED = "paused"
@@ -75,7 +73,12 @@ class SessionService:
             if resume_info["resume_status"] == "finalized":
                 raise ValueError("resume_not_allowed:session_finalized")
 
-        experiment = load_experiment_config(DEFAULT_EXPERIMENT_PATH)
+        run_config = loads(run["config_json"])
+        experiment = resolve_execution_config_from_run(
+            run_config=run_config,
+            run_experiment_id=run["experiment_id"],
+            run_task_family=run["task_family"],
+        )
         stimuli = self._load_run_stimuli(run)
         order_id, assigned_order = assign_order_id(participant_id, experiment.experiment_id)
         session_id = f"sess_{uuid4().hex[:12]}"

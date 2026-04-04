@@ -41,6 +41,11 @@ export interface TrialPayload {
     max: number;
     step: number;
   };
+  progress?: {
+    completed_trials: number;
+    total_trials: number;
+    current_ordinal: number;
+  };
 }
 
 export interface QuestionnairePayload {
