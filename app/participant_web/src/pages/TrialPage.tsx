@@ -46,7 +46,7 @@ export function TrialPage({ trial, completedTrials, totalTrials, loading, onSubm
         <p>
           {t('trial.progressLabel')} {Math.min(completedTrials + 1, totalTrials)} / {totalTrials}
         </p>
-        <div className="progress-track" aria-label="progress">
+        <div className="progress-track" aria-label={t('trial.progressAria')}>
           <div className="progress-fill" style={{ width: `${progressPct}%` }} />
         </div>
       </header>

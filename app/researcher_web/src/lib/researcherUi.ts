@@ -53,6 +53,11 @@ export function runOptionLabel(run: RunSummary): string {
   return `${run.run_name || run.run_id} • ${slug} • ${run.status}`;
 }
 
+export function runOptionLabelLocalized(run: RunSummary, localizeStatus: (value: unknown) => string): string {
+  const slug = run.public_slug ? `/${run.public_slug}` : 'no-public-slug';
+  return `${run.run_name || run.run_id} • ${slug} • ${localizeStatus(run.status)}`;
+}
+
 export function pickDefaultRunId(runs: RunSummary[]): string {
   const active = runs.find((item) => item.status === 'active');
   if (active) return active.run_id;

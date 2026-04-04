@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
+import { localizeOperatorError, localizeStatus } from '../i18n/uiText';
 import { useLocale } from '../i18n/useLocale';
 import { activateRun, closeRun, createRun, getRunBuilderDefaults, listRuns, listStimuli, pauseRun } from '../lib/api';
 import { parseRunSummary, parseStimulusSetSummary } from '../lib/researcherUi';
@@ -59,7 +60,7 @@ export function RunBuilderPage() {
         setPublicSlug(runName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('common.unknownError'));
+      setError(localizeOperatorError(t, err));
     } finally {
       setLoading(false);
     }
@@ -100,7 +101,7 @@ export function RunBuilderPage() {
       setSuccess(t('run.createSuccess'));
       await loadRecentRuns();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('common.unknownError'));
+      setError(localizeOperatorError(t, err));
     } finally {
       setIsCreating(false);
     }
@@ -131,7 +132,7 @@ export function RunBuilderPage() {
       }
       await loadRecentRuns();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('common.unknownError'));
+      setError(localizeOperatorError(t, err));
     } finally {
       setLifecycleLoadingRunId('');
     }
@@ -168,7 +169,7 @@ export function RunBuilderPage() {
 
       {selectedStimulus ? (
         <p>
-          {t('run.selectedStimulusSummary')}: {selectedStimulus.name} ({selectedStimulus.n_items} items, {selectedStimulus.validation_status}) · {selectedStimulus.stimulus_set_id}
+          {t('run.selectedStimulusSummary')}: {selectedStimulus.name} ({selectedStimulus.n_items} items, {localizeStatus(t, selectedStimulus.validation_status)}) · {selectedStimulus.stimulus_set_id}
         </p>
       ) : null}
       {error ? <p role="alert">{error}</p> : null}
@@ -178,7 +179,7 @@ export function RunBuilderPage() {
           <h3>{t('run.createResultTitle')}</h3>
           <p>{t('run.tableRunName')}: {String(response.run_name)}</p>
           <p>{t('run.tableSlug')}: {String(response.public_slug)}</p>
-          <p>{t('run.tableStatus')}: {String(response.status)}</p>
+          <p>{t('run.tableStatus')}: {localizeStatus(t, response.status)}</p>
           <p>{t('run.tableRunId')}: {String(response.run_id)}</p>
         </div>
       ) : null}
@@ -205,7 +206,7 @@ export function RunBuilderPage() {
                 <tr key={runId}>
                   <td>{run.run_name}</td>
                   <td>{run.public_slug}</td>
-                  <td>{status}</td>
+                  <td>{localizeStatus(t, status)}</td>
                   <td>{run.launchability_reason}</td>
                   <td>{run.linked_stimulus_set_ids.join(', ')}</td>
                   <td>{runId}</td>

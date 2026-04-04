@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
+import { formatProgress, localizeOperatorError, localizeStatus } from '../i18n/uiText';
 import { useLocale } from '../i18n/useLocale';
 import { getRunSessions, listRuns } from '../lib/api';
-import { parseRunSummary, pickDefaultRunId, runOptionLabel } from '../lib/researcherUi';
+import { parseRunSummary, pickDefaultRunId, runOptionLabelLocalized } from '../lib/researcherUi';
 
 export function SessionMonitorPage() {
   const [runId, setRunId] = useState('');
@@ -21,7 +22,7 @@ export function SessionMonitorPage() {
       setRuns(items);
       if (items.length > 0) setRunId((prev) => prev || pickDefaultRunId(items));
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('common.unknownError'));
+      setError(localizeOperatorError(t, err));
     } finally {
       setLoadingRuns(false);
     }
@@ -42,7 +43,7 @@ export function SessionMonitorPage() {
       setData(out);
       setError('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('common.unknownError'));
+      setError(localizeOperatorError(t, err));
     } finally {
       setLoadingSessions(false);
     }
@@ -61,18 +62,18 @@ export function SessionMonitorPage() {
         <option value="">{t('sessions.runId')}</option>
         {runs.map((run) => (
           <option key={run.run_id} value={run.run_id}>
-            {runOptionLabel(run)}
+            {runOptionLabelLocalized(run, (value) => localizeStatus(t, value))}
           </option>
         ))}
       </select>
       <button onClick={load} disabled={loadingSessions || !runId}>
         {loadingSessions ? t('common.loading') : t('sessions.load')}
       </button>
-      {selectedRun ? <p>{t('common.selectedRun')}: {runOptionLabel(selectedRun)} · {selectedRun.run_id}</p> : null}
+      {selectedRun ? <p>{t('common.selectedRun')}: {runOptionLabelLocalized(selectedRun, (value) => localizeStatus(t, value))} · {selectedRun.run_id}</p> : null}
       {error ? <p role="alert">{error}</p> : null}
       {data ? (
         <>
-          <p>{t('sessions.runStatus')}: {String(data.run_status ?? 'n/a')}</p>
+          <p>{t('sessions.runStatus')}: {localizeStatus(t, data.run_status ?? 'unknown')}</p>
           <pre>{t('sessions.counts')}: {JSON.stringify(data.counts ?? {}, null, 2)}</pre>
           {sessions.length === 0 ? <p>{t('sessions.empty')}</p> : null}
           {sessions.length > 0 ? (
@@ -92,12 +93,12 @@ export function SessionMonitorPage() {
                 {sessions.map((session) => (
                   <tr key={String(session.session_id)}>
                     <td>{String(session.participant_id)}</td>
-                    <td>{String(session.status)}</td>
-                    <td>{String(session.started_at ?? 'n/a')}</td>
-                    <td>{String(session.last_activity_at ?? 'n/a')}</td>
-                    <td>{String(session.completed_at ?? 'n/a')}</td>
+                    <td>{localizeStatus(t, session.status)}</td>
+                    <td>{String(session.started_at ?? t('common.na'))}</td>
+                    <td>{String(session.last_activity_at ?? t('common.na'))}</td>
+                    <td>{String(session.completed_at ?? t('common.na'))}</td>
                     <td>
-                      block {String(session.current_block_index ?? 0)} / trial {String(session.current_trial_index ?? 0)}
+                      {formatProgress(t, session.current_block_index ?? 0, session.current_trial_index ?? 0)}
                     </td>
                     <td>{String(session.session_id)}</td>
                   </tr>

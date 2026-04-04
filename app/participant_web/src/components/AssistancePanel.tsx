@@ -34,7 +34,7 @@ export function AssistancePanel({
   const evidenceText = String(stimulus.payload.evidence ?? t('assistance.defaultEvidence'));
 
   return (
-    <aside className={densityClass(policyDecision.compression_mode)} aria-label="AI assistance panel">
+    <aside className={densityClass(policyDecision.compression_mode)} aria-label={t('assistance.panelAria')}>
       <h3>{t('assistance.title')}</h3>
       {policyDecision.show_prediction && (
         <p>

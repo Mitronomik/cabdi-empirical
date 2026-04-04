@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 
 import { LanguageSwitcher } from './components/LanguageSwitcher';
 import { Nav, type PageKey } from './components/Nav';
+import { localizeOperatorError } from './i18n/uiText';
 import { LocaleProvider, useLocale } from './i18n/useLocale';
 import { getCurrentUser, login, logout } from './lib/api';
 import { DiagnosticsPage } from './pages/DiagnosticsPage';
@@ -61,7 +62,7 @@ function AppBody() {
               setPassword('');
               setAuthState('authenticated');
             } catch (error) {
-              setAuthError(error instanceof Error ? error.message : t('common.unknownError'));
+              setAuthError(localizeOperatorError(t, error));
             }
           }}
         >

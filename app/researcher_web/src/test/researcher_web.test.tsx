@@ -54,7 +54,7 @@ describe('researcher auth shell', () => {
     await user.type(screen.getByLabelText('Password'), 'wrong');
     await user.click(screen.getByRole('button', { name: 'Login' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Invalid username or password');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Invalid username or password.');
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
   });
 
@@ -111,7 +111,57 @@ describe('researcher auth shell', () => {
     await screen.findByText('Logged in as: admin');
     await user.click(screen.getByRole('button', { name: 'Step 3: Monitor Sessions' }));
 
-    expect(await screen.findByText('Selected run: pilot-run • /pilot-run • active · run_1')).toBeInTheDocument();
+    expect(await screen.findByText('Selected run: pilot-run • /pilot-run • Active · run_1')).toBeInTheDocument();
+  });
+
+  it('switches language and persists researcher locale', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ detail: 'unauthorized' }), { status: 401 })));
+
+    const { unmount } = render(<App />);
+    await user.click(screen.getByRole('button', { name: 'RU' }));
+    expect(await screen.findByText('Вход исследователя')).toBeInTheDocument();
+    expect(window.localStorage.getItem('researcher_web.locale')).toBe('ru');
+
+    unmount();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ detail: 'unauthorized' }), { status: 401 })));
+    render(<App />);
+    expect(await screen.findByText('Вход исследователя')).toBeInTheDocument();
+  });
+
+  it('localizes operator statuses in run/session surfaces', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith('/auth/me')) {
+          return new Response(JSON.stringify({ authenticated: true, user: { user_id: 'u1', username: 'admin', is_admin: true } }), { status: 200 });
+        }
+        if (url.endsWith('/runs/defaults')) {
+          return new Response(JSON.stringify({ experiment_id: 'exp_1', task_family: 'scam_detection', config_preset_options: [] }), { status: 200 });
+        }
+        if (url.endsWith('/stimuli')) {
+          return new Response(JSON.stringify([{ stimulus_set_id: 'stim_1', name: 'A', task_family: 'scam_detection', validation_status: 'warning_only', n_items: 3 }]), { status: 200 });
+        }
+        if (url.endsWith('/runs')) {
+          return new Response(JSON.stringify([{ run_id: 'run_1', run_name: 'pilot-run', public_slug: 'pilot-run', status: 'active', task_family: 'scam_detection', linked_stimulus_set_ids: ['stim_1'], launchable: true, launchability_reason: 'ok' }]), { status: 200 });
+        }
+        if (url.endsWith('/runs/run_1/sessions')) {
+          return new Response(JSON.stringify({ run_status: 'paused', sessions: [], counts: {} }), { status: 200 });
+        }
+        return new Response(JSON.stringify([]), { status: 200 });
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText('Logged in as: admin');
+    await user.click(screen.getByRole('button', { name: 'RU' }));
+    await user.click(screen.getByRole('button', { name: 'Шаг 3: Мониторинг сессий' }));
+    await user.click(await screen.findByRole('button', { name: 'Загрузить сессии' }));
+
+    expect(await screen.findByText(/Выбранный запуск: pilot-run • \/pilot-run • Активен/)).toBeInTheDocument();
+    expect(await screen.findByText(/Статус запуска: На паузе/)).toBeInTheDocument();
   });
 
   it('confirms lifecycle action before close', async () => {

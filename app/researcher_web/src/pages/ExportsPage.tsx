@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
+import { localizeOperatorError, localizeStatus } from '../i18n/uiText';
 import { useLocale } from '../i18n/useLocale';
 import { downloadRunExportArtifact, getRunExports, listRuns } from '../lib/api';
-import { parseRunSummary, pickDefaultRunId, runOptionLabel } from '../lib/researcherUi';
+import { parseRunSummary, pickDefaultRunId, runOptionLabelLocalized } from '../lib/researcherUi';
 
 function downloadBlob(filename: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
@@ -31,7 +32,7 @@ export function ExportsPage() {
       setRuns(items);
       if (items.length > 0) setRunId((prev) => prev || pickDefaultRunId(items));
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('common.unknownError'));
+      setError(localizeOperatorError(t, err));
     } finally {
       setLoadingRuns(false);
     }
@@ -52,7 +53,7 @@ export function ExportsPage() {
       setData(out);
       setError('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('common.unknownError'));
+      setError(localizeOperatorError(t, err));
     } finally {
       setLoadingExports(false);
     }
@@ -68,7 +69,7 @@ export function ExportsPage() {
       const blob = await downloadRunExportArtifact(runId, artifactType);
       downloadBlob(filename, blob);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('common.unknownError'));
+      setError(localizeOperatorError(t, err));
     } finally {
       setDownloading('');
     }
@@ -84,27 +85,27 @@ export function ExportsPage() {
         <option value="">{t('exports.runId')}</option>
         {runs.map((run) => (
           <option key={run.run_id} value={run.run_id}>
-            {runOptionLabel(run)}
+            {runOptionLabelLocalized(run, (value) => localizeStatus(t, value))}
           </option>
         ))}
       </select>
       <button onClick={load} disabled={loadingExports || !runId}>
         {loadingExports ? t('common.loading') : t('exports.load')}
       </button>
-      {selectedRun ? <p>{t('common.selectedRun')}: {runOptionLabel(selectedRun)} · {selectedRun.run_id}</p> : null}
+      {selectedRun ? <p>{t('common.selectedRun')}: {runOptionLabelLocalized(selectedRun, (value) => localizeStatus(t, value))} · {selectedRun.run_id}</p> : null}
       {error ? <p role="alert">{error}</p> : null}
       {data ? (
         <>
-          <p>{t('exports.state')}: {String(data.export_state ?? 'unknown')}</p>
-          <p>{t('exports.generatedAt')}: {String(data.generated_at ?? 'n/a')}</p>
+          <p>{t('exports.state')}: {localizeStatus(t, data.export_state ?? 'unknown')}</p>
+          <p>{t('exports.generatedAt')}: {String(data.generated_at ?? t('common.na'))}</p>
           <p>{String(data.message ?? '')}</p>
           {String(data.export_state) === 'empty' ? <p>{t('exports.empty')}</p> : null}
           {artifacts.length > 0 ? (
             <ul>
               {artifacts.map((artifact) => (
                 <li key={String(artifact.artifact_type)}>
-                  {String(artifact.artifact_type)} · {String(artifact.category)} · {String(artifact.size_bytes)} bytes ·{' '}
-                  {String(artifact.available) === 'true' ? 'available' : 'empty'}{' '}
+                  {String(artifact.artifact_type)} · {String(artifact.category)} · {t('exports.artifactSize')}: {String(artifact.size_bytes)} {t('exports.bytes')} ·{' '}
+                  {t('exports.artifactAvailable')}: {localizeStatus(t, String(artifact.available) === 'true' ? 'available' : 'empty')}{' '}
                   <button
                     onClick={() => downloadArtifact(String(artifact.artifact_type), String(artifact.filename))}
                     disabled={downloading === String(artifact.artifact_type)}
