@@ -8,12 +8,10 @@ from uuid import uuid4
 
 from app.participant_api.persistence.sqlite_store import SQLiteStore, dumps, loads
 from app.participant_api.services.randomization_service import assign_order_id, build_trial_plan
-from packages.shared_types.pilot_types import ParticipantSession, StimulusItem
+from packages.shared_types.pilot_types import ExperimentConfig, ParticipantSession, StimulusItem
 from pilot.config_loader import load_experiment_config
-from pilot.stimulus_validation import load_stimulus_bank
 
 DEFAULT_EXPERIMENT_PATH = "pilot/configs/default_experiment.yaml"
-DEFAULT_STIMULI_PATH = "pilot/stimuli/scam_not_scam_demo.jsonl"
 
 
 def _now_iso() -> str:
@@ -39,35 +37,15 @@ class SessionService:
         language: str | None = None,
     ) -> dict[str, Any]:
         experiment = load_experiment_config(DEFAULT_EXPERIMENT_PATH)
-        if experiment_id != "toy_v1" and experiment_id != experiment.experiment_id:
+        if experiment_id not in {"toy_v1", experiment.experiment_id}:
             raise ValueError(f"Unsupported experiment_id: {experiment_id}")
-        normalized_run_id = (run_id or "").strip()
-        normalized_run_slug = (run_slug or "").strip()
-        if not normalized_run_id and not normalized_run_slug:
-            raise ValueError("run_id or run_slug is required")
-        if normalized_run_id and normalized_run_slug:
-            raise ValueError("Provide only one of run_id or run_slug")
-
-        if normalized_run_id:
-            run = self.store.fetchone(
-                "SELECT run_id, experiment_id FROM researcher_runs WHERE run_id = ?",
-                (normalized_run_id,),
-            )
-            if run is None:
-                raise ValueError(f"Unknown run_id: {normalized_run_id}")
-        else:
-            run = self.store.fetchone(
-                "SELECT run_id, experiment_id FROM researcher_runs WHERE public_slug = ?",
-                (normalized_run_slug,),
-            )
-            if run is None:
-                raise ValueError(f"Unknown run_slug: {normalized_run_slug}")
-        if run is None:
-            raise ValueError("Unknown run")
-        if run["experiment_id"] != experiment_id:
-            raise ValueError("run and experiment_id mismatch")
-
-        stimuli = load_stimulus_bank(DEFAULT_STIMULI_PATH)
+        run = self._resolve_run(
+            run_id=run_id,
+            run_slug=run_slug,
+            experiment=experiment,
+            requested_experiment_id=experiment_id,
+        )
+        stimuli = self._load_run_stimuli(run)
         order_id, assigned_order = assign_order_id(participant_id, experiment.experiment_id)
         session_id = f"sess_{uuid4().hex[:12]}"
         normalized_language = self._normalize_language(language)
@@ -78,7 +56,7 @@ class SessionService:
             experiment_id=experiment_id,
             run_id=run["run_id"],
             assigned_order=order_id,
-            stimulus_set_map={"default": "demo"},
+            stimulus_set_map={f"set_{idx + 1}": set_id for idx, set_id in enumerate(run["stimulus_set_ids"])},
             current_block_index=-1,
             current_trial_index=0,
             status="created",
@@ -151,6 +129,60 @@ class SessionService:
             "run_id": session.run_id,
             "language": session.language,
         }
+
+    def _resolve_run(
+        self,
+        *,
+        run_id: str | None,
+        run_slug: str | None,
+        experiment: ExperimentConfig,
+        requested_experiment_id: str,
+    ) -> dict[str, Any]:
+        normalized_run_id = (run_id or "").strip()
+        normalized_run_slug = (run_slug or "").strip()
+        if not normalized_run_id and not normalized_run_slug:
+            raise ValueError("run_id or run_slug is required")
+        if normalized_run_id and normalized_run_slug:
+            raise ValueError("Provide only one of run_id or run_slug")
+
+        if normalized_run_id:
+            run = self.store.fetchone("SELECT * FROM researcher_runs WHERE run_id = ?", (normalized_run_id,))
+            if run is None:
+                raise ValueError(f"Unknown run_id: {normalized_run_id}")
+        else:
+            run = self.store.fetchone("SELECT * FROM researcher_runs WHERE public_slug = ?", (normalized_run_slug,))
+            if run is None:
+                raise ValueError(f"Unknown run_slug: {normalized_run_slug}")
+        if run["experiment_id"] != requested_experiment_id:
+            raise ValueError("run and experiment_id mismatch")
+        if requested_experiment_id == experiment.experiment_id and run["task_family"] != experiment.task_family:
+            raise ValueError("run task_family is incompatible with experiment task_family")
+
+        run["stimulus_set_ids"] = loads(run["stimulus_set_ids_json"])
+        if not isinstance(run["stimulus_set_ids"], list) or not run["stimulus_set_ids"]:
+            raise ValueError("run does not reference any stimulus sets")
+        return run
+
+    def _load_run_stimuli(self, run: dict[str, Any]) -> list[StimulusItem]:
+        items: list[StimulusItem] = []
+        for stimulus_set_id in run["stimulus_set_ids"]:
+            row = self.store.fetchone(
+                "SELECT stimulus_set_id, task_family, items_json FROM researcher_stimulus_sets WHERE stimulus_set_id = ?",
+                (stimulus_set_id,),
+            )
+            if row is None:
+                raise ValueError(f"run references missing stimulus_set_id: {stimulus_set_id}")
+            if row["task_family"] != run["task_family"]:
+                raise ValueError("run stimulus set task_family mismatch")
+            for raw_item in loads(row["items_json"]):
+                parsed = StimulusItem.from_dict(raw_item)
+                if parsed.task_family != run["task_family"]:
+                    raise ValueError(f"stimulus {parsed.stimulus_id} task_family mismatches run task_family")
+                items.append(parsed)
+
+        if not items:
+            raise ValueError("run has no usable stimuli")
+        return items
 
     def start_session(self, session_id: str) -> dict[str, Any]:
         session = self.get_session(session_id)

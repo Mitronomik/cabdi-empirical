@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
+from app.participant_api.persistence.sqlite_store import dumps, loads
+
 from app.participant_api.main import create_app
 from app.researcher_api.main import create_app as create_researcher_app
 
@@ -37,6 +39,37 @@ def _bootstrap_run(tmp_path) -> str:
         },
     )
     return run.json()["public_slug"]
+
+
+def _bootstrap_run_with_details(tmp_path) -> dict[str, str]:
+    db_path = str(tmp_path / "pilot_api.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    payload = (
+        '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"text":"original"},'
+        '"true_label":"scam","difficulty_prior":"low","model_prediction":"scam","model_confidence":"high",'
+        '"model_correct":true,"eligible_sets":["demo"]}\n'
+    )
+    upload = researcher.post(
+        "/admin/api/v1/stimuli/upload",
+        files={"file": ("stimuli.jsonl", payload, "application/json")},
+        data={"name": "set1", "source_format": "jsonl"},
+    )
+    stimulus_set_id = upload.json()["stimulus_set_id"]
+    run = researcher.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "snapshot run",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"mode": "test"},
+            "stimulus_set_ids": [stimulus_set_id],
+        },
+    )
+    return {
+        "run_id": run.json()["run_id"],
+        "run_slug": run.json()["public_slug"],
+        "stimulus_set_id": stimulus_set_id,
+    }
 
 
 def test_health_endpoint(tmp_path):
@@ -132,6 +165,17 @@ def test_session_creation_requires_run_reference(tmp_path):
     assert create_res.status_code == 400
 
 
+def test_session_creation_fails_when_run_experiment_mismatch(tmp_path):
+    client = _make_client(tmp_path)
+    run_info = _bootstrap_run_with_details(tmp_path)
+    create_res = client.post(
+        "/api/v1/sessions",
+        json={"experiment_id": "pilot_scam_not_scam_v1", "participant_id": "p_bad_experiment", "run_id": run_info["run_id"]},
+    )
+    assert create_res.status_code == 400
+    assert "run and experiment_id mismatch" in create_res.json()["detail"]
+
+
 def test_session_creation_accepts_run_id_for_backward_compatibility(tmp_path):
     client = _make_client(tmp_path)
     db_path = str(tmp_path / "pilot_api.sqlite3")
@@ -162,3 +206,42 @@ def test_session_creation_accepts_run_id_for_backward_compatibility(tmp_path):
         json={"experiment_id": "toy_v1", "participant_id": "p_with_run_id", "run_id": run_id},
     )
     assert create_res.status_code == 200
+
+
+def test_session_trials_are_frozen_snapshots_even_if_stimulus_set_changes(tmp_path):
+    client = _make_client(tmp_path)
+    run_info = _bootstrap_run_with_details(tmp_path)
+
+    create_res = client.post(
+        "/api/v1/sessions",
+        json={"experiment_id": "toy_v1", "participant_id": "p_snapshot", "run_slug": run_info["run_slug"]},
+    )
+    assert create_res.status_code == 200
+    session_id = create_res.json()["session_id"]
+
+    rows = client.app.state.store.fetchall(
+        "SELECT trial_id, stimulus_json FROM session_trials WHERE session_id = ? ORDER BY trial_id LIMIT 1",
+        (session_id,),
+    )
+    assert rows
+    frozen_before = loads(rows[0]["stimulus_json"])
+    assert frozen_before["payload"]["text"] == "original"
+
+    stim_row = client.app.state.store.fetchone(
+        "SELECT items_json FROM researcher_stimulus_sets WHERE stimulus_set_id = ?",
+        (run_info["stimulus_set_id"],),
+    )
+    assert stim_row is not None
+    edited_items = loads(stim_row["items_json"])
+    edited_items[0]["payload"]["text"] = "mutated"
+    client.app.state.store.execute(
+        "UPDATE researcher_stimulus_sets SET items_json = ? WHERE stimulus_set_id = ?",
+        (dumps(edited_items), run_info["stimulus_set_id"]),
+    )
+
+    rows_after = client.app.state.store.fetchall(
+        "SELECT trial_id, stimulus_json FROM session_trials WHERE session_id = ? ORDER BY trial_id LIMIT 1",
+        (session_id,),
+    )
+    frozen_after = loads(rows_after[0]["stimulus_json"])
+    assert frozen_after["payload"]["text"] == "original"

@@ -118,11 +118,20 @@ class SQLiteStore:
             self._ensure_column(conn, "participant_sessions", "run_id", "TEXT")
             self._ensure_column(conn, "participant_sessions", "language", "TEXT NOT NULL DEFAULT 'en'")
             self._ensure_column(conn, "researcher_runs", "public_slug", "TEXT")
+            self._assert_not_null_column(conn, "participant_sessions", "run_id")
 
     def _ensure_column(self, conn: sqlite3.Connection, table_name: str, column_name: str, column_type: str) -> None:
         columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()}
         if column_name not in columns:
             conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
+
+    def _assert_not_null_column(self, conn: sqlite3.Connection, table_name: str, column_name: str) -> None:
+        column_rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+        for row in column_rows:
+            if row["name"] == column_name and int(row["notnull"]) != 1:
+                raise RuntimeError(
+                    f"{table_name}.{column_name} must be NOT NULL; recreate local DB or migrate schema before running service"
+                )
 
     def fetchone(self, query: str, params: tuple[Any, ...]) -> dict[str, Any] | None:
         with self.connect() as conn:
