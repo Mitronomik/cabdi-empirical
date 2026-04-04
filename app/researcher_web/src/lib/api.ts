@@ -84,7 +84,7 @@ export function pauseRun(runId: string) {
 }
 
 export function closeRun(runId: string) {
-  return apiPost<Record<string, unknown>>(`/admin/api/v1/runs/${runId}/close`)
+  return apiPost<Record<string, unknown>>(`/admin/api/v1/runs/${runId}/close`, { confirm_run_id: runId })
 }
 
 export function getRunBuilderDefaults() {

@@ -110,7 +110,11 @@ export function RunBuilderPage() {
       setLifecycleLoadingRunId(runId);
       if (action === 'activate') await activateRun(runId);
       if (action === 'pause') await pauseRun(runId);
-      if (action === 'close') await closeRun(runId);
+      if (action === 'close') {
+        const proceed = window.confirm(`Close run ${runId}? This blocks new participant sessions for this run.`);
+        if (!proceed) return;
+        await closeRun(runId);
+      }
       await loadRecentRuns();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
