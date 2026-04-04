@@ -104,6 +104,17 @@ body {
   margin-bottom: 12px;
 }
 
+.range-labels {
+  display: flex;
+  justify-content: space-between;
+  margin: 4px 0 12px;
+  font-size: 0.9rem;
+}
+
+.submit-hint {
+  margin-top: 8px;
+}
+
 button {
   border: 1px solid #bcc7d7;
   background: #fff;

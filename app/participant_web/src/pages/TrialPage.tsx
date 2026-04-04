@@ -81,6 +81,10 @@ export function TrialPage({ trial, loading, onSubmit }: Props) {
 
       <section className="card">
         <h3>{t('trial.decisionTitle')}</h3>
+        <p className="muted">{t('trial.decisionHelp')}</p>
+        <p>
+          <strong>{t('trial.answerLabel')}</strong>
+        </p>
         <div className="button-row">
           {responseOptions.map((option) => (
             <button
@@ -108,6 +112,10 @@ export function TrialPage({ trial, loading, onSubmit }: Props) {
               value={selfConfidence}
               onChange={(e) => setSelfConfidence(Number(e.target.value))}
             />
+            <div className="range-labels muted">
+              <span>{t('trial.confidenceLow')}</span>
+              <span>{t('trial.confidenceHigh')}</span>
+            </div>
           </>
         )}
 
@@ -126,6 +134,7 @@ export function TrialPage({ trial, loading, onSubmit }: Props) {
         >
           {t('trial.submit')}
         </button>
+        <p className="muted submit-hint">{t('trial.submitHelp')}</p>
       </section>
     </section>
   );
