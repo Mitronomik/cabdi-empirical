@@ -196,7 +196,8 @@ test('forced verification blocks submission until completed', async () => {
     { status: 200, body: { session_id: 'sess_1', status: 'in_progress' } },
     { status: 200, body: makeTrial() },
     { status: 200, body: { trial_id: 't_1', status: 'completed' } },
-    { status: 200, body: { status: 'completed' } },
+    { status: 200, body: { status: 'awaiting_final_submit' } },
+    { status: 200, body: { session_id: 'sess_1', status: 'finalized', final_submit: 'accepted', already_finalized: false } },
   ]);
 
   render(<App />);
@@ -212,6 +213,8 @@ test('forced verification blocks submission until completed', async () => {
   expect(submit).toBeEnabled();
 
   await user.click(submit);
+  await screen.findByRole('heading', { name: /final submit required/i });
+  await user.click(screen.getByRole('button', { name: /final submit/i }));
   await screen.findByRole('heading', { name: /complete/i });
   expect(fetchMock).toHaveBeenCalled();
 });
@@ -254,7 +257,8 @@ test('block-end questionnaire submits and completion flow appears', async () => 
     { status: 200, body: { session_id: 'sess_1', status: 'in_progress' } },
     { status: 409, body: { detail: { message: 'block_questionnaire_required', block_id: 'block_1' } } },
     { status: 200, body: { block_id: 'block_1', status: 'submitted' } },
-    { status: 200, body: { status: 'completed' } },
+    { status: 200, body: { status: 'awaiting_final_submit' } },
+    { status: 200, body: { session_id: 'sess_1', status: 'finalized', final_submit: 'accepted', already_finalized: false } },
   ]);
 
   render(<App />);
@@ -264,6 +268,8 @@ test('block-end questionnaire submits and completion flow appears', async () => 
   await screen.findByRole('heading', { name: /block questionnaire/i });
   await user.click(screen.getByRole('button', { name: /submit questionnaire/i }));
 
-  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(6));
+  await screen.findByRole('heading', { name: /final submit required/i });
+  await user.click(screen.getByRole('button', { name: /final submit/i }));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(7));
   await screen.findByRole('heading', { name: /complete/i });
 });

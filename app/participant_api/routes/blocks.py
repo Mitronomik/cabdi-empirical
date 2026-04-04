@@ -18,3 +18,5 @@ def submit_block_questionnaire(session_id: str, block_id: str, req: BlockQuestio
         return request.app.state.trial_service.submit_block_questionnaire(session_id, block_id, req.model_dump())
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

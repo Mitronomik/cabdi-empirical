@@ -7,6 +7,7 @@ import { BlockQuestionnairePage } from './pages/BlockQuestionnairePage';
 import { CompletionPage } from './pages/CompletionPage';
 import { ConsentPage } from './pages/ConsentPage';
 import { InstructionsPage } from './pages/InstructionsPage';
+import { FinalSubmitPage } from './pages/FinalSubmitPage';
 import { TrialPage } from './pages/TrialPage';
 
 import './styles.css';
@@ -30,6 +31,7 @@ function AppBody() {
     beginSession,
     submitCurrentTrial,
     submitQuestionnaire,
+    submitFinalSession,
     retryCurrent,
   } = useParticipantFlow();
 
@@ -83,6 +85,7 @@ function AppBody() {
       )}
 
       {stage === 'completion' && <CompletionPage completionCode={completionCode} />}
+      {stage === 'awaiting_final_submit' && <FinalSubmitPage loading={loading} onSubmit={submitFinalSession} />}
     </main>
   );
 }
