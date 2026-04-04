@@ -6,7 +6,7 @@ from collections import Counter, defaultdict
 from typing import Any
 
 from app.participant_api.persistence.sqlite_store import SQLiteStore, loads
-from app.researcher_api.services.run_service import RunService
+from app.researcher_api.services.run_data_service import RunDataService
 from packages.shared_types.pilot_types import RiskBucket
 from policies.budget_checks import compare_budget_to_reference, summarize_budgets_by_condition
 from policies.contracts import BudgetTrace
@@ -28,16 +28,20 @@ _CORE_SUMMARY_FIELDS = [
 class DiagnosticsService:
     def __init__(self, store: SQLiteStore) -> None:
         self.store = store
-        self.run_service = RunService(store)
+        self.run_data_service = RunDataService(store)
 
     def get_run_diagnostics(self, run_id: str) -> dict[str, Any]:
-        session_info = self.run_service.list_run_sessions(run_id)
-        session_ids = [row["session_id"] for row in session_info["sessions"]]
+        run_data = self.run_data_service.load_run_scoped_data(run_id)
+        session_info = run_data.session_payload
+        session_ids = run_data.session_ids
 
         if not session_ids:
             return {
                 "run_id": run_id,
                 "session_counts": session_info["counts"],
+                "session_count_total": 0,
+                "trial_count_total": 0,
+                "trial_summary_count": 0,
                 "missing_core_fields_count": 0,
                 "completed_trials_per_condition": {},
                 "model_wrong_share": {},
@@ -49,23 +53,8 @@ class DiagnosticsService:
                 "warnings": ["No sessions linked to this run yet"],
             }
 
-        placeholders = ",".join("?" for _ in session_ids)
-        summaries = self.store.fetchall(
-            f"SELECT session_id, trial_id, summary_json FROM trial_summary_logs WHERE session_id IN ({placeholders})",
-            tuple(session_ids),
-        )
-        trials = self.store.fetchall(
-            f"SELECT session_id, block_id, trial_id, condition, policy_decision_json FROM session_trials WHERE session_id IN ({placeholders})",
-            tuple(session_ids),
-        )
-
-        parsed_summaries = []
-        for row in summaries:
-            summary = loads(row["summary_json"])
-            summary["_session_id"] = row["session_id"]
-            summary["_trial_id"] = row["trial_id"]
-            parsed_summaries.append(summary)
-        trial_lookup = {(row["session_id"], row["trial_id"]): row for row in trials}
+        parsed_summaries = list(run_data.trial_summary_rows)
+        trial_lookup = {(row["session_id"], row["trial_id"]): row for row in run_data.trial_rows}
         missing_core_fields_count = 0
         completed_trials_per_condition: dict[str, int] = Counter()
         model_wrong_counts: dict[tuple[str, str], list[int]] = defaultdict(lambda: [0, 0])
@@ -79,7 +68,7 @@ class DiagnosticsService:
                 if value is None or value == "":
                     missing_core_fields_count += 1
             condition = str(summary.get("condition", "unknown"))
-            trial_meta = trial_lookup.get((str(summary.get("_session_id", "")), str(summary.get("_trial_id", ""))), {})
+            trial_meta = trial_lookup.get((str(summary.get("session_id", "")), str(summary.get("trial_id", ""))), {})
             block_id = str(trial_meta.get("block_id", "unknown"))
             completed_trials_per_condition[condition] += 1
             model_wrong_counts[(condition, block_id)][1] += 1
@@ -104,15 +93,26 @@ class DiagnosticsService:
             for (condition, block_id), (wrong, total) in model_wrong_counts.items()
         }
 
-        budget_flags = self._budget_flags(trials)
+        budget_flags = self._budget_flags(run_data.trial_rows)
         n_trials = max(len(parsed_summaries), 1)
         warnings = []
+        if len(parsed_summaries) != len(
+            [row for row in run_data.trial_rows if row["status"] == "completed" and row["block_id"] != "practice"]
+        ):
+            warnings.append(
+                "Trial-summary count differs from completed non-practice trials; check for partial or missing summary logs"
+            )
         if missing_core_fields_count > 0:
             warnings.append(f"Missing core log fields detected: {missing_core_fields_count}")
+        if len(parsed_summaries) == 0 and len(run_data.trial_rows) > 0:
+            warnings.append("No trial summaries logged for this run yet")
 
         return {
             "run_id": run_id,
             "session_counts": session_info["counts"],
+            "session_count_total": len(session_ids),
+            "trial_count_total": len(run_data.trial_rows),
+            "trial_summary_count": len(parsed_summaries),
             "missing_core_fields_count": missing_core_fields_count,
             "completed_trials_per_condition": dict(completed_trials_per_condition),
             "model_wrong_share": model_wrong_share,

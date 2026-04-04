@@ -218,3 +218,45 @@ def test_session_monitor_distinguishes_awaiting_final_submit_and_finalized(tmp_p
     counts = sessions.json()["counts"]
     assert counts["awaiting_final_submit"] == 1
     assert counts["finalized"] == 1
+
+
+def test_run_diagnostics_and_exports_share_run_scoped_truth(tmp_path):
+    db_path = str(tmp_path / "pilot.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    participant = TestClient(create_participant_app(db_path))
+
+    stimulus_set_id = _upload_stimulus(researcher)
+    run_res = researcher.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "diag-export coherence",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"n_blocks": 3},
+            "stimulus_set_ids": [stimulus_set_id],
+        },
+    )
+    run_id = run_res.json()["run_id"]
+    run_slug = run_res.json()["public_slug"]
+    assert researcher.post(f"/admin/api/v1/runs/{run_id}/activate").status_code == 200
+
+    s1 = participant.post("/api/v1/sessions", json={"participant_id": "p1", "run_slug": run_slug}).json()["session_id"]
+    s2 = participant.post("/api/v1/sessions", json={"participant_id": "p2", "run_slug": run_slug}).json()["session_id"]
+    participant.app.state.store.execute(
+        "UPDATE participant_sessions SET status = 'awaiting_final_submit' WHERE session_id = ?",
+        (s1,),
+    )
+    participant.app.state.store.execute(
+        "UPDATE participant_sessions SET status = 'finalized', completed_at = '2026-01-01T00:00:00+00:00' WHERE session_id = ?",
+        (s2,),
+    )
+
+    diagnostics = researcher.get(f"/admin/api/v1/runs/{run_id}/diagnostics")
+    exports = researcher.get(f"/admin/api/v1/runs/{run_id}/exports")
+    assert diagnostics.status_code == 200
+    assert exports.status_code == 200
+    d_body = diagnostics.json()
+    e_body = exports.json()
+    assert d_body["session_counts"]["awaiting_final_submit"] == 1
+    assert d_body["session_counts"]["finalized"] == 1
+    assert len(e_body["session_summary_json"]) == 2
