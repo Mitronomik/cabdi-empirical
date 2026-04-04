@@ -8,7 +8,7 @@ from app.researcher_api.main import create_app as create_researcher_app
 
 def _upload_stimulus(client: TestClient) -> str:
     payload = (
-        '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"text":"a"},'
+        '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"title":"Case 1","body":"a"},'
         '"true_label":"scam","difficulty_prior":"low","model_prediction":"scam","model_confidence":"high",'
         '"model_correct":true,"eligible_sets":["demo"]}\n'
     )
@@ -19,7 +19,7 @@ def _upload_stimulus(client: TestClient) -> str:
     )
     assert res.status_code == 200
     assert res.json()["ok"] is True
-    assert res.json()["validation_status"] == "validated"
+    assert res.json()["validation_status"] == "valid"
     return res.json()["stimulus_set_id"]
 
 
@@ -54,9 +54,12 @@ def test_create_run_and_session_monitor_and_diagnostics(tmp_path):
     list_stimuli_res = researcher.get("/admin/api/v1/stimuli")
     assert list_stimuli_res.status_code == 200
     assert list_stimuli_res.json()[0]["stimulus_set_id"] == stimulus_set_id
+    assert list_stimuli_res.json()[0]["validation_status"] == "valid"
+    assert list_stimuli_res.json()[0]["payload_schema_version"] == "stimulus_payload.v1"
     stimulus_detail = researcher.get(f"/admin/api/v1/stimuli/{stimulus_set_id}")
     assert stimulus_detail.status_code == 200
     assert len(stimulus_detail.json()["items"]) == 1
+    assert stimulus_detail.json()["preview_rows"]
 
     defaults_res = researcher.get("/admin/api/v1/runs/defaults")
     assert defaults_res.status_code == 200

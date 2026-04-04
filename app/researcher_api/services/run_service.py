@@ -57,13 +57,15 @@ class RunService:
 
         for stimulus_set_id in stimulus_set_ids:
             row = self.store.fetchone(
-                "SELECT stimulus_set_id, task_family FROM researcher_stimulus_sets WHERE stimulus_set_id = ?",
+                "SELECT stimulus_set_id, task_family, validation_status FROM researcher_stimulus_sets WHERE stimulus_set_id = ?",
                 (stimulus_set_id,),
             )
             if row is None:
                 raise ValueError(f"Unknown stimulus_set_id: {stimulus_set_id}")
             if row["task_family"] != task_family:
                 raise ValueError("All selected stimulus sets must match run task_family")
+            if row.get("validation_status") not in {"valid", "warning_only"}:
+                raise ValueError(f"Stimulus set is not run-compatible: {stimulus_set_id}")
 
         run_id = f"run_{uuid4().hex[:10]}"
         resolved_public_slug = self._build_unique_public_slug(run_name, public_slug)

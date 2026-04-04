@@ -18,7 +18,7 @@ def _bootstrap_run(tmp_path) -> str:
     db_path = str(tmp_path / "pilot_api.sqlite3")
     researcher = TestClient(create_researcher_app(db_path))
     payload = (
-        '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"text":"a"},'
+        '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"title":"Case","body":"a"},'
         '"true_label":"scam","difficulty_prior":"low","model_prediction":"scam","model_confidence":"high",'
         '"model_correct":true,"eligible_sets":["demo"]}\n'
     )
@@ -45,7 +45,7 @@ def _bootstrap_run_with_details(tmp_path) -> dict[str, str]:
     db_path = str(tmp_path / "pilot_api.sqlite3")
     researcher = TestClient(create_researcher_app(db_path))
     payload = (
-        '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"text":"original"},'
+        '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"title":"Case","body":"original"},'
         '"true_label":"scam","difficulty_prior":"low","model_prediction":"scam","model_confidence":"high",'
         '"model_correct":true,"eligible_sets":["demo"]}\n'
     )
@@ -181,7 +181,7 @@ def test_session_creation_accepts_run_id_for_backward_compatibility(tmp_path):
     db_path = str(tmp_path / "pilot_api.sqlite3")
     researcher = TestClient(create_researcher_app(db_path))
     payload = (
-        '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"text":"a"},'
+        '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"title":"Case","body":"a"},'
         '"true_label":"scam","difficulty_prior":"low","model_prediction":"scam","model_confidence":"high",'
         '"model_correct":true,"eligible_sets":["demo"]}\n'
     )
@@ -225,7 +225,7 @@ def test_session_trials_are_frozen_snapshots_even_if_stimulus_set_changes(tmp_pa
     )
     assert rows
     frozen_before = loads(rows[0]["stimulus_json"])
-    assert frozen_before["payload"]["text"] == "original"
+    assert frozen_before["payload"]["body"] == "original"
 
     stim_row = client.app.state.store.fetchone(
         "SELECT items_json FROM researcher_stimulus_sets WHERE stimulus_set_id = ?",
@@ -233,7 +233,7 @@ def test_session_trials_are_frozen_snapshots_even_if_stimulus_set_changes(tmp_pa
     )
     assert stim_row is not None
     edited_items = loads(stim_row["items_json"])
-    edited_items[0]["payload"]["text"] = "mutated"
+    edited_items[0]["payload"]["body"] = "mutated"
     client.app.state.store.execute(
         "UPDATE researcher_stimulus_sets SET items_json = ? WHERE stimulus_set_id = ?",
         (dumps(edited_items), run_info["stimulus_set_id"]),
@@ -244,4 +244,4 @@ def test_session_trials_are_frozen_snapshots_even_if_stimulus_set_changes(tmp_pa
         (session_id,),
     )
     frozen_after = loads(rows_after[0]["stimulus_json"])
-    assert frozen_after["payload"]["text"] == "original"
+    assert frozen_after["payload"]["body"] == "original"

@@ -99,7 +99,12 @@ class SQLiteStore:
                     source_format TEXT NOT NULL,
                     n_items INTEGER NOT NULL,
                     created_at TEXT NOT NULL,
-                    items_json TEXT NOT NULL
+                    items_json TEXT NOT NULL,
+                    validation_status TEXT NOT NULL DEFAULT 'invalid',
+                    payload_schema_version TEXT NOT NULL DEFAULT 'stimulus_payload.v1',
+                    warnings_json TEXT NOT NULL DEFAULT '[]',
+                    errors_json TEXT NOT NULL DEFAULT '[]',
+                    preview_rows_json TEXT NOT NULL DEFAULT '[]'
                 );
 
                 CREATE TABLE IF NOT EXISTS researcher_runs (
@@ -118,6 +123,36 @@ class SQLiteStore:
             self._ensure_column(conn, "participant_sessions", "run_id", "TEXT")
             self._ensure_column(conn, "participant_sessions", "language", "TEXT NOT NULL DEFAULT 'en'")
             self._ensure_column(conn, "researcher_runs", "public_slug", "TEXT")
+            self._ensure_column(
+                conn,
+                "researcher_stimulus_sets",
+                "validation_status",
+                "TEXT NOT NULL DEFAULT 'invalid'",
+            )
+            self._ensure_column(
+                conn,
+                "researcher_stimulus_sets",
+                "payload_schema_version",
+                "TEXT NOT NULL DEFAULT 'stimulus_payload.v1'",
+            )
+            self._ensure_column(
+                conn,
+                "researcher_stimulus_sets",
+                "warnings_json",
+                "TEXT NOT NULL DEFAULT '[]'",
+            )
+            self._ensure_column(
+                conn,
+                "researcher_stimulus_sets",
+                "errors_json",
+                "TEXT NOT NULL DEFAULT '[]'",
+            )
+            self._ensure_column(
+                conn,
+                "researcher_stimulus_sets",
+                "preview_rows_json",
+                "TEXT NOT NULL DEFAULT '[]'",
+            )
             self._assert_not_null_column(conn, "participant_sessions", "run_id")
 
     def _ensure_column(self, conn: sqlite3.Connection, table_name: str, column_name: str, column_type: str) -> None:

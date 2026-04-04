@@ -68,7 +68,7 @@ export function StimulusUploadPage() {
       {result ? (
         <div>
           <h3>Upload result</h3>
-          <p>status: {String(result.validation_status ?? (result.ok ? 'validated' : 'invalid'))}</p>
+          <p>status: {String(result.validation_status ?? (result.ok ? 'valid' : 'invalid'))}</p>
           <p>stimulus_set_id: {String(result.stimulus_set_id ?? 'n/a')}</p>
           <p>n_items: {String(result.n_items ?? 0)}</p>
           {Array.isArray(result.warnings) && result.warnings.length > 0 ? (
