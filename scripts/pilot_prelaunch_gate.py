@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -11,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi.testclient import TestClient
+import httpx
 
 from app.participant_api.main import create_app as create_participant_app
 from app.participant_api.persistence.backup_restore import backup_database, restore_database
@@ -64,7 +66,54 @@ def _login_researcher(researcher_client: TestClient, username: str, password: st
     return True, "researcher auth login + protected /me passed"
 
 
+def _wait_for_http_ready(
+    *,
+    participant_base_url: str,
+    researcher_base_url: str,
+    timeout_seconds: float = 30.0,
+) -> tuple[bool, str]:
+    deadline = time.time() + timeout_seconds
+    last_error = "unknown"
+    while time.time() < deadline:
+        try:
+            with httpx.Client(base_url=participant_base_url, timeout=5.0) as participant:
+                health = participant.get("/health")
+            with httpx.Client(base_url=researcher_base_url, timeout=5.0) as researcher:
+                me = researcher.get("/admin/api/v1/auth/me")
+            if health.status_code == 200 and me.status_code in {200, 401}:
+                return True, "participant/researcher HTTP boundary is reachable"
+            last_error = f"participant={health.status_code}, researcher_me={me.status_code}"
+        except Exception as exc:
+            last_error = str(exc)
+        time.sleep(1.0)
+    return False, f"timed out waiting for HTTP boundary readiness: {last_error}"
+
+
+def _login_researcher_http(researcher_client: httpx.Client, username: str, password: str) -> tuple[bool, str, bool]:
+    res = researcher_client.post("/admin/api/v1/auth/login", json={"username": username, "password": password})
+    if res.status_code != 200:
+        return False, f"researcher login failed with status={res.status_code}", False
+    cookie_header = res.headers.get("set-cookie", "")
+    cookie_present = "researcher_session=" in cookie_header
+    me = researcher_client.get("/admin/api/v1/auth/me")
+    if me.status_code != 200:
+        return False, f"researcher auth check failed with status={me.status_code}", cookie_present
+    return True, "researcher auth login + protected /me passed", cookie_present
+
+
 def _resolve_active_run(researcher_client: TestClient, run_slug: str) -> tuple[bool, str, str | None]:
+    runs_res = researcher_client.get("/admin/api/v1/runs")
+    if runs_res.status_code != 200:
+        return False, f"failed to list runs; status={runs_res.status_code}", None
+    for row in runs_res.json():
+        if row.get("public_slug") == run_slug:
+            if row.get("status") != "active":
+                return False, f"run_slug={run_slug} exists but status={row.get('status')}", row.get("run_id")
+            return True, f"run_slug={run_slug} resolved to active run", row.get("run_id")
+    return False, f"run_slug={run_slug} not found among researcher runs", None
+
+
+def _resolve_active_run_http(researcher_client: httpx.Client, run_slug: str) -> tuple[bool, str, str | None]:
     runs_res = researcher_client.get("/admin/api/v1/runs")
     if runs_res.status_code != 200:
         return False, f"failed to list runs; status={runs_res.status_code}", None
@@ -134,6 +183,65 @@ def _exercise_session_integrity(participant: TestClient, run_slug: str) -> dict[
     resume_after = participant.post(
         "/api/v1/sessions/resume-info", json={"run_slug": run_slug, "resume_token": resume_token}
     )
+    resume_after.raise_for_status()
+
+    return {
+        "session_id": session_id,
+        "resume_before_final": resume_payload,
+        "resume_after_final": resume_after.json(),
+        "final_submit_status": final_submit.json().get("status"),
+    }
+
+
+def _submit_trial_http(participant: httpx.Client, session_id: str, trial_payload: dict[str, Any]) -> None:
+    submit = participant.post(
+        f"/api/v1/sessions/{session_id}/trials/{trial_payload['trial_id']}/submit",
+        json={
+            "human_response": trial_payload["stimulus"]["true_label"],
+            "reaction_time_ms": 900,
+            "self_confidence": 65,
+            "reason_clicked": False,
+            "evidence_opened": False,
+            "verification_completed": False,
+        },
+    )
+    submit.raise_for_status()
+
+
+def _exercise_session_integrity_http(participant: httpx.Client, run_slug: str) -> dict[str, Any]:
+    create = participant.post("/api/v1/sessions", json={"run_slug": run_slug, "language": "en"})
+    create.raise_for_status()
+    session = create.json()
+    session_id = session["session_id"]
+    resume_token = session["resume_token"]
+    participant.post(f"/api/v1/sessions/{session_id}/start").raise_for_status()
+
+    first_trial = participant.get(f"/api/v1/sessions/{session_id}/next-trial")
+    first_trial.raise_for_status()
+    _submit_trial_http(participant, session_id, first_trial.json())
+
+    resume_info = participant.post("/api/v1/sessions/resume-info", json={"run_slug": run_slug, "resume_token": resume_token})
+    resume_info.raise_for_status()
+    resume_payload = resume_info.json()
+
+    while True:
+        nxt = participant.get(f"/api/v1/sessions/{session_id}/next-trial")
+        if nxt.status_code == 409:
+            block_id = nxt.json()["detail"]["block_id"]
+            participant.post(
+                f"/api/v1/sessions/{session_id}/blocks/{block_id}/questionnaire",
+                json={"burden": 30, "trust": 60, "usefulness": 70},
+            ).raise_for_status()
+            continue
+        nxt.raise_for_status()
+        payload = nxt.json()
+        if payload.get("status") == "awaiting_final_submit":
+            break
+        _submit_trial_http(participant, session_id, payload)
+
+    final_submit = participant.post(f"/api/v1/sessions/{session_id}/final-submit")
+    final_submit.raise_for_status()
+    resume_after = participant.post("/api/v1/sessions/resume-info", json={"run_slug": run_slug, "resume_token": resume_token})
     resume_after.raise_for_status()
 
     return {
@@ -247,6 +355,8 @@ def run_prelaunch_gate(
     concurrent_sessions: int = 6,
     concurrent_trials_per_session: int = 3,
     run_restore_drill: bool = False,
+    participant_base_url: str | None = None,
+    researcher_base_url: str | None = None,
 ) -> dict[str, Any]:
     checks: list[GateCheck] = []
     out_dir = Path(output_dir)
@@ -265,10 +375,43 @@ def run_prelaunch_gate(
         metadata={"db_target": db_target, "require_postgres": require_postgres},
     )
 
-    participant_app = create_participant_app(db_target)
-    researcher_app = create_researcher_app(db_target)
+    use_blackbox_http = bool(participant_base_url and researcher_base_url)
+    _record(
+        checks,
+        check_id="launch_boundary_mode",
+        severity="info",
+        passed=True,
+        detail=("black-box HTTP boundary mode enabled" if use_blackbox_http else "in-process TestClient mode"),
+        metadata={
+            "participant_base_url": participant_base_url or "",
+            "researcher_base_url": researcher_base_url or "",
+        },
+    )
 
-    with TestClient(participant_app) as participant_client, TestClient(researcher_app) as researcher_client:
+    if use_blackbox_http:
+        ready_ok, ready_detail = _wait_for_http_ready(
+            participant_base_url=str(participant_base_url),
+            researcher_base_url=str(researcher_base_url),
+        )
+        _record(
+            checks,
+            check_id="http_stack_readiness",
+            severity="blocker",
+            passed=ready_ok,
+            detail=ready_detail,
+            metadata={},
+        )
+        participant_client = httpx.Client(base_url=str(participant_base_url), timeout=20.0)
+        researcher_client = httpx.Client(base_url=str(researcher_base_url), timeout=20.0)
+        unauth_researcher_client = httpx.Client(base_url=str(researcher_base_url), timeout=20.0)
+    else:
+        participant_app = create_participant_app(db_target)
+        researcher_app = create_researcher_app(db_target)
+        participant_client = TestClient(participant_app)
+        researcher_client = TestClient(researcher_app)
+        unauth_researcher_client = TestClient(researcher_app)
+
+    with participant_client, researcher_client, unauth_researcher_client:
         health = participant_client.get("/health")
         _record(
             checks,
@@ -279,7 +422,15 @@ def run_prelaunch_gate(
             metadata={"response": health.json() if health.status_code == 200 else {}},
         )
 
-        auth_ok, auth_detail = _login_researcher(researcher_client, researcher_username, researcher_password)
+        if use_blackbox_http:
+            auth_ok, auth_detail, cookie_present = _login_researcher_http(
+                researcher_client,
+                researcher_username,
+                researcher_password,
+            )
+        else:
+            auth_ok, auth_detail = _login_researcher(researcher_client, researcher_username, researcher_password)
+            cookie_present = True
         _record(
             checks,
             check_id="researcher_auth",
@@ -288,8 +439,29 @@ def run_prelaunch_gate(
             detail=auth_detail,
             metadata={},
         )
+        if use_blackbox_http:
+            _record(
+                checks,
+                check_id="researcher_cookie_persistence",
+                severity="blocker",
+                passed=cookie_present and researcher_client.get("/admin/api/v1/auth/me").status_code == 200,
+                detail="researcher auth cookie issued and reused across external HTTP requests",
+                metadata={"cookie_present": cookie_present},
+            )
+            unauth_status = unauth_researcher_client.get("/admin/api/v1/runs").status_code
+            _record(
+                checks,
+                check_id="researcher_protected_boundary",
+                severity="blocker",
+                passed=unauth_status == 401,
+                detail=f"unauthenticated protected researcher endpoint status={unauth_status}",
+                metadata={},
+            )
 
-        run_ok, run_detail, run_id = _resolve_active_run(researcher_client, run_slug)
+        if use_blackbox_http:
+            run_ok, run_detail, run_id = _resolve_active_run_http(researcher_client, run_slug)
+        else:
+            run_ok, run_detail, run_id = _resolve_active_run(researcher_client, run_slug)
         _record(
             checks,
             check_id="active_run_present",
@@ -311,7 +483,10 @@ def run_prelaunch_gate(
         )
 
         if run_ok and slug_ok:
-            integrity = _exercise_session_integrity(participant_client, run_slug)
+            if use_blackbox_http:
+                integrity = _exercise_session_integrity_http(participant_client, run_slug)
+            else:
+                integrity = _exercise_session_integrity(participant_client, run_slug)
             resumed = integrity["resume_before_final"].get("resume_status") == "resumable"
             finalized = integrity["resume_after_final"].get("resume_status") == "finalized"
             final_submit_ok = integrity.get("final_submit_status") in {"finalized", "completed"}
@@ -324,27 +499,28 @@ def run_prelaunch_gate(
                 metadata=integrity,
             )
 
-            concurrent = _run_concurrent_smoke(
-                participant_app=participant_app,
-                run_slug=run_slug,
-                concurrent_sessions=concurrent_sessions,
-                trials_per_session=concurrent_trials_per_session,
-            )
-            concurrent_ok = (
-                concurrent["completed_workers"] == concurrent["requested_sessions"]
-                and not concurrent["errors"]
-                and all(row["trials_submitted"] >= 1 for row in concurrent["results"])
-            )
-            _record(
-                checks,
-                check_id="concurrent_session_smoke",
-                severity="blocker",
-                passed=concurrent_ok,
-                detail=(
-                    f"concurrent smoke completed {concurrent['completed_workers']}/{concurrent['requested_sessions']} sessions"
-                ),
-                metadata=concurrent,
-            )
+            if not use_blackbox_http:
+                concurrent = _run_concurrent_smoke(
+                    participant_app=participant_app,
+                    run_slug=run_slug,
+                    concurrent_sessions=concurrent_sessions,
+                    trials_per_session=concurrent_trials_per_session,
+                )
+                concurrent_ok = (
+                    concurrent["completed_workers"] == concurrent["requested_sessions"]
+                    and not concurrent["errors"]
+                    and all(row["trials_submitted"] >= 1 for row in concurrent["results"])
+                )
+                _record(
+                    checks,
+                    check_id="concurrent_session_smoke",
+                    severity="blocker",
+                    passed=concurrent_ok,
+                    detail=(
+                        f"concurrent smoke completed {concurrent['completed_workers']}/{concurrent['requested_sessions']} sessions"
+                    ),
+                    metadata=concurrent,
+                )
 
             if run_id:
                 diagnostics = researcher_client.get(f"/admin/api/v1/runs/{run_id}/diagnostics")
@@ -464,7 +640,12 @@ def main() -> None:
     parser.add_argument("--concurrent-trials-per-session", type=int, default=3)
     parser.add_argument("--run-restore-drill", action="store_true")
     parser.add_argument("--fail-on-warning", action="store_true")
+    parser.add_argument("--participant-base-url", default=None)
+    parser.add_argument("--researcher-base-url", default=None)
     args = parser.parse_args()
+
+    if bool(args.participant_base_url) ^ bool(args.researcher_base_url):
+        raise SystemExit("Both --participant-base-url and --researcher-base-url are required for black-box HTTP mode.")
 
     report = run_prelaunch_gate(
         db_target=args.db_target,
@@ -476,6 +657,8 @@ def main() -> None:
         concurrent_sessions=max(1, int(args.concurrent_sessions)),
         concurrent_trials_per_session=max(1, int(args.concurrent_trials_per_session)),
         run_restore_drill=args.run_restore_drill,
+        participant_base_url=args.participant_base_url,
+        researcher_base_url=args.researcher_base_url,
     )
 
     if report["blocking_failures"]:

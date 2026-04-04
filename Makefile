@@ -1,4 +1,4 @@
-.PHONY: setup test validate run-participant-api run-researcher-api run-participant-web run-researcher-web dry-run run-participant-api run-researcher-api pilot-backup pilot-restore pilot-prelaunch-gate
+.PHONY: setup test validate run-participant-api run-researcher-api run-participant-web run-researcher-web dry-run run-participant-api run-researcher-api pilot-backup pilot-restore pilot-prelaunch-gate pilot-prelaunch-gate-blackbox
 
 PYTHON ?= python3
 VENV_DIR ?= .venv
@@ -47,6 +47,16 @@ pilot-prelaunch-gate:
 	$(VENV_PY) scripts/pilot_prelaunch_gate.py \
 		--db-target "$${PILOT_DB_URL:-$${PILOT_DB_PATH:-pilot/sessions/pilot_sessions.sqlite3}}" \
 		--run-slug "$${PILOT_RUN_SLUG}" \
+		--output-dir "$${PILOT_GATE_OUTPUT_DIR:-artifacts/pilot_ops/prelaunch_gate}" \
+		--researcher-username "$${PILOT_RESEARCHER_USERNAME:-admin}" \
+		--researcher-password "$${PILOT_RESEARCHER_PASSWORD:-admin1234}"
+
+pilot-prelaunch-gate-blackbox:
+	$(VENV_PY) scripts/pilot_prelaunch_gate.py \
+		--db-target "$${PILOT_DB_URL:-$${PILOT_DB_PATH:-pilot/sessions/pilot_sessions.sqlite3}}" \
+		--run-slug "$${PILOT_RUN_SLUG}" \
+		--participant-base-url "$${PILOT_PARTICIPANT_BASE_URL:-http://127.0.0.1}" \
+		--researcher-base-url "$${PILOT_RESEARCHER_BASE_URL:-http://127.0.0.1:8081}" \
 		--output-dir "$${PILOT_GATE_OUTPUT_DIR:-artifacts/pilot_ops/prelaunch_gate}" \
 		--researcher-username "$${PILOT_RESEARCHER_USERNAME:-admin}" \
 		--researcher-password "$${PILOT_RESEARCHER_PASSWORD:-admin1234}"
