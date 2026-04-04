@@ -1,8 +1,20 @@
 const BASE = import.meta.env.VITE_RESEARCHER_API_BASE ?? 'http://localhost:8001'
 
+async function parseError(res: Response): Promise<string> {
+  const text = await res.text()
+  if (!text) return `HTTP ${res.status}`
+  try {
+    const parsed = JSON.parse(text) as { detail?: string }
+    if (parsed.detail) return parsed.detail
+  } catch {
+    // noop: preserve raw text fallback
+  }
+  return text
+}
+
 export async function apiGet<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`)
-  if (!res.ok) throw new Error(await res.text())
+  if (!res.ok) throw new Error(await parseError(res))
   return res.json()
 }
 
@@ -12,12 +24,20 @@ export async function createRun(payload: Record<string, unknown>) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
-  if (!res.ok) throw new Error(await res.text())
+  if (!res.ok) throw new Error(await parseError(res))
   return res.json()
 }
 
 export async function uploadStimuli(form: FormData) {
   const res = await fetch(`${BASE}/admin/api/v1/stimuli/upload`, { method: 'POST', body: form })
-  if (!res.ok) throw new Error(await res.text())
+  if (!res.ok) throw new Error(await parseError(res))
   return res.json()
+}
+
+export function listStimuli() {
+  return apiGet<Array<Record<string, unknown>>>('/admin/api/v1/stimuli')
+}
+
+export function listRuns() {
+  return apiGet<Array<Record<string, unknown>>>('/admin/api/v1/runs')
 }

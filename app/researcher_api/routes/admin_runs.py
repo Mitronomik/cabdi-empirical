@@ -34,6 +34,11 @@ def create_run(req: CreateRunRequest, request: Request) -> dict:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.get("")
+def list_runs(request: Request) -> list[dict]:
+    return request.app.state.run_service.list_runs()
+
+
 @router.get("/{run_id}")
 def get_run(run_id: str, request: Request) -> dict:
     try:

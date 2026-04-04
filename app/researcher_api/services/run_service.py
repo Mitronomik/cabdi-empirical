@@ -99,6 +99,17 @@ class RunService:
         row["stimulus_set_ids"] = loads(row.pop("stimulus_set_ids_json"))
         return row
 
+    def list_runs(self) -> list[dict[str, Any]]:
+        rows = self.store.fetchall(
+            """
+            SELECT run_id, run_name, public_slug, experiment_id, task_family, notes, created_at
+            FROM researcher_runs
+            ORDER BY created_at DESC
+            """,
+            (),
+        )
+        return rows
+
     def list_run_sessions(self, run_id: str) -> dict[str, Any]:
         self.get_run(run_id)
         rows = self.store.fetchall(
