@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-import math
+import statistics
 from typing import Any
 from uuid import uuid4
 
@@ -282,15 +282,20 @@ class TrialService:
         """Derive lagged routing features from prior completed trials in this session.
 
         Operational semantics:
-        - Window: most recent up to 3 *completed* trials before current trial serving.
-        - error: summary.correct_or_not is explicitly False.
-        - blind acceptance: accepted_model_advice=True and model_correct_or_not=False.
-        - latency bucket: z-bucket from prior reaction_time_ms values only; falls back
-          deterministically to "medium" for sparse or degenerate latency history.
+        - Window: most recent up to 5 *completed* trials before current trial serving.
+          Risk-marker counts remain anchored to last 3 to preserve policy contract.
+        - error: summary.correct_or_not=False, or fallback from event response_selected
+          compared with persisted stimulus true_label when summary is missing.
+        - blind acceptance: accepted model advice with wrong model prediction AND no
+          observable deliberation (reason/evidence/verification) in prior trace.
+          Event trace signals complement/override thin summary booleans.
+        - latency bucket: deterministic coarse bucket from prior per-trial observed
+          completion latency (trial_completed event payload if present, else summary).
+          Sparse or malformed history falls back deterministically.
         """
         rows = self.store.fetchall(
             """
-            SELECT st.trial_id, tsl.summary_json
+            SELECT st.trial_id, st.stimulus_json, tsl.summary_json
             FROM session_trials st
             LEFT JOIN trial_summary_logs tsl
               ON tsl.session_id = st.session_id AND tsl.trial_id = st.trial_id
@@ -299,35 +304,54 @@ class TrialService:
               AND st.completed_at IS NOT NULL
               AND st.trial_id != ?
             ORDER BY st.completed_at DESC
-            LIMIT 3
+            LIMIT 5
             """,
             (session_id, current_trial_id),
         )
 
-        summaries: list[dict[str, Any]] = []
+        prior_trials: list[dict[str, Any]] = []
+        trial_ids: list[str] = []
         for row in rows:
+            summary: dict[str, Any] = {}
+            stimulus: dict[str, Any] = {}
             if not row["summary_json"]:
-                continue
-            try:
-                parsed = loads(row["summary_json"])
-            except Exception:
-                continue
-            if isinstance(parsed, dict):
-                summaries.append(parsed)
+                summary = {}
+            else:
+                try:
+                    parsed = loads(row["summary_json"])
+                except Exception:
+                    parsed = {}
+                if isinstance(parsed, dict):
+                    summary = parsed
+            if row["stimulus_json"]:
+                try:
+                    stimulus_parsed = loads(row["stimulus_json"])
+                except Exception:
+                    stimulus_parsed = {}
+                if isinstance(stimulus_parsed, dict):
+                    stimulus = stimulus_parsed
 
-        recent_error_count = sum(1 for summary in summaries if summary.get("correct_or_not") is False)
-        recent_blind_accept_count = sum(
-            1
-            for summary in summaries
-            if summary.get("accepted_model_advice") is True and summary.get("model_correct_or_not") is False
-        )
-        latency_bucket = _latency_bucket_from_summaries(summaries)
+            trial_id = str(row["trial_id"])
+            trial_ids.append(trial_id)
+            prior_trials.append({"trial_id": trial_id, "summary": summary, "stimulus": stimulus})
+
+        trial_events = _load_trial_events(store=self.store, session_id=session_id, trial_ids=trial_ids)
+
+        lagged_records = [
+            _build_prior_trial_behavior_record(trial=trial, events=trial_events.get(trial["trial_id"], []))
+            for trial in prior_trials
+        ]
+
+        marker_window = lagged_records[:3]
+        recent_error_count = sum(1 for record in marker_window if record["is_error"])
+        recent_blind_accept_count = sum(1 for record in marker_window if record["is_blind_accept"])
+        latency_bucket = _latency_bucket_from_prior_records(lagged_records)
 
         return {
             "recent_error_count_last_3": recent_error_count,
             "recent_blind_accept_count_last_3": recent_blind_accept_count,
             "recent_latency_z_bucket": latency_bucket,
-            "prior_completed_trials_considered": len(summaries),
+            "prior_completed_trials_considered": len(lagged_records),
         }
 
     def _log_event(self, session_id: str, block_id: str, trial_id: str, event_type: str, payload: dict[str, Any]) -> None:
@@ -365,32 +389,129 @@ def _shown_components(policy_decision: dict[str, Any]) -> list[str]:
     return components
 
 
-def _latency_bucket_from_summaries(summaries: list[dict[str, Any]]) -> str:
-    latencies: list[int] = []
-    for summary in summaries:
-        value = summary.get("reaction_time_ms")
-        if value is None:
-            continue
-        try:
-            parsed = int(value)
-        except (TypeError, ValueError):
-            continue
-        if parsed >= 0:
-            latencies.append(parsed)
+def _load_trial_events(store: PilotStore, session_id: str, trial_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+    if not trial_ids:
+        return {}
+    placeholders = ", ".join("?" for _ in trial_ids)
+    rows = store.fetchall(
+        f"""
+        SELECT trial_id, event_type, payload_json, timestamp
+        FROM trial_event_logs
+        WHERE session_id = ?
+          AND trial_id IN ({placeholders})
+        ORDER BY timestamp
+        """,
+        (session_id, *trial_ids),
+    )
+    grouped: dict[str, list[dict[str, Any]]] = {trial_id: [] for trial_id in trial_ids}
+    for row in rows:
+        payload: dict[str, Any] = {}
+        if row["payload_json"]:
+            try:
+                parsed = loads(row["payload_json"])
+            except Exception:
+                parsed = {}
+            if isinstance(parsed, dict):
+                payload = parsed
+        grouped.setdefault(str(row["trial_id"]), []).append(
+            {"event_type": row["event_type"], "payload": payload, "timestamp": row["timestamp"]}
+        )
+    return grouped
 
-    if len(latencies) < 2:
+
+def _parse_bool(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    return None
+
+
+def _parse_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed >= 0 else None
+
+
+def _build_prior_trial_behavior_record(trial: dict[str, Any], events: list[dict[str, Any]]) -> dict[str, Any]:
+    summary = trial["summary"]
+    stimulus = trial["stimulus"]
+
+    response_from_event: str | None = None
+    rt_from_event: int | None = None
+    observed_deliberation = False
+    for event in events:
+        event_type = event.get("event_type")
+        payload = event.get("payload", {})
+        if event_type == "response_selected":
+            maybe_response = payload.get("human_response")
+            if isinstance(maybe_response, str):
+                response_from_event = maybe_response
+        elif event_type == "trial_completed":
+            rt_from_event = _parse_int(payload.get("reaction_time_ms"))
+        elif event_type in {"reason_clicked", "evidence_opened", "verification_checked"}:
+            observed_value = payload.get("value", True)
+            if observed_value is not False:
+                observed_deliberation = True
+
+    accepted_model = _parse_bool(summary.get("accepted_model_advice"))
+    if accepted_model is None:
+        model_prediction = stimulus.get("model_prediction")
+        if isinstance(model_prediction, str) and response_from_event is not None:
+            accepted_model = response_from_event == model_prediction
+
+    model_wrong = _parse_bool(summary.get("model_correct_or_not"))
+    if model_wrong is None:
+        model_wrong = _parse_bool(stimulus.get("model_correct"))
+    model_is_wrong = (model_wrong is False) if model_wrong is not None else False
+
+    summary_deliberation = any(
+        _parse_bool(summary.get(field)) is True for field in ("reason_clicked", "evidence_opened", "verification_completed")
+    )
+
+    is_blind_accept = bool(accepted_model is True and model_is_wrong and not (summary_deliberation or observed_deliberation))
+
+    is_error = _parse_bool(summary.get("correct_or_not"))
+    if is_error is None:
+        true_label = stimulus.get("true_label")
+        if isinstance(true_label, str) and response_from_event is not None:
+            is_error = response_from_event == true_label
+    is_error_final = (is_error is False) if is_error is not None else False
+
+    latency_ms = rt_from_event
+    if latency_ms is None:
+        latency_ms = _parse_int(summary.get("reaction_time_ms"))
+
+    return {
+        "is_error": is_error_final,
+        "is_blind_accept": is_blind_accept,
+        "latency_ms": latency_ms,
+    }
+
+
+def _latency_bucket_from_prior_records(records: list[dict[str, Any]]) -> str:
+    latencies = [record["latency_ms"] for record in records if isinstance(record.get("latency_ms"), int)]
+    if not latencies:
+        return "medium"
+    if len(latencies) == 1:
+        if latencies[0] >= 1800:
+            return "high"
+        if latencies[0] <= 800:
+            return "low"
         return "medium"
 
+    median_latency = statistics.median(latencies)
     latest_latency = latencies[0]
-    mean_latency = sum(latencies) / len(latencies)
-    variance = sum((item - mean_latency) ** 2 for item in latencies) / len(latencies)
-    std_dev = math.sqrt(variance)
-    if std_dev == 0:
-        return "medium"
-
-    z_score = (latest_latency - mean_latency) / std_dev
-    if z_score >= 0.5:
+    if median_latency >= 1600 or latest_latency >= 2200:
         return "high"
-    if z_score <= -0.5:
+    if median_latency <= 900 and latest_latency <= 1200:
         return "low"
     return "medium"
+
+
+def _latency_bucket_from_summaries(summaries: list[dict[str, Any]]) -> str:
+    """Backward-compatible helper used by tests for sparse fallback semantics."""
+    records = [{"latency_ms": _parse_int(summary.get("reaction_time_ms"))} for summary in summaries]
+    return _latency_bucket_from_prior_records(records)
