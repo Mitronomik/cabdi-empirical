@@ -5,6 +5,10 @@ export type Locale = (typeof SUPPORTED_LOCALES)[number];
 export type MessageKey =
   | 'lang.en'
   | 'lang.ru'
+  | 'lang.switcherLabel'
+  | 'trial.progressAria'
+  | 'assistance.panelAria'
+  | 'error.runSlugRequired'
   | 'error.retry'
   | 'error.loadNextTrial'
   | 'error.startSession'
@@ -68,6 +72,10 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
   en: {
     'lang.en': 'EN',
     'lang.ru': 'RU',
+    'lang.switcherLabel': 'Language switcher',
+    'trial.progressAria': 'progress',
+    'assistance.panelAria': 'AI assistance panel',
+    'error.runSlugRequired': 'Run slug is required.',
     'error.retry': 'Retry',
     'error.loadNextTrial': 'Could not load the next trial. Please retry.',
     'error.startSession': 'Unable to start session. Please retry.',
@@ -132,6 +140,11 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
   ru: {
     'lang.en': 'EN',
     'lang.ru': 'RU',
+
+    'lang.switcherLabel': 'Переключатель языка',
+    'trial.progressAria': 'прогресс',
+    'assistance.panelAria': 'Панель помощи ИИ',
+    'error.runSlugRequired': 'Требуется slug запуска.',
     'error.retry': 'Повторить',
     'error.loadNextTrial': 'Не удалось загрузить следующий раунд. Пожалуйста, попробуйте снова.',
     'error.startSession': 'Не удалось начать сессию. Пожалуйста, попробуйте снова.',

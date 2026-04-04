@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
+import { localizeOperatorError, localizeStatus } from '../i18n/uiText';
 import { useLocale } from '../i18n/useLocale';
 import { listStimuli, uploadStimuli } from '../lib/api';
 import { parseStimulusSetSummary } from '../lib/researcherUi';
@@ -19,7 +20,7 @@ export function StimulusUploadPage() {
       const items = await listStimuli();
       setSets(items.map(parseStimulusSetSummary));
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('common.unknownError'));
+      setError(localizeOperatorError(t, err));
     } finally {
       setLoading(false);
     }
@@ -40,7 +41,7 @@ export function StimulusUploadPage() {
       setResult(json);
       await loadLibrary();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('common.unknownError'));
+      setError(localizeOperatorError(t, err));
     } finally {
       setIsUploading(false);
     }
@@ -71,8 +72,8 @@ export function StimulusUploadPage() {
       {result ? (
         <div>
           <h3>{t('upload.resultTitle')}</h3>
-          <p>{t('upload.validationStatus')}: {String(result.validation_status ?? (result.ok ? 'valid' : 'invalid'))}</p>
-          <p>{t('upload.resultSetId')}: {String(result.stimulus_set_id ?? 'n/a')}</p>
+          <p>{t('upload.validationStatus')}: {localizeStatus(t, result.validation_status ?? (result.ok ? 'valid' : 'invalid'))}</p>
+          <p>{t('upload.resultSetId')}: {String(result.stimulus_set_id ?? t('common.na'))}</p>
           <p>{t('upload.resultItems')}: {String(result.n_items ?? 0)}</p>
           <p>{t('upload.resultTaskFamily')}: {String(result.task_family ?? 'n/a')}</p>
           {Array.isArray(result.errors) && result.errors.length > 0 ? <p>{t('upload.resultHasErrors')}</p> : <p>{t('upload.resultReady')}</p>}
@@ -99,7 +100,7 @@ export function StimulusUploadPage() {
                 <td>{setItem.name}</td>
                 <td>{setItem.task_family}</td>
                 <td>{setItem.n_items}</td>
-                <td>{setItem.validation_status}</td>
+                <td>{localizeStatus(t, setItem.validation_status)}</td>
                 <td>{setItem.source_format}</td>
                 <td>{setItem.stimulus_set_id}</td>
               </tr>

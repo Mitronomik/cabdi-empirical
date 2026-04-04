@@ -29,7 +29,8 @@ function localizedError(
     | 'error.missingQuestionnaireState'
     | 'error.submitQuestionnaire'
     | 'error.missingSessionStateShort'
-    | 'error.finalSubmit',
+    | 'error.finalSubmit'
+    | 'error.runSlugRequired',
 ) {
   const locale = getCurrentLocale();
   return messages[locale][key];
@@ -109,7 +110,7 @@ export function useParticipantFlow() {
   async function beginSession(activeRunSlug: string) {
     const normalizedRunSlug = activeRunSlug.trim();
     if (!normalizedRunSlug) {
-      setError('run_slug is required');
+      setError(localizedError('error.runSlugRequired'));
       return;
     }
     setLoading(true);

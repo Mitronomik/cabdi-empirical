@@ -97,6 +97,7 @@ test('language selector renders and switches onboarding copy', async () => {
   await user.click(screen.getByRole('button', { name: 'RU' }));
   expect(screen.getByRole('heading', { name: /согласие/i })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: /продолжить/i })).toBeInTheDocument();
+  expect(screen.getByLabelText(/переключатель языка/i)).toBeInTheDocument();
 });
 
 test('default language follows browser locale on first load', () => {

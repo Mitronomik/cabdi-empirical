@@ -4,7 +4,7 @@ export function LanguageSwitcher() {
   const { locale, setLocale, t } = useLocale();
 
   return (
-    <div className="language-switcher" aria-label="language switcher">
+    <div className="language-switcher" aria-label={t('lang.switcherLabel')}>
       <button
         type="button"
         className={locale === 'en' ? 'active' : ''}
@@ -23,4 +23,3 @@ export function LanguageSwitcher() {
     </div>
   );
 }
-
