@@ -131,17 +131,31 @@ class RunService:
             row["public_slug"] = synthesized_slug
         row["config"] = loads(row.pop("config_json"))
         row["stimulus_set_ids"] = loads(row.pop("stimulus_set_ids_json"))
+        row["launchable"] = row["status"] == RUN_STATUS_ACTIVE
+        row["launchability_reason"] = (
+            "run is active and accepts participant sessions"
+            if row["status"] == RUN_STATUS_ACTIVE
+            else f"run is {row['status']}; activate to accept new participant sessions"
+        )
         return row
 
     def list_runs(self) -> list[dict[str, Any]]:
         rows = self.store.fetchall(
             """
-            SELECT run_id, run_name, public_slug, status, experiment_id, task_family, notes, created_at
+            SELECT run_id, run_name, public_slug, status, experiment_id, task_family, notes, created_at, stimulus_set_ids_json
             FROM researcher_runs
             ORDER BY created_at DESC
             """,
             (),
         )
+        for row in rows:
+            row["linked_stimulus_set_ids"] = loads(row.pop("stimulus_set_ids_json"))
+            row["launchable"] = row["status"] == RUN_STATUS_ACTIVE
+            row["launchability_reason"] = (
+                "run is active and accepts participant sessions"
+                if row["status"] == RUN_STATUS_ACTIVE
+                else f"run is {row['status']}; activate to accept new participant sessions"
+            )
         return rows
 
     def transition_run_status(self, run_id: str, target_status: str) -> dict[str, Any]:

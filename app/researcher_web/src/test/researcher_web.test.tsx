@@ -117,7 +117,7 @@ describe('researcher web shell', () => {
       )
       .mockResolvedValueOnce(
         new Response(
-          JSON.stringify([{ stimulus_set_id: 'stim_new', name: 'new', task_family: 'scam_not_scam', n_items: 2 }]),
+          JSON.stringify([{ stimulus_set_id: 'stim_new', name: 'new', task_family: 'scam_not_scam', n_items: 2, validation_status: 'valid' }]),
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         ),
       );
@@ -134,7 +134,8 @@ describe('researcher web shell', () => {
     expect(await screen.findByText('Upload result')).toBeInTheDocument();
     expect(screen.getByText(/stimulus_set_id: stim_new/)).toBeInTheDocument();
     expect(screen.getByText(/n_items: 2/)).toBeInTheDocument();
-    expect(await screen.findByText(/stim_new · new/)).toBeInTheDocument();
+    expect(await screen.findByText('stim_new')).toBeInTheDocument();
+    expect(screen.getByText('new')).toBeInTheDocument();
   });
 
   it('uses selectors for run and monitor pages instead of manual run_id typing', async () => {
@@ -142,7 +143,12 @@ describe('researcher web shell', () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify([{ stimulus_set_id: 'stim_1', name: 'set', task_family: 'scam_not_scam' }]), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify([{ stimulus_set_id: 'stim_1', name: 'set', task_family: 'scam_not_scam', validation_status: 'valid' }]),
+          { status: 200 },
+        ),
+      )
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
@@ -161,8 +167,24 @@ describe('researcher web shell', () => {
           { status: 200 },
         ),
       )
-      .mockResolvedValueOnce(new Response(JSON.stringify([{ run_id: 'run_1', run_name: 'run-1', public_slug: 'slug-1', task_family: 'scam_not_scam' }]), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify([{ run_id: 'run_1', run_name: 'run-1' }]), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify([
+            {
+              run_id: 'run_1',
+              run_name: 'run-1',
+              public_slug: 'slug-1',
+              task_family: 'scam_not_scam',
+              status: 'draft',
+              linked_stimulus_set_ids: ['stim_1'],
+              launchability_reason: 'run is draft',
+              created_at: '2026-01-01T00:00:00+00:00',
+            },
+          ]),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ run_id: 'run_1', run_name: 'run-1', public_slug: 'slug-1', status: 'active' }]), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ run_id: 'run_1', counts: { created: 0 }, sessions: [] }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -177,6 +199,6 @@ describe('researcher web shell', () => {
     const selector = await screen.findByRole('combobox');
     expect(selector).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Load Sessions' }));
-    expect(await screen.findByText(/"run_id": "run_1"/)).toBeInTheDocument();
+    expect(await screen.findByText(/run_id: run_1/)).toBeInTheDocument();
   });
 });
