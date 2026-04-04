@@ -60,7 +60,10 @@ export function ExportsPage() {
   const rawEventLog = String(data?.raw_event_log_jsonl ?? '');
   const trialSummaryCsv = String(data?.trial_summary_csv ?? '');
   const sessionSummaryCsv = String(data?.session_summary_csv ?? '');
-  const analysisReadyCsv = String(data?.analysis_ready_csv ?? '');
+  const trialLevelCsv = String(data?.trial_level_csv ?? '');
+  const participantSummaryCsv = String(data?.participant_summary_csv ?? '');
+  const mixedEffectsCsv = String(data?.mixed_effects_ready_csv ?? '');
+  const pilotSummaryMd = String(data?.pilot_summary_md ?? '');
 
   return (
     <section>
@@ -104,10 +107,37 @@ export function ExportsPage() {
               <button onClick={() => downloadText(`${String(data.run_id)}_session_summary.csv`, sessionSummaryCsv)}>Download</button>
             </p>
           ) : null}
-          {analysisReadyCsv ? (
+          {trialLevelCsv ? (
             <p>
-              analysis_ready_csv ({analysisReadyCsv.length} chars){' '}
-              <button onClick={() => downloadText(`${String(data.run_id)}_analysis_ready.csv`, analysisReadyCsv)}>Download</button>
+              trial_level_csv ({trialLevelCsv.length} chars){' '}
+              <button onClick={() => downloadText(`${String(data.run_id)}_trial_level.csv`, trialLevelCsv)}>Download</button>
+            </p>
+          ) : null}
+          {participantSummaryCsv ? (
+            <p>
+              participant_summary_csv ({participantSummaryCsv.length} chars){' '}
+              <button onClick={() => downloadText(`${String(data.run_id)}_participant_summary.csv`, participantSummaryCsv)}>Download</button>
+            </p>
+          ) : null}
+          {mixedEffectsCsv ? (
+            <p>
+              mixed_effects_ready_csv ({mixedEffectsCsv.length} chars){' '}
+              <button onClick={() => downloadText(`${String(data.run_id)}_mixed_effects_ready.csv`, mixedEffectsCsv)}>Download</button>
+            </p>
+          ) : null}
+          {pilotSummaryMd ? (
+            <p>
+              pilot_summary_md ({pilotSummaryMd.length} chars){' '}
+              <button onClick={() => downloadText(`${String(data.run_id)}_pilot_summary.md`, pilotSummaryMd)}>Download</button>
+            </p>
+          ) : null}
+          {String(data.export_state) === 'available' && !trialSummaryCsv ? <p>Run has sessions but no trial summaries yet.</p> : null}
+          {Array.isArray(data?.warnings) && (data?.warnings as unknown[]).length > 0 ? (
+            <p>
+              warnings ({(data?.warnings as unknown[]).length}){' '}
+              <button onClick={() => downloadText(`${String(data.run_id)}_export_warnings.json`, JSON.stringify(data?.warnings ?? [], null, 2))}>
+                Download
+              </button>
             </p>
           ) : null}
         </>
