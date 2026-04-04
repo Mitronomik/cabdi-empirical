@@ -1,4 +1,4 @@
-const BASE = import.meta.env.VITE_RESEARCHER_API_BASE ?? 'http://localhost:8001'
+const BASE = import.meta.env.VITE_RESEARCHER_API_BASE ?? ''
 
 async function parseError(res: Response): Promise<string> {
   const text = await res.text()

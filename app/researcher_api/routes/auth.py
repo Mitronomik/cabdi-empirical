@@ -25,7 +25,7 @@ def login(req: LoginRequest, request: Request, response: Response) -> dict:
         value=token,
         httponly=True,
         samesite="lax",
-        secure=False,
+        secure=bool(getattr(request.app.state, "researcher_cookie_secure", False)),
         max_age=60 * 60 * 12,
     )
     return {"ok": True, "user": {"user_id": user.user_id, "username": user.username, "is_admin": user.is_admin}}
