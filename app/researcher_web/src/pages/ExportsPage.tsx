@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
 
 import { useLocale } from '../i18n/useLocale';
-import { getRunExports, listRuns } from '../lib/api';
+import { downloadRunExportArtifact, getRunExports, listRuns } from '../lib/api';
 
-function downloadText(filename: string, content: string) {
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+function downloadBlob(filename: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
@@ -20,6 +19,7 @@ export function ExportsPage() {
   const [error, setError] = useState('');
   const [loadingRuns, setLoadingRuns] = useState(false);
   const [loadingExports, setLoadingExports] = useState(false);
+  const [downloading, setDownloading] = useState('');
   const { t } = useLocale();
 
   async function loadRuns() {
@@ -57,13 +57,20 @@ export function ExportsPage() {
     }
   }
 
-  const rawEventLog = String(data?.raw_event_log_jsonl ?? '');
-  const trialSummaryCsv = String(data?.trial_summary_csv ?? '');
-  const sessionSummaryCsv = String(data?.session_summary_csv ?? '');
-  const trialLevelCsv = String(data?.trial_level_csv ?? '');
-  const participantSummaryCsv = String(data?.participant_summary_csv ?? '');
-  const mixedEffectsCsv = String(data?.mixed_effects_ready_csv ?? '');
-  const pilotSummaryMd = String(data?.pilot_summary_md ?? '');
+  const artifacts = Array.isArray(data?.artifacts) ? (data?.artifacts as Array<Record<string, unknown>>) : [];
+
+  async function downloadArtifact(artifactType: string, filename: string) {
+    if (!runId) return;
+    setDownloading(artifactType);
+    try {
+      const blob = await downloadRunExportArtifact(runId, artifactType);
+      downloadBlob(filename, blob);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setDownloading('');
+    }
+  }
 
   return (
     <section>
@@ -86,56 +93,31 @@ export function ExportsPage() {
         <>
           <p>run_id: {String(data.run_id)}</p>
           <p>export_state: {String(data.export_state ?? 'unknown')}</p>
+          <p>generated_at: {String(data.generated_at ?? 'n/a')}</p>
           <p>{String(data.message ?? '')}</p>
           <pre>available_outputs: {JSON.stringify(data.available_outputs ?? {}, null, 2)}</pre>
           {String(data.export_state) === 'empty' ? <p>No sessions yet for this run, so exports are not available.</p> : null}
-          {rawEventLog ? (
-            <p>
-              raw_event_log_jsonl ({rawEventLog.length} chars){' '}
-              <button onClick={() => downloadText(`${String(data.run_id)}_raw_event_log.jsonl`, rawEventLog)}>Download</button>
-            </p>
+          {artifacts.length > 0 ? (
+            <ul>
+              {artifacts.map((artifact) => (
+                <li key={String(artifact.artifact_type)}>
+                  {String(artifact.artifact_type)} · {String(artifact.category)} · {String(artifact.size_bytes)} bytes ·{' '}
+                  {String(artifact.available) === 'true' ? 'available' : 'empty'}{' '}
+                  <button
+                    onClick={() => downloadArtifact(String(artifact.artifact_type), String(artifact.filename))}
+                    disabled={downloading === String(artifact.artifact_type)}
+                  >
+                    {downloading === String(artifact.artifact_type) ? 'Downloading...' : 'Download'}
+                  </button>
+                </li>
+              ))}
+            </ul>
           ) : null}
-          {trialSummaryCsv ? (
-            <p>
-              trial_summary_csv ({trialSummaryCsv.length} chars){' '}
-              <button onClick={() => downloadText(`${String(data.run_id)}_trial_summary.csv`, trialSummaryCsv)}>Download</button>
-            </p>
-          ) : null}
-          {sessionSummaryCsv ? (
-            <p>
-              session_summary_csv ({sessionSummaryCsv.length} chars){' '}
-              <button onClick={() => downloadText(`${String(data.run_id)}_session_summary.csv`, sessionSummaryCsv)}>Download</button>
-            </p>
-          ) : null}
-          {trialLevelCsv ? (
-            <p>
-              trial_level_csv ({trialLevelCsv.length} chars){' '}
-              <button onClick={() => downloadText(`${String(data.run_id)}_trial_level.csv`, trialLevelCsv)}>Download</button>
-            </p>
-          ) : null}
-          {participantSummaryCsv ? (
-            <p>
-              participant_summary_csv ({participantSummaryCsv.length} chars){' '}
-              <button onClick={() => downloadText(`${String(data.run_id)}_participant_summary.csv`, participantSummaryCsv)}>Download</button>
-            </p>
-          ) : null}
-          {mixedEffectsCsv ? (
-            <p>
-              mixed_effects_ready_csv ({mixedEffectsCsv.length} chars){' '}
-              <button onClick={() => downloadText(`${String(data.run_id)}_mixed_effects_ready.csv`, mixedEffectsCsv)}>Download</button>
-            </p>
-          ) : null}
-          {pilotSummaryMd ? (
-            <p>
-              pilot_summary_md ({pilotSummaryMd.length} chars){' '}
-              <button onClick={() => downloadText(`${String(data.run_id)}_pilot_summary.md`, pilotSummaryMd)}>Download</button>
-            </p>
-          ) : null}
-          {String(data.export_state) === 'available' && !trialSummaryCsv ? <p>Run has sessions but no trial summaries yet.</p> : null}
+          {String(data.export_state) === 'available' && artifacts.length === 0 ? <p>Run has sessions but no export artifacts were generated.</p> : null}
           {Array.isArray(data?.warnings) && (data?.warnings as unknown[]).length > 0 ? (
             <p>
               warnings ({(data?.warnings as unknown[]).length}){' '}
-              <button onClick={() => downloadText(`${String(data.run_id)}_export_warnings.json`, JSON.stringify(data?.warnings ?? [], null, 2))}>
+              <button onClick={() => downloadBlob(`${String(data.run_id)}_export_warnings.json`, new Blob([JSON.stringify(data?.warnings ?? [], null, 2)]))}>
                 Download
               </button>
             </p>

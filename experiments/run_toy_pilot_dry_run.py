@@ -362,6 +362,10 @@ def run_dry_run(config_path: str | Path, output_dir: str | Path) -> dict[str, An
 
     exports_payload = admin_export_service.export_run(run_id)
     diagnostics = diagnostics_service.get_run_diagnostics(run_id)
+    artifact_paths = {
+        item["artifact_type"]: Path(exports_payload["artifact_root"]) / item["filename"]
+        for item in exports_payload.get("artifacts", [])
+    }
 
     raw_dir = out_dir / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
@@ -372,10 +376,10 @@ def run_dry_run(config_path: str | Path, output_dir: str | Path) -> dict[str, An
     session_summary_path = raw_dir / "session_summary.csv"
     diagnostics_json_path = raw_dir / "diagnostics.json"
 
-    _write_text(event_log_path, exports_payload["raw_event_log_jsonl"])
-    _write_text(trial_summary_path, exports_payload["trial_summary_csv"])
-    _write_text(questionnaire_path, exports_payload["block_questionnaire_csv"])
-    _write_text(session_summary_path, exports_payload["session_summary_csv"])
+    _write_text(event_log_path, artifact_paths["raw_event_log_jsonl"].read_text(encoding="utf-8"))
+    _write_text(trial_summary_path, artifact_paths["trial_summary_csv"].read_text(encoding="utf-8"))
+    _write_text(questionnaire_path, artifact_paths["block_questionnaire_csv"].read_text(encoding="utf-8"))
+    _write_text(session_summary_path, artifact_paths["session_summary_csv"].read_text(encoding="utf-8"))
     _write_json(diagnostics_json_path, diagnostics)
 
     analysis_dir = out_dir / "analysis"

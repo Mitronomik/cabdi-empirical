@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import csv
 import io
+import json
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
@@ -57,20 +59,18 @@ def test_run_exports_include_expected_sections(tmp_path):
     exports_res = researcher.get(f"/admin/api/v1/runs/{run_info['run_id']}/exports")
     assert exports_res.status_code == 200
     body = exports_res.json()
-    assert "raw_event_log_jsonl" in body
-    assert "trial_summary_csv" in body
-    assert "block_questionnaire_csv" in body
+    assert "artifacts" in body
     assert "session_summary_json" in body
-    assert "trial_level_csv" in body
-    assert "participant_summary_csv" in body
-    assert "mixed_effects_ready_csv" in body
-    assert "pilot_summary_md" in body
     assert body["export_state"] == "available"
     assert "available_outputs" in body
     assert body["available_outputs"]["session_summary_csv"] is True
     assert body["available_outputs"]["trial_level_csv"] is False
     assert body["session_summary_json"][0]["language"] == "ru"
     assert "No trial summaries available" in body["warnings"][0]
+    assert body["artifact_policy"]["mode"] == "replace_current"
+    artifact_types = {item["artifact_type"] for item in body["artifacts"]}
+    assert "raw_event_log_jsonl" in artifact_types
+    assert "trial_level_csv" in artifact_types
 
 
 def test_run_exports_include_analysis_ready_outputs_when_trial_data_exists(tmp_path):
@@ -111,12 +111,46 @@ def test_run_exports_include_analysis_ready_outputs_when_trial_data_exists(tmp_p
     assert body["available_outputs"]["mixed_effects_ready_csv"] is True
     assert body["available_outputs"]["pilot_summary_md"] is True
 
-    trial_summary_rows = list(csv.DictReader(io.StringIO(body["trial_summary_csv"])))
+    trial_summary_artifact = researcher.get(
+        f"/admin/api/v1/runs/{run_info['run_id']}/exports/artifacts/trial_summary_csv"
+    )
+    assert trial_summary_artifact.status_code == 200
+    trial_summary_rows = list(csv.DictReader(io.StringIO(trial_summary_artifact.text)))
     assert trial_summary_rows
     assert trial_summary_rows[0]["run_id"] == run_info["run_id"]
     assert trial_summary_rows[0]["session_id"] == session_id
     assert trial_summary_rows[0]["trial_id"] == trial_id
 
-    trial_level_rows = list(csv.DictReader(io.StringIO(body["trial_level_csv"])))
+    trial_level_artifact = researcher.get(
+        f"/admin/api/v1/runs/{run_info['run_id']}/exports/artifacts/trial_level_csv"
+    )
+    assert trial_level_artifact.status_code == 200
+    trial_level_rows = list(csv.DictReader(io.StringIO(trial_level_artifact.text)))
     assert trial_level_rows
     assert trial_level_rows[0]["session_id"] == session_id
+
+    manifest_path = Path(body["artifact_root"]) / "manifest.json"
+    assert manifest_path.exists()
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["run_id"] == run_info["run_id"]
+
+
+def test_run_export_generation_replaces_current_artifacts(tmp_path):
+    db_path = str(tmp_path / "pilot.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    _login_researcher(researcher)
+    participant = TestClient(create_participant_app(db_path))
+
+    run_info = _bootstrap_run(researcher)
+    participant.post("/api/v1/sessions", json={"run_slug": run_info["run_slug"]})
+
+    first = researcher.get(f"/admin/api/v1/runs/{run_info['run_id']}/exports").json()
+    first_manifest = Path(first["artifact_root"]) / "manifest.json"
+    first_generated_at = json.loads(first_manifest.read_text(encoding="utf-8"))["generated_at"]
+
+    second = researcher.get(f"/admin/api/v1/runs/{run_info['run_id']}/exports").json()
+    second_manifest = Path(second["artifact_root"]) / "manifest.json"
+    second_generated_at = json.loads(second_manifest.read_text(encoding="utf-8"))["generated_at"]
+
+    assert first_manifest == second_manifest
+    assert first_generated_at != second_generated_at
