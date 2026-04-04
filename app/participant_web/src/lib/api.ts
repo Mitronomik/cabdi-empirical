@@ -17,7 +17,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export interface NextTrialResponseCompleted {
-  status: 'completed';
+  status: 'awaiting_final_submit' | 'finalized' | 'completed';
+  no_more_trials?: boolean;
+  session_id?: string;
 }
 
 export async function createSession(

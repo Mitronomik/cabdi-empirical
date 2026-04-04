@@ -93,9 +93,11 @@ def test_session_flow_happy_path_with_exports(tmp_path):
     )
     assert create_res.status_code == 200
     session_id = create_res.json()["session_id"]
+    assert create_res.json()["status"] == "created"
 
     start_res = client.post(f"/api/v1/sessions/{session_id}/start")
     assert start_res.status_code == 200
+    assert start_res.json()["status"] == "in_progress"
 
     submitted = 0
     questionnaire_submitted = set()
@@ -114,7 +116,8 @@ def test_session_flow_happy_path_with_exports(tmp_path):
             continue
 
         payload = next_res.json()
-        if payload.get("status") == "completed":
+        if payload.get("status") in {"awaiting_final_submit", "finalized", "completed"}:
+            assert payload["status"] == "awaiting_final_submit"
             break
 
         submit_res = client.post(
@@ -142,6 +145,7 @@ def test_session_flow_happy_path_with_exports(tmp_path):
     assert "block_questionnaire_csv" in export_data
     assert export_data["participant_session_summary"]["n_trial_summaries"] == 54
     assert export_data["participant_session_summary"]["language"] == "en"
+    assert export_data["participant_session_summary"]["status"] == "awaiting_final_submit"
 
 
 def test_session_creation_stores_language_metadata(tmp_path):
@@ -293,6 +297,75 @@ def test_public_run_metadata_endpoint_returns_minimal_launch_info(tmp_path):
     assert body["launchable"] is True
     assert body["run_status"] == "active"
     assert "public_title" in body
+
+
+def test_progress_is_persisted_incrementally_and_not_finalized_on_trial_exhaustion(tmp_path):
+    client = _make_client(tmp_path)
+    run_slug = _bootstrap_run(tmp_path)
+
+    create_res = client.post("/api/v1/sessions", json={"participant_id": "p_progress", "run_slug": run_slug})
+    assert create_res.status_code == 200
+    session_id = create_res.json()["session_id"]
+    assert client.post(f"/api/v1/sessions/{session_id}/start").status_code == 200
+
+    first_trial = client.get(f"/api/v1/sessions/{session_id}/next-trial")
+    assert first_trial.status_code == 200
+    payload = first_trial.json()
+    submit = client.post(
+        f"/api/v1/sessions/{session_id}/trials/{payload['trial_id']}/submit",
+        json={
+            "human_response": payload["stimulus"]["true_label"],
+            "reaction_time_ms": 1000,
+            "self_confidence": 70,
+            "reason_clicked": False,
+            "evidence_opened": False,
+            "verification_completed": False,
+        },
+    )
+    assert submit.status_code == 200
+
+    row = client.app.state.store.fetchone(
+        "SELECT current_block_index, current_trial_index, last_activity_at, status FROM participant_sessions WHERE session_id = ?",
+        (session_id,),
+    )
+    assert row is not None
+    assert row["current_trial_index"] >= 1
+    assert row["last_activity_at"] is not None
+    assert row["status"] == "in_progress"
+
+    while True:
+        next_res = client.get(f"/api/v1/sessions/{session_id}/next-trial")
+        assert next_res.status_code in {200, 409}
+        if next_res.status_code == 409:
+            block_id = next_res.json()["detail"]["block_id"]
+            q_res = client.post(
+                f"/api/v1/sessions/{session_id}/blocks/{block_id}/questionnaire",
+                json={"burden": 30, "trust": 40, "usefulness": 50},
+            )
+            assert q_res.status_code == 200
+            continue
+        body = next_res.json()
+        if body.get("status") == "awaiting_final_submit":
+            break
+        client.post(
+            f"/api/v1/sessions/{session_id}/trials/{body['trial_id']}/submit",
+            json={
+                "human_response": body["stimulus"]["true_label"],
+                "reaction_time_ms": 1000,
+                "self_confidence": 70,
+                "reason_clicked": False,
+                "evidence_opened": False,
+                "verification_completed": False,
+            },
+        ).raise_for_status()
+
+    final_row = client.app.state.store.fetchone(
+        "SELECT status, completed_at FROM participant_sessions WHERE session_id = ?",
+        (session_id,),
+    )
+    assert final_row is not None
+    assert final_row["status"] == "awaiting_final_submit"
+    assert final_row["completed_at"] is None
 
 
 def test_session_trials_are_frozen_snapshots_even_if_stimulus_set_changes(tmp_path):

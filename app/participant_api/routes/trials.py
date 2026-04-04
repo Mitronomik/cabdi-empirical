@@ -36,7 +36,7 @@ def next_trial(session_id: str, request: Request) -> dict:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if trial is None:
-        return {"status": "completed"}
+        return {"status": "in_progress"}
     return trial
 
 

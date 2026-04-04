@@ -42,6 +42,7 @@ class SQLiteStore:
                     status TEXT NOT NULL,
                     started_at TEXT NOT NULL,
                     completed_at TEXT,
+                    last_activity_at TEXT,
                     device_info TEXT NOT NULL,
                     language TEXT NOT NULL DEFAULT "en"
                 );
@@ -123,6 +124,7 @@ class SQLiteStore:
             )
             self._ensure_column(conn, "participant_sessions", "run_id", "TEXT")
             self._ensure_column(conn, "participant_sessions", "language", "TEXT NOT NULL DEFAULT 'en'")
+            self._ensure_column(conn, "participant_sessions", "last_activity_at", "TEXT")
             self._ensure_column(conn, "researcher_runs", "public_slug", "TEXT")
             self._ensure_column(conn, "researcher_runs", "status", "TEXT NOT NULL DEFAULT 'draft'")
             self._ensure_column(

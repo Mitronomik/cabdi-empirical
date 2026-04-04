@@ -226,13 +226,39 @@ class RunService:
     def list_run_sessions(self, run_id: str) -> dict[str, Any]:
         run = self.get_run(run_id)
         rows = self.store.fetchall(
-            "SELECT session_id, participant_id, experiment_id, run_id, status, started_at, completed_at, COALESCE(language, 'en') AS language FROM participant_sessions WHERE run_id = ? ORDER BY started_at",
+            """
+            SELECT
+                session_id,
+                participant_id,
+                experiment_id,
+                run_id,
+                status,
+                started_at,
+                completed_at,
+                last_activity_at,
+                current_block_index,
+                current_trial_index,
+                COALESCE(language, 'en') AS language
+            FROM participant_sessions
+            WHERE run_id = ?
+            ORDER BY started_at
+            """,
             (run_id,),
         )
-        counts = {"created": 0, "in_progress": 0, "completed": 0, "abandoned": 0}
+        counts = {
+            "created": 0,
+            "in_progress": 0,
+            "paused": 0,
+            "awaiting_final_submit": 0,
+            "finalized": 0,
+            "abandoned": 0,
+        }
         completion_seconds: list[float] = []
         for row in rows:
             status = row["status"]
+            if status == "completed":
+                status = "finalized"
+                row["status"] = "finalized"
             if status in counts:
                 counts[status] += 1
             else:

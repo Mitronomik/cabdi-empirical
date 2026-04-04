@@ -68,7 +68,7 @@ export function useParticipantFlow() {
     setError(null);
     try {
       const next = await fetchNextTrial(activeSessionId);
-      if ('status' in next && next.status === 'completed') {
+      if ('status' in next && ['completed', 'awaiting_final_submit', 'finalized'].includes(next.status)) {
         setStage('completion');
         setCurrentTrial(null);
         setCompletionCode(activeSessionId.slice(0, 8).toUpperCase());

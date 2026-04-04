@@ -61,7 +61,7 @@ def compute_exclusion_flags(
         missing_required = any(r.get("trial_id") in {None, ""} or r.get("stimulus_id") in {None, ""} for r in rows)
 
         session_meta = session_lookup.get(session_id, {})
-        completed_status = str(session_meta.get("status", "")) == "completed" if session_meta else False
+        completed_status = str(session_meta.get("status", "")) in {"finalized", "completed"} if session_meta else False
 
         flags.append(
             {
@@ -86,7 +86,7 @@ def compute_exclusion_flags(
                     "n_trials": 0,
                     "too_fast_responder": False,
                     "missing_confidence_reports": True,
-                    "incomplete_session": str(meta.get("status", "")) != "completed",
+                    "incomplete_session": str(meta.get("status", "")) not in {"finalized", "completed"},
                     "repeated_same_response_pattern": False,
                     "logging_corruption_flag": True,
                     "dominant_response_pattern_share": 0.0,

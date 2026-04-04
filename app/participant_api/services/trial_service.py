@@ -8,7 +8,13 @@ from uuid import uuid4
 
 from app.participant_api.persistence.sqlite_store import SQLiteStore, dumps, loads
 from app.participant_api.services.policy_service import render_policy_decision
-from app.participant_api.services.session_service import SessionService
+from app.participant_api.services.session_service import (
+    SESSION_STATUS_AWAITING_FINAL_SUBMIT,
+    SESSION_STATUS_CREATED,
+    SESSION_STATUS_IN_PROGRESS,
+    SESSION_STATUS_PAUSED,
+    SessionService,
+)
 from packages.logging_schema.pilot_logs import TrialEventLog, TrialSummaryLog
 from packages.shared_types.pilot_types import StimulusItem, TrialContext
 
@@ -27,8 +33,12 @@ class TrialService:
 
     def next_trial(self, session_id: str) -> dict[str, Any] | None:
         session = self.session_service.get_session(session_id)
-        if session["status"] not in {"in_progress", "created"}:
-            return None
+        if session["status"] in {SESSION_STATUS_AWAITING_FINAL_SUBMIT, "finalized", "completed"}:
+            return {"status": session["status"], "session_id": session_id, "no_more_trials": True}
+        if session["status"] in {SESSION_STATUS_PAUSED, "abandoned"}:
+            return {"status": session["status"], "session_id": session_id}
+        if session["status"] not in {SESSION_STATUS_IN_PROGRESS, SESSION_STATUS_CREATED}:
+            return {"status": session["status"], "session_id": session_id}
 
         blocked = self._questionnaire_block_gate(session_id)
         if blocked:
@@ -44,8 +54,9 @@ class TrialService:
             (session_id,),
         )
         if trial is None:
-            self.session_service.mark_completed_if_done(session_id)
-            return None
+            moved = self.session_service.mark_awaiting_final_submit_if_done(session_id)
+            status = SESSION_STATUS_AWAITING_FINAL_SUBMIT if moved else self.session_service.get_session(session_id)["status"]
+            return {"status": status, "session_id": session_id, "no_more_trials": True}
 
         stimulus = StimulusItem.from_dict(loads(trial["stimulus_json"]))
         if trial["policy_decision_json"]:
@@ -159,8 +170,14 @@ class TrialService:
             (_now_iso(), trial_id),
         )
         self.session_service.update_progress(session_id)
-        done = self.session_service.mark_completed_if_done(session_id)
-        return {"trial_id": trial_id, "status": "completed", "session_completed": done}
+        awaiting_final_submit = self.session_service.mark_awaiting_final_submit_if_done(session_id)
+        session = self.session_service.get_session(session_id)
+        return {
+            "trial_id": trial_id,
+            "status": "completed",
+            "session_completed": awaiting_final_submit,
+            "session_status": session["status"],
+        }
 
     def submit_block_questionnaire(self, session_id: str, block_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         self.store.execute(
@@ -177,8 +194,15 @@ class TrialService:
                 _now_iso(),
             ),
         )
-        done = self.session_service.mark_completed_if_done(session_id)
-        return {"block_id": block_id, "status": "submitted", "session_completed": done}
+        self.session_service.update_progress(session_id)
+        awaiting_final_submit = self.session_service.mark_awaiting_final_submit_if_done(session_id)
+        session = self.session_service.get_session(session_id)
+        return {
+            "block_id": block_id,
+            "status": "submitted",
+            "session_completed": awaiting_final_submit,
+            "session_status": session["status"],
+        }
 
     def _questionnaire_block_gate(self, session_id: str) -> str | None:
         rows = self.store.fetchall(
