@@ -3,11 +3,13 @@ import { useLocale } from '../i18n/useLocale';
 interface Props {
   participantId: string;
   setParticipantId: (value: string) => void;
+  runSlug: string;
+  setRunSlug: (value: string) => void;
   onStart: () => void;
   loading: boolean;
 }
 
-export function InstructionsPage({ participantId, setParticipantId, onStart, loading }: Props) {
+export function InstructionsPage({ participantId, setParticipantId, runSlug, setRunSlug, onStart, loading }: Props) {
   const { t } = useLocale();
 
   return (
@@ -27,7 +29,14 @@ export function InstructionsPage({ participantId, setParticipantId, onStart, loa
         onChange={(e) => setParticipantId(e.target.value)}
         placeholder={t('instructions.participantIdPlaceholder')}
       />
-      <button type="button" disabled={!participantId || loading} onClick={onStart}>
+      <label htmlFor="run-slug">{t('instructions.runSlugLabel')}</label>
+      <input
+        id="run-slug"
+        value={runSlug}
+        onChange={(e) => setRunSlug(e.target.value)}
+        placeholder={t('instructions.runSlugPlaceholder')}
+      />
+      <button type="button" disabled={!participantId || !runSlug || loading} onClick={onStart}>
         {t('instructions.startPractice')}
       </button>
     </section>

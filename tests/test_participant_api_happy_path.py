@@ -36,7 +36,7 @@ def _bootstrap_run(tmp_path) -> str:
             "stimulus_set_ids": [stimulus_set_id],
         },
     )
-    return run.json()["run_id"]
+    return run.json()["public_slug"]
 
 
 def test_health_endpoint(tmp_path):
@@ -48,11 +48,11 @@ def test_health_endpoint(tmp_path):
 
 def test_session_flow_happy_path_with_exports(tmp_path):
     client = _make_client(tmp_path)
-    run_id = _bootstrap_run(tmp_path)
+    run_slug = _bootstrap_run(tmp_path)
 
     create_res = client.post(
         "/api/v1/sessions",
-        json={"experiment_id": "toy_v1", "participant_id": "p_001", "run_id": run_id},
+        json={"experiment_id": "toy_v1", "participant_id": "p_001", "run_slug": run_slug},
     )
     assert create_res.status_code == 200
     session_id = create_res.json()["session_id"]
@@ -109,11 +109,11 @@ def test_session_flow_happy_path_with_exports(tmp_path):
 
 def test_session_creation_stores_language_metadata(tmp_path):
     client = _make_client(tmp_path)
-    run_id = _bootstrap_run(tmp_path)
+    run_slug = _bootstrap_run(tmp_path)
 
     create_res = client.post(
         "/api/v1/sessions",
-        json={"experiment_id": "toy_v1", "participant_id": "p_ru", "run_id": run_id, "language": "ru"},
+        json={"experiment_id": "toy_v1", "participant_id": "p_ru", "run_slug": run_slug, "language": "ru"},
     )
     assert create_res.status_code == 200
     session_id = create_res.json()["session_id"]
@@ -123,10 +123,42 @@ def test_session_creation_stores_language_metadata(tmp_path):
     assert export_res.json()["participant_session_summary"]["language"] == "ru"
 
 
-def test_session_creation_requires_run_id(tmp_path):
+def test_session_creation_requires_run_reference(tmp_path):
     client = _make_client(tmp_path)
     create_res = client.post(
         "/api/v1/sessions",
         json={"experiment_id": "toy_v1", "participant_id": "p_missing_run"},
     )
-    assert create_res.status_code == 422
+    assert create_res.status_code == 400
+
+
+def test_session_creation_accepts_run_id_for_backward_compatibility(tmp_path):
+    client = _make_client(tmp_path)
+    db_path = str(tmp_path / "pilot_api.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    payload = (
+        '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"text":"a"},'
+        '"true_label":"scam","difficulty_prior":"low","model_prediction":"scam","model_confidence":"high",'
+        '"model_correct":true,"eligible_sets":["demo"]}\n'
+    )
+    upload = researcher.post(
+        "/admin/api/v1/stimuli/upload",
+        files={"file": ("stimuli.jsonl", payload, "application/json")},
+        data={"name": "set1", "source_format": "jsonl"},
+    )
+    run = researcher.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "participant test run",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"mode": "test"},
+            "stimulus_set_ids": [upload.json()["stimulus_set_id"]],
+        },
+    )
+    run_id = run.json()["run_id"]
+    create_res = client.post(
+        "/api/v1/sessions",
+        json={"experiment_id": "toy_v1", "participant_id": "p_with_run_id", "run_id": run_id},
+    )
+    assert create_res.status_code == 200

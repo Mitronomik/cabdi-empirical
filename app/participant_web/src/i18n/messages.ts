@@ -25,6 +25,8 @@ export type MessageKey =
   | 'instructions.item.practice'
   | 'instructions.participantIdLabel'
   | 'instructions.participantIdPlaceholder'
+  | 'instructions.runSlugLabel'
+  | 'instructions.runSlugPlaceholder'
   | 'instructions.startPractice'
   | 'trial.progressLabel'
   | 'trial.caseTitle'
@@ -84,6 +86,8 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
     'instructions.item.practice': 'You will complete practice trials before the main blocks.',
     'instructions.participantIdLabel': 'Participant ID',
     'instructions.participantIdPlaceholder': 'e.g., p_001',
+    'instructions.runSlugLabel': 'Run link slug',
+    'instructions.runSlugPlaceholder': 'e.g., spring-2026-cohort-a',
     'instructions.startPractice': 'Start practice',
     'trial.progressLabel': 'Trial',
     'trial.caseTitle': 'Case',
@@ -143,6 +147,8 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
       'Перед основными блоками вы пройдёте тренировочные раунды.',
     'instructions.participantIdLabel': 'ID участника',
     'instructions.participantIdPlaceholder': 'например, p_001',
+    'instructions.runSlugLabel': 'Публичный slug запуска',
+    'instructions.runSlugPlaceholder': 'например, spring-2026-cohort-a',
     'instructions.startPractice': 'Начать тренировку',
     'trial.progressLabel': 'Раунд',
     'trial.caseTitle': 'Кейс',

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import re
 from typing import Any
 from uuid import uuid4
 
@@ -17,6 +18,22 @@ class RunService:
     def __init__(self, store: SQLiteStore) -> None:
         self.store = store
 
+    @staticmethod
+    def _slugify(value: str) -> str:
+        normalized = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+        return normalized[:64]
+
+    def _build_unique_public_slug(self, run_name: str, requested_slug: str | None) -> str:
+        base_slug = self._slugify(requested_slug or run_name)
+        if not base_slug:
+            raise ValueError("public_slug must contain at least one alphanumeric character")
+        candidate = base_slug
+        suffix = 2
+        while self.store.fetchone("SELECT run_id FROM researcher_runs WHERE public_slug = ?", (candidate,)) is not None:
+            candidate = f"{base_slug}-{suffix}"
+            suffix += 1
+        return candidate
+
     def create_run(
         self,
         *,
@@ -26,6 +43,7 @@ class RunService:
         config: dict[str, Any],
         stimulus_set_ids: list[str],
         notes: str | None,
+        public_slug: str | None = None,
     ) -> dict[str, Any]:
         if not run_name.strip():
             raise ValueError("run_name must be non-empty")
@@ -47,16 +65,18 @@ class RunService:
                 raise ValueError("All selected stimulus sets must match run task_family")
 
         run_id = f"run_{uuid4().hex[:10]}"
+        resolved_public_slug = self._build_unique_public_slug(run_name, public_slug)
         self.store.execute(
             """
             INSERT INTO researcher_runs(
-                run_id, run_name, experiment_id, task_family, config_json,
+                run_id, run_name, public_slug, experiment_id, task_family, config_json,
                 stimulus_set_ids_json, notes, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 run_id,
                 run_name,
+                resolved_public_slug,
                 experiment_id,
                 task_family,
                 dumps(config),
@@ -71,6 +91,10 @@ class RunService:
         row = self.store.fetchone("SELECT * FROM researcher_runs WHERE run_id = ?", (run_id,))
         if row is None:
             raise KeyError("run not found")
+        if not row.get("public_slug"):
+            synthesized_slug = self._build_unique_public_slug(row["run_name"], None)
+            self.store.execute("UPDATE researcher_runs SET public_slug = ? WHERE run_id = ?", (synthesized_slug, run_id))
+            row["public_slug"] = synthesized_slug
         row["config"] = loads(row.pop("config_json"))
         row["stimulus_set_ids"] = loads(row.pop("stimulus_set_ids_json"))
         return row

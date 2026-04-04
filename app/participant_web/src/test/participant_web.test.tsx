@@ -71,6 +71,14 @@ afterEach(() => {
   });
 });
 
+
+async function proceedToInstructionsAndStart(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByLabelText(/i consent to participate/i));
+  await user.click(screen.getByRole('button', { name: /continue/i }));
+  await user.type(screen.getByLabelText(/run link slug/i), 'public-run-a');
+  await user.click(screen.getByRole('button', { name: /start practice/i }));
+}
+
 test('instructions screen renders', async () => {
   render(<App />);
   const user = userEvent.setup();
@@ -138,13 +146,14 @@ test('session creation sends selected participant language', async () => {
   await user.click(screen.getByRole('button', { name: 'RU' }));
   await user.click(screen.getByLabelText(/я согласен/i));
   await user.click(screen.getByRole('button', { name: /продолжить/i }));
+  await user.type(screen.getByLabelText(/публичный slug запуска/i), 'public-run-ru');
   await user.click(screen.getByRole('button', { name: /начать тренировку/i }));
 
   expect(fetchMock).toHaveBeenCalled();
   const firstCall = fetchMock.mock.calls[0];
   expect(firstCall[0]).toContain('/api/v1/sessions');
   expect(String((firstCall[1] as RequestInit).body)).toContain('"language":"ru"');
-  expect(String((firstCall[1] as RequestInit).body)).toContain('"run_id":"run_local_dev"');
+  expect(String((firstCall[1] as RequestInit).body)).toContain('"run_slug":"public-run-ru"');
 });
 test('trial screen renders consistent layout and assistance panel', async () => {
   mockFetchSequence([
@@ -155,9 +164,7 @@ test('trial screen renders consistent layout and assistance panel', async () => 
 
   render(<App />);
   const user = userEvent.setup();
-  await user.click(screen.getByLabelText(/i consent to participate/i));
-  await user.click(screen.getByRole('button', { name: /continue/i }));
-  await user.click(screen.getByRole('button', { name: /start practice/i }));
+  await proceedToInstructionsAndStart(user);
 
   await screen.findByTestId('trial-layout');
   expect(screen.getByText(/trial 1 \/ 54/i)).toBeInTheDocument();
@@ -176,9 +183,7 @@ test('forced verification blocks submission until completed', async () => {
 
   render(<App />);
   const user = userEvent.setup();
-  await user.click(screen.getByLabelText(/i consent to participate/i));
-  await user.click(screen.getByRole('button', { name: /continue/i }));
-  await user.click(screen.getByRole('button', { name: /start practice/i }));
+  await proceedToInstructionsAndStart(user);
 
   await screen.findByTestId('trial-layout');
   await user.click(screen.getByRole('button', { name: 'scam' }));
@@ -205,9 +210,7 @@ test('rationale on-click mode works and evidence toggle works', async () => {
 
   render(<App />);
   const user = userEvent.setup();
-  await user.click(screen.getByLabelText(/i consent to participate/i));
-  await user.click(screen.getByRole('button', { name: /continue/i }));
-  await user.click(screen.getByRole('button', { name: /start practice/i }));
+  await proceedToInstructionsAndStart(user);
 
   await screen.findByTestId('trial-layout');
   expect(screen.queryByTestId('rationale-on-click')).not.toBeInTheDocument();
@@ -230,9 +233,7 @@ test('block-end questionnaire submits and completion flow appears', async () => 
 
   render(<App />);
   const user = userEvent.setup();
-  await user.click(screen.getByLabelText(/i consent to participate/i));
-  await user.click(screen.getByRole('button', { name: /continue/i }));
-  await user.click(screen.getByRole('button', { name: /start practice/i }));
+  await proceedToInstructionsAndStart(user);
 
   await screen.findByRole('heading', { name: /block questionnaire/i });
   await user.click(screen.getByRole('button', { name: /submit questionnaire/i }));

@@ -34,20 +34,38 @@ class SessionService:
         self,
         experiment_id: str,
         participant_id: str,
-        run_id: str,
+        run_id: str | None = None,
+        run_slug: str | None = None,
         language: str | None = None,
     ) -> dict[str, Any]:
         experiment = load_experiment_config(DEFAULT_EXPERIMENT_PATH)
         if experiment_id != "toy_v1" and experiment_id != experiment.experiment_id:
             raise ValueError(f"Unsupported experiment_id: {experiment_id}")
-        if not run_id.strip():
-            raise ValueError("run_id is required")
+        normalized_run_id = (run_id or "").strip()
+        normalized_run_slug = (run_slug or "").strip()
+        if not normalized_run_id and not normalized_run_slug:
+            raise ValueError("run_id or run_slug is required")
+        if normalized_run_id and normalized_run_slug:
+            raise ValueError("Provide only one of run_id or run_slug")
 
-        run = self.store.fetchone("SELECT run_id, experiment_id FROM researcher_runs WHERE run_id = ?", (run_id,))
+        if normalized_run_id:
+            run = self.store.fetchone(
+                "SELECT run_id, experiment_id FROM researcher_runs WHERE run_id = ?",
+                (normalized_run_id,),
+            )
+            if run is None:
+                raise ValueError(f"Unknown run_id: {normalized_run_id}")
+        else:
+            run = self.store.fetchone(
+                "SELECT run_id, experiment_id FROM researcher_runs WHERE public_slug = ?",
+                (normalized_run_slug,),
+            )
+            if run is None:
+                raise ValueError(f"Unknown run_slug: {normalized_run_slug}")
         if run is None:
-            raise ValueError(f"Unknown run_id: {run_id}")
+            raise ValueError("Unknown run")
         if run["experiment_id"] != experiment_id:
-            raise ValueError("run_id and experiment_id mismatch")
+            raise ValueError("run and experiment_id mismatch")
 
         stimuli = load_stimulus_bank(DEFAULT_STIMULI_PATH)
         order_id, assigned_order = assign_order_id(participant_id, experiment.experiment_id)
@@ -58,7 +76,7 @@ class SessionService:
             session_id=session_id,
             participant_id=participant_id,
             experiment_id=experiment_id,
-            run_id=run_id,
+            run_id=run["run_id"],
             assigned_order=order_id,
             stimulus_set_map={"default": "demo"},
             current_block_index=-1,
@@ -126,7 +144,13 @@ class SessionService:
             trial_rows,
         )
 
-        return {"session_id": session_id, "status": "created", "assigned_order": order_id, "run_id": session.run_id, "language": session.language}
+        return {
+            "session_id": session_id,
+            "status": "created",
+            "assigned_order": order_id,
+            "run_id": session.run_id,
+            "language": session.language,
+        }
 
     def start_session(self, session_id: str) -> dict[str, Any]:
         session = self.get_session(session_id)

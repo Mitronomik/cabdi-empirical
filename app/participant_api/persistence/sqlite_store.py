@@ -105,6 +105,7 @@ class SQLiteStore:
                 CREATE TABLE IF NOT EXISTS researcher_runs (
                     run_id TEXT PRIMARY KEY,
                     run_name TEXT NOT NULL,
+                    public_slug TEXT UNIQUE NOT NULL,
                     experiment_id TEXT NOT NULL,
                     task_family TEXT NOT NULL,
                     config_json TEXT NOT NULL,
@@ -116,6 +117,7 @@ class SQLiteStore:
             )
             self._ensure_column(conn, "participant_sessions", "run_id", "TEXT")
             self._ensure_column(conn, "participant_sessions", "language", "TEXT NOT NULL DEFAULT 'en'")
+            self._ensure_column(conn, "researcher_runs", "public_slug", "TEXT")
 
     def _ensure_column(self, conn: sqlite3.Connection, table_name: str, column_name: str, column_type: str) -> None:
         columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()}
