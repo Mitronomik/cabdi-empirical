@@ -39,7 +39,7 @@ function AppBody() {
       <main>
         <LanguageSwitcher />
         <h1>{t('app.title')}</h1>
-        <p>Checking auth...</p>
+        <p>{t('auth.checking')}</p>
       </main>
     );
   }
@@ -50,6 +50,7 @@ function AppBody() {
         <LanguageSwitcher />
         <h1>{t('app.title')}</h1>
         <h2>{t('auth.loginTitle')}</h2>
+        <p>{t('auth.loginHint')}</p>
         <form
           onSubmit={async (event) => {
             event.preventDefault();
@@ -60,7 +61,7 @@ function AppBody() {
               setPassword('');
               setAuthState('authenticated');
             } catch (error) {
-              setAuthError(error instanceof Error ? error.message : 'Login failed');
+              setAuthError(error instanceof Error ? error.message : t('common.unknownError'));
             }
           }}
         >
@@ -83,7 +84,10 @@ function AppBody() {
     <main>
       <LanguageSwitcher />
       <h1>{t('app.title')}</h1>
-      <p>{t('auth.loggedInAs')}: {authedUsername}</p>
+      <p>{t('app.subtitle')}</p>
+      <p>
+        {t('auth.loggedInAs')}: {authedUsername}
+      </p>
       <button
         onClick={async () => {
           await logout();

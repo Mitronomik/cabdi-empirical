@@ -2,17 +2,17 @@ import React, { useEffect, useMemo, useState } from 'react';
 
 import { useLocale } from '../i18n/useLocale';
 import { activateRun, closeRun, createRun, getRunBuilderDefaults, listRuns, listStimuli, pauseRun } from '../lib/api';
-
-type RunRow = Record<string, unknown>;
+import { parseRunSummary, parseStimulusSetSummary } from '../lib/researcherUi';
 
 export function RunBuilderPage() {
   const [response, setResponse] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [lifecycleLoadingRunId, setLifecycleLoadingRunId] = useState('');
-  const [stimulusSets, setStimulusSets] = useState<Array<Record<string, unknown>>>([]);
-  const [recentRuns, setRecentRuns] = useState<Array<RunRow>>([]);
+  const [stimulusSets, setStimulusSets] = useState<Array<ReturnType<typeof parseStimulusSetSummary>>>([]);
+  const [recentRuns, setRecentRuns] = useState<Array<ReturnType<typeof parseRunSummary>>>([]);
   const [defaults, setDefaults] = useState<Record<string, unknown> | null>(null);
   const [selectedStimulusSetId, setSelectedStimulusSetId] = useState('');
   const [runName, setRunName] = useState(`run-${new Date().toISOString().slice(0, 16).replace('T', '-')}`);
@@ -35,7 +35,7 @@ export function RunBuilderPage() {
 
   async function loadRecentRuns() {
     const items = await listRuns();
-    setRecentRuns(items.slice(0, 20));
+    setRecentRuns(items.slice(0, 20).map(parseRunSummary));
   }
 
   async function loadDependencies() {
@@ -43,7 +43,7 @@ export function RunBuilderPage() {
     setError('');
     try {
       const [stimuli, runDefaults] = await Promise.all([listStimuli(), getRunBuilderDefaults(), loadRecentRuns()]);
-      const safeStimuli = Array.isArray(stimuli) ? stimuli : [];
+      const safeStimuli = Array.isArray(stimuli) ? stimuli.map(parseStimulusSetSummary) : [];
       setStimulusSets(safeStimuli);
       setDefaults(runDefaults);
 
@@ -59,7 +59,7 @@ export function RunBuilderPage() {
         setPublicSlug(runName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      setError(err instanceof Error ? err.message : t('common.unknownError'));
     } finally {
       setLoading(false);
     }
@@ -72,9 +72,10 @@ export function RunBuilderPage() {
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError('');
+    setSuccess('');
     setResponse(null);
     if (!selectedStimulusSetId) {
-      setError('Select a valid stimulus set before creating a run.');
+      setError(t('run.errorMissingStimulus'));
       return;
     }
     try {
@@ -82,7 +83,7 @@ export function RunBuilderPage() {
       const experimentId = String(defaults?.experiment_id ?? '').trim();
       const taskFamily = String(selectedStimulus?.task_family ?? defaults?.task_family ?? '').trim();
       if (!experimentId || !taskFamily) {
-        setError('Missing required system defaults (experiment/task family).');
+        setError(t('run.errorMissingDefaults'));
         return;
       }
       const payload = {
@@ -96,9 +97,10 @@ export function RunBuilderPage() {
       };
       const out = await createRun(payload);
       setResponse(out);
+      setSuccess(t('run.createSuccess'));
       await loadRecentRuns();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      setError(err instanceof Error ? err.message : t('common.unknownError'));
     } finally {
       setIsCreating(false);
     }
@@ -106,18 +108,30 @@ export function RunBuilderPage() {
 
   async function onLifecycle(runId: string, action: 'activate' | 'pause' | 'close') {
     setError('');
+    setSuccess('');
     try {
       setLifecycleLoadingRunId(runId);
-      if (action === 'activate') await activateRun(runId);
-      if (action === 'pause') await pauseRun(runId);
+      if (action === 'activate') {
+        const proceed = window.confirm(t('run.confirmActivate'));
+        if (!proceed) return;
+        await activateRun(runId);
+        setSuccess(t('run.activateSuccess'));
+      }
+      if (action === 'pause') {
+        const proceed = window.confirm(t('run.confirmPause'));
+        if (!proceed) return;
+        await pauseRun(runId);
+        setSuccess(t('run.pauseSuccess'));
+      }
       if (action === 'close') {
-        const proceed = window.confirm(`Close run ${runId}? This blocks new participant sessions for this run.`);
+        const proceed = window.confirm(`${t('run.confirmClose')} ${runId}`);
         if (!proceed) return;
         await closeRun(runId);
+        setSuccess(t('run.closeSuccess'));
       }
       await loadRecentRuns();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      setError(err instanceof Error ? err.message : t('common.unknownError'));
     } finally {
       setLifecycleLoadingRunId('');
     }
@@ -126,83 +140,84 @@ export function RunBuilderPage() {
   return (
     <section>
       <h2>{t('run.title')}</h2>
-      {loading ? <p>Loading run builder options...</p> : null}
-      {!loading && stimulusSets.length === 0 ? <p>No stimulus sets found. Upload a stimulus bank first to create a run.</p> : null}
-      {!loading && stimulusSets.length > 0 && validStimulusSets.length === 0 ? (
-        <p>Stimulus sets exist but none are run-compatible yet. Upload a valid bank to create a run.</p>
-      ) : null}
+      <p>{t('run.workflowHint')}</p>
+      {loading ? <p>{t('run.loading')}</p> : null}
+      {!loading && stimulusSets.length === 0 ? <p>{t('run.emptyNoStimulus')}</p> : null}
+      {!loading && stimulusSets.length > 0 && validStimulusSets.length === 0 ? <p>{t('run.emptyNoValidStimulus')}</p> : null}
       <form onSubmit={onSubmit}>
         <input name="run_name" value={runName} onChange={(e) => setRunName(e.target.value)} placeholder={t('run.name')} required />
-        <input name="public_slug" value={publicSlug} onChange={(e) => setPublicSlug(e.target.value)} placeholder="public slug" />
-        <input value={String(defaults?.experiment_id ?? '')} readOnly />
-        <input value={String(selectedStimulus?.task_family ?? defaults?.task_family ?? '')} readOnly />
+        <input name="public_slug" value={publicSlug} onChange={(e) => setPublicSlug(e.target.value)} placeholder={t('run.slug')} />
+        <input value={String(defaults?.experiment_id ?? '')} readOnly aria-label={t('run.experimentId')} />
+        <input value={String(selectedStimulus?.task_family ?? defaults?.task_family ?? '')} readOnly aria-label={t('run.taskFamily')} />
         <select value={selectedStimulusSetId} onChange={(e) => setSelectedStimulusSetId(e.target.value)} required>
-          <option value="">Select valid stimulus set</option>
+          <option value="">{t('run.selectStimulus')}</option>
           {validStimulusSets.map((item) => (
-            <option key={String(item.stimulus_set_id)} value={String(item.stimulus_set_id)}>
-              {String(item.stimulus_set_id)} · {String(item.name)} · {String(item.task_family)} · {String(item.validation_status)}
+            <option key={item.stimulus_set_id} value={item.stimulus_set_id}>
+              {item.name} • {item.task_family} • {item.n_items} • {item.validation_status}
             </option>
           ))}
         </select>
         <input name="notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t('run.notes')} />
         <button type="submit" disabled={isCreating || validStimulusSets.length === 0}>
-          {isCreating ? 'Creating...' : t('run.submit')}
+          {isCreating ? t('run.creating') : t('run.submit')}
         </button>
         <button type="button" onClick={loadDependencies} disabled={loading}>
           {t('run.loadRecent')}
         </button>
       </form>
+
+      {selectedStimulus ? (
+        <p>
+          {t('run.selectedStimulusSummary')}: {selectedStimulus.name} ({selectedStimulus.n_items} items, {selectedStimulus.validation_status}) · {selectedStimulus.stimulus_set_id}
+        </p>
+      ) : null}
       {error ? <p role="alert">{error}</p> : null}
+      {success ? <p>{success}</p> : null}
       {response ? (
         <div>
-          <h3>Run create result</h3>
-          <p>run_id: {String(response.run_id)}</p>
-          <p>public_slug: {String(response.public_slug)}</p>
-          <p>status: {String(response.status)}</p>
-          <p>task_family: {String(response.task_family)}</p>
-          <p>linked stimulus sets: {JSON.stringify(response.linked_stimulus_set_ids ?? [])}</p>
+          <h3>{t('run.createResultTitle')}</h3>
+          <p>{t('run.tableRunName')}: {String(response.run_name)}</p>
+          <p>{t('run.tableSlug')}: {String(response.public_slug)}</p>
+          <p>{t('run.tableStatus')}: {String(response.status)}</p>
+          <p>{t('run.tableRunId')}: {String(response.run_id)}</p>
         </div>
       ) : null}
       <h3>{t('run.recentTitle')}</h3>
-      {recentRuns.length === 0 ? <p>No runs yet. Create a run to continue.</p> : null}
+      {recentRuns.length === 0 ? <p>{t('run.emptyNoRuns')}</p> : null}
       {recentRuns.length > 0 ? (
         <table>
           <thead>
             <tr>
-              <th>run_id</th>
-              <th>run_name</th>
-              <th>public_slug</th>
-              <th>status</th>
-              <th>task_family</th>
-              <th>linked_stimulus_set_ids</th>
-              <th>launchability</th>
-              <th>created_at</th>
-              <th>actions</th>
+              <th>{t('run.tableRunName')}</th>
+              <th>{t('run.tableSlug')}</th>
+              <th>{t('run.tableStatus')}</th>
+              <th>{t('run.tableLaunchability')}</th>
+              <th>{t('run.tableStimulus')}</th>
+              <th>{t('run.tableRunId')}</th>
+              <th>{t('run.tableActions')}</th>
             </tr>
           </thead>
           <tbody>
             {recentRuns.map((run) => {
-              const runId = String(run.run_id);
-              const status = String(run.status);
+              const runId = run.run_id;
+              const status = run.status;
               return (
                 <tr key={runId}>
-                  <td>{runId}</td>
-                  <td>{String(run.run_name)}</td>
-                  <td>{String(run.public_slug)}</td>
+                  <td>{run.run_name}</td>
+                  <td>{run.public_slug}</td>
                   <td>{status}</td>
-                  <td>{String(run.task_family)}</td>
-                  <td>{JSON.stringify(run.linked_stimulus_set_ids ?? [])}</td>
-                  <td>{String(run.launchability_reason ?? '')}</td>
-                  <td>{String(run.created_at)}</td>
+                  <td>{run.launchability_reason}</td>
+                  <td>{run.linked_stimulus_set_ids.join(', ')}</td>
+                  <td>{runId}</td>
                   <td>
-                    <button disabled={status !== 'draft' && status !== 'paused' || lifecycleLoadingRunId === runId} onClick={() => onLifecycle(runId, 'activate')}>
-                      Activate
+                    <button disabled={(status !== 'draft' && status !== 'paused') || lifecycleLoadingRunId === runId} onClick={() => onLifecycle(runId, 'activate')}>
+                      {t('run.activate')}
                     </button>
                     <button disabled={status !== 'active' || lifecycleLoadingRunId === runId} onClick={() => onLifecycle(runId, 'pause')}>
-                      Pause
+                      {t('run.pause')}
                     </button>
                     <button disabled={status === 'closed' || lifecycleLoadingRunId === runId} onClick={() => onLifecycle(runId, 'close')}>
-                      Close
+                      {t('run.close')}
                     </button>
                   </td>
                 </tr>
