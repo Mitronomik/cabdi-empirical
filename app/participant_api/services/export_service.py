@@ -73,10 +73,27 @@ class ExportService:
             "n_events": len(event_lines),
             "n_trial_summaries": len(csv_rows),
         }
+        warnings: list[str] = []
+        if events and not summaries:
+            warnings.append("Trial events exist but trial summary logs are missing for this session")
+        if summaries and not questionnaires:
+            warnings.append("Trial summaries exist but block questionnaires are missing for one or more blocks")
         return {
             "session_id": session_id,
             "raw_event_log_jsonl": "\n".join(event_lines),
             "trial_summary_csv": csv_buffer.getvalue(),
             "participant_session_summary": summary_json,
             "block_questionnaire_csv": q_buffer.getvalue(),
+            "data_layer": "source_of_truth_extract",
+            "run_scope": {"scope_level": "session", "run_id": session["run_id"], "session_id": session_id},
+            "provenance": {
+                "persisted_tables": [
+                    "participant_sessions",
+                    "trial_event_logs",
+                    "trial_summary_logs",
+                    "block_questionnaires",
+                ],
+                "derived_artifacts": [],
+            },
+            "warnings": warnings,
         }
