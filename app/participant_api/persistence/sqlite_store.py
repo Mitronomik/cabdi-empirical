@@ -41,9 +41,10 @@ class SQLiteStore:
             self._ensure_migration_table(conn)
             current_version = self._current_schema_version(conn)
             if current_version is None:
-                current_version = self._infer_legacy_schema_version(conn)
-                if current_version > 0:
-                    self._record_inferred_legacy_versions(conn, current_version)
+                inferred_version = self._infer_legacy_schema_version(conn)
+                if inferred_version > 0:
+                    self._record_inferred_legacy_versions(conn, inferred_version)
+                current_version = self._current_schema_version(conn) or 0
             if current_version > self.CURRENT_SCHEMA_VERSION:
                 raise RuntimeError(
                     f"Database schema version {current_version} is newer than supported {self.CURRENT_SCHEMA_VERSION}."
@@ -179,7 +180,7 @@ class SQLiteStore:
         names = {migration.version: migration.name for migration in self._migrations()}
         for index in range(1, version + 1):
             conn.execute(
-                "INSERT INTO schema_migrations(version, name, applied_at) VALUES (?, ?, ?)",
+                "INSERT OR IGNORE INTO schema_migrations(version, name, applied_at) VALUES (?, ?, ?)",
                 (index, f"{names[index]}:legacy_inferred", _now_iso()),
             )
 

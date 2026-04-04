@@ -9,7 +9,13 @@ from app.researcher_api.main import create_app
 
 def _client(tmp_path):
     app = create_app(str(tmp_path / "pilot.sqlite3"))
-    return TestClient(app)
+    client = TestClient(app)
+    login = client.post(
+        "/admin/api/v1/auth/login",
+        json={"username": "admin", "password": "admin1234"},
+    )
+    assert login.status_code == 200
+    return client
 
 
 def _base_item(**overrides):
