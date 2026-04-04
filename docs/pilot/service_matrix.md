@@ -11,6 +11,7 @@
 | Human-pilot frontend | Researcher web | `app/researcher_web/src/main.tsx` | packaged via `deploy/docker/Dockerfile.researcher_web` | private via proxy `127.0.0.1:8081` | `VITE_RESEARCHER_API_BASE` optional (defaults same-origin) | Runnable |
 | Reverse proxy | Edge proxy (public/private split) | `deploy/nginx/edge.conf` | `docker compose -f deploy/compose.staging.yml up` | public `:80`, private `127.0.0.1:8081` | Nginx config + compose port posture | Runnable |
 | Dry-run / QA | Toy pilot dry-run harness | `experiments/run_toy_pilot_dry_run.py` | `python experiments/run_toy_pilot_dry_run.py --config pilot/configs/dry_run_experiment.yaml --output-dir artifacts/pilot_dry_run` | n/a | Uses FastAPI TestClient + SQLite + pilot configs | Runnable |
+| Pre-launch gate | Launch-readiness gate (staging smoke/load/checklist) | `scripts/pilot_prelaunch_gate.py` | `python scripts/pilot_prelaunch_gate.py --db-target \"$PILOT_DB_URL\" --run-slug <active-run-slug> --run-restore-drill` | n/a | Requires active run slug + researcher credentials + staging DB target (Postgres for launch posture) | Runnable |
 | Analysis | Pilot analysis pipeline | `experiments/run_pilot_analysis.py` | `python experiments/run_pilot_analysis.py ...` | n/a | Input export files required | Runnable |
 
 ## Required config files (actively used)
