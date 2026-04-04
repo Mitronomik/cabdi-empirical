@@ -18,20 +18,18 @@ from app.researcher_api.services.run_service import (
     RUN_STATUS_DRAFT,
     RUN_STATUS_PAUSED,
 )
-from packages.shared_types.pilot_types import ParticipantSession, StimulusItem
-SESSION_STATUS_CREATED = "created"
-SESSION_STATUS_IN_PROGRESS = "in_progress"
-SESSION_STATUS_PAUSED = "paused"
-SESSION_STATUS_AWAITING_FINAL_SUBMIT = "awaiting_final_submit"
-SESSION_STATUS_FINALIZED = "finalized"
-SESSION_STATUS_ABANDONED = "abandoned"
-TERMINAL_SESSION_STATUSES = {SESSION_STATUS_FINALIZED, "completed"}
-RESUMABLE_SESSION_STATUSES = {
+from packages.shared_types.pilot_types import (
+    RESUMABLE_SESSION_STATUSES,
+    SESSION_STATUS_AWAITING_FINAL_SUBMIT,
+    SESSION_STATUS_COMPLETED_LEGACY,
     SESSION_STATUS_CREATED,
+    SESSION_STATUS_FINALIZED,
     SESSION_STATUS_IN_PROGRESS,
     SESSION_STATUS_PAUSED,
-    SESSION_STATUS_AWAITING_FINAL_SUBMIT,
-}
+    TERMINAL_SESSION_STATUSES,
+    ParticipantSession,
+    StimulusItem,
+)
 
 
 def _now_iso() -> str:
@@ -47,6 +45,13 @@ class SessionService:
         if language in {"en", "ru"}:
             return language
         return "en"
+
+    @staticmethod
+    def _normalize_runtime_status(status: str) -> str:
+        # Legacy compatibility: historical rows may still use "completed".
+        if status == SESSION_STATUS_COMPLETED_LEGACY:
+            return SESSION_STATUS_FINALIZED
+        return status
 
     def create_session(
         self,
@@ -322,7 +327,10 @@ class SessionService:
 
     def start_session(self, session_id: str) -> dict[str, Any]:
         session = self.get_session(session_id)
-        if session["status"] in TERMINAL_SESSION_STATUSES | {SESSION_STATUS_AWAITING_FINAL_SUBMIT}:
+        runtime_status = self._normalize_runtime_status(session["status"])
+        if runtime_status in TERMINAL_SESSION_STATUSES | {SESSION_STATUS_AWAITING_FINAL_SUBMIT}:
+            return {"session_id": session_id, "status": runtime_status}
+        if runtime_status not in {SESSION_STATUS_CREATED, SESSION_STATUS_IN_PROGRESS, SESSION_STATUS_PAUSED}:
             return {"session_id": session_id, "status": session["status"]}
         self.store.execute(
             "UPDATE participant_sessions SET status = ?, started_at = ?, last_activity_at = ? WHERE session_id = ?",
@@ -337,6 +345,7 @@ class SessionService:
         row["stimulus_set_map"] = loads(row["stimulus_set_map"])
         row["device_info"] = loads(row["device_info"])
         row["language"] = row.get("language") or "en"
+        row["status"] = self._normalize_runtime_status(str(row["status"]))
         return row
 
     def update_progress(self, session_id: str) -> None:
@@ -360,6 +369,13 @@ class SessionService:
         )
 
     def mark_awaiting_final_submit_if_done(self, session_id: str) -> bool:
+        session = self.get_session(session_id)
+        runtime_status = self._normalize_runtime_status(session["status"])
+        if runtime_status in TERMINAL_SESSION_STATUSES:
+            return False
+        if runtime_status == SESSION_STATUS_AWAITING_FINAL_SUBMIT:
+            return True
+
         status = self.required_work_status(session_id)
         if not status["eligible"]:
             return False
@@ -398,7 +414,7 @@ class SessionService:
 
     def final_submit(self, session_id: str) -> dict[str, Any]:
         session = self.get_session(session_id)
-        if session["status"] in {SESSION_STATUS_FINALIZED, "completed"}:
+        if self._normalize_runtime_status(session["status"]) == SESSION_STATUS_FINALIZED:
             return {
                 "session_id": session_id,
                 "status": SESSION_STATUS_FINALIZED,

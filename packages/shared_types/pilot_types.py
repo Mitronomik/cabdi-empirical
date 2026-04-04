@@ -21,6 +21,36 @@ _ALLOWED_RATIONALE = {"none", "inline", "on_click"}
 _ALLOWED_VERIFICATION = {"none", "soft_prompt", "forced_checkbox", "forced_second_look"}
 _ALLOWED_COMPRESSION = {"none", "medium", "high"}
 
+SESSION_STATUS_CREATED = "created"
+SESSION_STATUS_IN_PROGRESS = "in_progress"
+SESSION_STATUS_PAUSED = "paused"
+SESSION_STATUS_AWAITING_FINAL_SUBMIT = "awaiting_final_submit"
+SESSION_STATUS_FINALIZED = "finalized"
+SESSION_STATUS_ABANDONED = "abandoned"
+# Backward-compatibility status still tolerated when reading legacy rows.
+SESSION_STATUS_COMPLETED_LEGACY = "completed"
+
+CANONICAL_SESSION_STATUSES = {
+    SESSION_STATUS_CREATED,
+    SESSION_STATUS_IN_PROGRESS,
+    SESSION_STATUS_PAUSED,
+    SESSION_STATUS_AWAITING_FINAL_SUBMIT,
+    SESSION_STATUS_FINALIZED,
+    SESSION_STATUS_ABANDONED,
+}
+ALLOWED_SESSION_STATUSES = CANONICAL_SESSION_STATUSES | {SESSION_STATUS_COMPLETED_LEGACY}
+TERMINAL_SESSION_STATUSES = {
+    SESSION_STATUS_FINALIZED,
+    SESSION_STATUS_ABANDONED,
+    SESSION_STATUS_COMPLETED_LEGACY,
+}
+RESUMABLE_SESSION_STATUSES = {
+    SESSION_STATUS_CREATED,
+    SESSION_STATUS_IN_PROGRESS,
+    SESSION_STATUS_PAUSED,
+    SESSION_STATUS_AWAITING_FINAL_SUBMIT,
+}
+
 
 class RiskBucket(str, Enum):
     """Pre-render risk bucket used by future policy runtime."""
@@ -111,7 +141,15 @@ class ExperimentConfig:
 
 @dataclass
 class ParticipantSession:
-    """Session state skeleton for future participant API."""
+    """Session state for participant API runtime.
+
+    Semantics:
+    - ``current_block_index = -1`` means the session has not entered main blocks yet.
+      This covers pre-start and practice-only progression.
+    - ``current_block_index >= 0`` means the session has progressed into main blocks.
+    - ``awaiting_final_submit`` means all required trial/questionnaire work is done but
+      the explicit final-submit action has not been completed.
+    """
 
     session_id: str
     participant_id: str
@@ -132,10 +170,13 @@ class ParticipantSession:
         _require(bool(self.participant_id), "participant_id must be non-empty")
         _require(bool(self.experiment_id), "experiment_id must be non-empty")
         _require(bool(self.run_id), "run_id must be non-empty")
-        _require(self.current_block_index >= 0, "current_block_index must be >= 0")
+        _require(self.status in ALLOWED_SESSION_STATUSES, "invalid session status")
+        _require(self.current_block_index >= -1, "current_block_index must be >= -1")
         _require(self.current_trial_index >= 0, "current_trial_index must be >= 0")
         datetime.fromisoformat(self.started_at)
         _require(self.language in {"en", "ru"}, "language must be en or ru")
+        if self.status in {SESSION_STATUS_AWAITING_FINAL_SUBMIT, SESSION_STATUS_FINALIZED, SESSION_STATUS_COMPLETED_LEGACY}:
+            _require(self.current_block_index >= 0, "post-trial session state requires current_block_index >= 0")
         if self.completed_at:
             datetime.fromisoformat(self.completed_at)
 

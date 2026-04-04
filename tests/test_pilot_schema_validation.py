@@ -5,6 +5,8 @@ import json
 import pytest
 
 from packages.shared_types.pilot_types import (
+    SESSION_STATUS_CREATED,
+    SESSION_STATUS_IN_PROGRESS,
     ExperimentConfig,
     ParticipantSession,
     PolicyDecision,
@@ -94,9 +96,9 @@ def test_serialization_roundtrip_for_shared_schemas():
         run_id="run_1",
         assigned_order="order_1",
         stimulus_set_map={"block_1": "A"},
-        current_block_index=0,
+        current_block_index=-1,
         current_trial_index=0,
-        status="active",
+        status=SESSION_STATUS_CREATED,
         started_at="2026-01-01T00:00:00",
         completed_at=None,
         device_info={"user_agent": "pytest"},
@@ -105,3 +107,40 @@ def test_serialization_roundtrip_for_shared_schemas():
     assert TrialContext.from_dict(ctx.to_dict()).trial_id == "t_1"
     assert PolicyDecision.from_dict(decision.to_dict()).risk_bucket == RiskBucket.MODERATE
     assert ParticipantSession.from_dict(session.to_dict()).session_id == "sess_1"
+
+
+def test_participant_session_allows_prestart_block_index_while_in_progress_practice():
+    session = ParticipantSession(
+        session_id="sess_2",
+        participant_id="p_2",
+        experiment_id="pilot_scam_not_scam_v1",
+        run_id="run_2",
+        assigned_order="order_1",
+        stimulus_set_map={"block_1": "A"},
+        current_block_index=-1,
+        current_trial_index=0,
+        status=SESSION_STATUS_IN_PROGRESS,
+        started_at="2026-01-01T00:00:00",
+        completed_at=None,
+        device_info={"user_agent": "pytest"},
+    )
+    session.validate()
+
+
+def test_participant_session_rejects_prestart_block_index_after_trials_done():
+    session = ParticipantSession(
+        session_id="sess_3",
+        participant_id="p_3",
+        experiment_id="pilot_scam_not_scam_v1",
+        run_id="run_3",
+        assigned_order="order_1",
+        stimulus_set_map={"block_1": "A"},
+        current_block_index=-1,
+        current_trial_index=0,
+        status="awaiting_final_submit",
+        started_at="2026-01-01T00:00:00",
+        completed_at=None,
+        device_info={"user_agent": "pytest"},
+    )
+    with pytest.raises(ValueError, match="post-trial session state requires current_block_index >= 0"):
+        session.validate()
