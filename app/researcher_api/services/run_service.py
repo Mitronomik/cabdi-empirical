@@ -266,6 +266,7 @@ class RunService:
                 experiment_id,
                 run_id,
                 status,
+                created_at,
                 started_at,
                 completed_at,
                 last_activity_at,
@@ -274,7 +275,7 @@ class RunService:
                 COALESCE(language, 'en') AS language
             FROM participant_sessions
             WHERE run_id = ?
-            ORDER BY started_at
+            ORDER BY created_at
             """,
             (run_id,),
         )

@@ -123,6 +123,11 @@ def test_fresh_bootstrap_creates_latest_schema_and_version_metadata(tmp_path: Pa
         ).fetchone()
         assert run_id is not None
         assert int(run_id["notnull"]) == 1
+        created_at = conn.execute(
+            "SELECT name, \"notnull\" FROM pragma_table_info('participant_sessions') WHERE name='created_at'"
+        ).fetchone()
+        assert created_at is not None
+        assert int(created_at["notnull"]) == 1
     finally:
         conn.close()
 
@@ -141,7 +146,7 @@ def test_upgrade_from_v1_schema_applies_all_migrations(tmp_path: Path) -> None:
         participant_columns = {
             row["name"] for row in conn.execute("SELECT name FROM pragma_table_info('participant_sessions')").fetchall()
         }
-        assert {"run_id", "public_session_code", "resume_token_hash", "language", "last_activity_at"}.issubset(
+        assert {"run_id", "public_session_code", "resume_token_hash", "language", "last_activity_at", "created_at"}.issubset(
             participant_columns
         )
         user_columns = {row["name"] for row in conn.execute("SELECT name FROM pragma_table_info('researcher_users')")}

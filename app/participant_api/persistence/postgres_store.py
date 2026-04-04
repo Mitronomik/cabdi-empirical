@@ -23,7 +23,7 @@ class Migration:
 
 
 class PostgresStore:
-    CURRENT_SCHEMA_VERSION = 6
+    CURRENT_SCHEMA_VERSION = 7
 
     def __init__(self, db_url: str) -> None:
         if psycopg is None:
@@ -88,6 +88,7 @@ class PostgresStore:
             Migration(4, "add_stimulus_validation_columns", self._migration_004_add_stimulus_validation_columns),
             Migration(5, "enforce_participant_session_run_not_null", self._migration_005_enforce_run_not_null),
             Migration(6, "add_researcher_users_table", self._migration_006_add_researcher_users_table),
+            Migration(7, "add_session_created_at_and_preserve_started_at_semantics", self._migration_007_add_session_created_at),
         ]
 
     def _ensure_migration_table(self, conn: Any) -> None:
@@ -143,6 +144,17 @@ class PostgresStore:
         ).fetchone()
         if row is None or str(row["is_nullable"]).upper() != "NO":
             raise RuntimeError("participant_sessions.run_id must be NOT NULL in Postgres schema.")
+        created_row = conn.execute(
+            """
+            SELECT is_nullable
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = 'participant_sessions'
+              AND column_name = 'created_at'
+            """
+        ).fetchone()
+        if created_row is None or str(created_row["is_nullable"]).upper() != "NO":
+            raise RuntimeError("participant_sessions.created_at must be NOT NULL in Postgres schema.")
 
     def _migration_001_create_initial_tables(self, conn: Any) -> None:
         conn.execute(
@@ -294,6 +306,12 @@ class PostgresStore:
             )
             """
         )
+
+    def _migration_007_add_session_created_at(self, conn: Any) -> None:
+        conn.execute("ALTER TABLE participant_sessions ADD COLUMN created_at TEXT")
+        conn.execute("UPDATE participant_sessions SET created_at = started_at WHERE created_at IS NULL")
+        conn.execute("ALTER TABLE participant_sessions ALTER COLUMN created_at SET NOT NULL")
+        conn.execute("ALTER TABLE participant_sessions ALTER COLUMN started_at DROP NOT NULL")
 
     def fetchone(self, query: str, params: tuple[Any, ...]) -> dict[str, Any] | None:
         with self.connect() as conn:

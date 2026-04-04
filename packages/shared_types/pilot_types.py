@@ -160,7 +160,8 @@ class ParticipantSession:
     current_block_index: int
     current_trial_index: int
     status: str
-    started_at: str
+    created_at: str
+    started_at: str | None
     completed_at: str | None
     device_info: dict[str, Any]
     language: str = "en"
@@ -173,7 +174,9 @@ class ParticipantSession:
         _require(self.status in ALLOWED_SESSION_STATUSES, "invalid session status")
         _require(self.current_block_index >= -1, "current_block_index must be >= -1")
         _require(self.current_trial_index >= 0, "current_trial_index must be >= 0")
-        datetime.fromisoformat(self.started_at)
+        datetime.fromisoformat(self.created_at)
+        if self.started_at:
+            datetime.fromisoformat(self.started_at)
         _require(self.language in {"en", "ru"}, "language must be en or ru")
         if self.status in {SESSION_STATUS_AWAITING_FINAL_SUBMIT, SESSION_STATUS_FINALIZED, SESSION_STATUS_COMPLETED_LEGACY}:
             _require(self.current_block_index >= 0, "post-trial session state requires current_block_index >= 0")
