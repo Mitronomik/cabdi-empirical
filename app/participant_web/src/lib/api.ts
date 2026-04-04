@@ -20,6 +20,11 @@ export interface NextTrialResponseCompleted {
   status: 'awaiting_final_submit' | 'finalized' | 'completed';
   no_more_trials?: boolean;
   session_id?: string;
+  progress?: {
+    completed_trials: number;
+    total_trials: number;
+    current_ordinal: number;
+  };
 }
 
 export async function createSession(

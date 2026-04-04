@@ -16,8 +16,6 @@ import type { QuestionnairePayload, TrialPayload } from '../lib/types';
 
 type Stage = 'consent' | 'instructions' | 'trial' | 'questionnaire' | 'awaiting_final_submit' | 'completion';
 
-const TOTAL_TRIALS = 54;
-
 function getCurrentLocale(): Locale {
   return detectLocale();
 }
@@ -51,6 +49,7 @@ export function useParticipantFlow() {
   const [currentTrial, setCurrentTrial] = useState<TrialPayload | null>(null);
   const [questionnaireBlockId, setQuestionnaireBlockId] = useState<string | null>(null);
   const [completedTrials, setCompletedTrials] = useState(0);
+  const [totalTrials, setTotalTrials] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [completionCode, setCompletionCode] = useState<string | null>(null);
@@ -66,15 +65,19 @@ export function useParticipantFlow() {
 
   const progress = useMemo(() => ({
     completedTrials,
-    totalTrials: TOTAL_TRIALS,
-    currentOrdinal: Math.min(completedTrials + 1, TOTAL_TRIALS),
-  }), [completedTrials]);
+    totalTrials: Math.max(totalTrials, completedTrials + 1),
+    currentOrdinal: Math.min(completedTrials + 1, Math.max(totalTrials, completedTrials + 1)),
+  }), [completedTrials, totalTrials]);
 
   async function loadNextTrial(activeSessionId: string) {
     setLoading(true);
     setError(null);
     try {
       const next = await fetchNextTrial(activeSessionId);
+      if ('progress' in next && next.progress) {
+        setCompletedTrials(Number(next.progress.completed_trials ?? 0));
+        setTotalTrials(Math.max(1, Number(next.progress.total_trials ?? 1)));
+      }
       if ('status' in next && next.status === 'awaiting_final_submit') {
         setStage('awaiting_final_submit');
         setCurrentTrial(null);
@@ -126,6 +129,8 @@ export function useParticipantFlow() {
       }
       const created = await createSession(participantId, normalizedRunSlug, detectLocale(), resumeTokenForCreate);
       setSessionId(created.session_id);
+      setCompletedTrials(0);
+      setTotalTrials(1);
       window.localStorage.setItem(resumeStorageKey(normalizedRunSlug), created.resume_token);
       await startSession(created.session_id);
       await loadNextTrial(created.session_id);

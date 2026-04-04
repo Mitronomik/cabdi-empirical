@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from app.participant_api.persistence.sqlite_store import dumps, loads
 from app.participant_api.persistence.store_protocol import PilotStore
+from app.participant_api.services.run_config_service import materialize_run_config_for_storage, resolve_execution_config_from_run
 from pilot.config_loader import load_experiment_config
 
 RUN_STATUS_DRAFT = "draft"
@@ -68,6 +69,14 @@ class RunService:
         if not stimulus_set_ids:
             raise ValueError("at least one stimulus_set_id is required")
 
+        default_experiment = load_experiment_config("pilot/configs/default_experiment.yaml")
+        resolved_config = materialize_run_config_for_storage(
+            run_config=config,
+            default_experiment=default_experiment,
+            experiment_id=experiment_id,
+            task_family=task_family,
+        )
+
         for stimulus_set_id in stimulus_set_ids:
             row = self.store.fetchone(
                 "SELECT stimulus_set_id, task_family, validation_status FROM researcher_stimulus_sets WHERE stimulus_set_id = ?",
@@ -96,7 +105,7 @@ class RunService:
                 RUN_STATUS_DRAFT,
                 experiment_id,
                 task_family,
-                dumps(config),
+                dumps(resolved_config),
                 dumps(stimulus_set_ids),
                 notes,
                 _now_iso(),
@@ -211,6 +220,15 @@ class RunService:
         config = run.get("config")
         if not isinstance(config, dict) or not config:
             errors.append("run.config must be a non-empty object")
+        else:
+            try:
+                resolve_execution_config_from_run(
+                    run_config=config,
+                    run_experiment_id=str(run.get("experiment_id", "")),
+                    run_task_family=str(run.get("task_family", "")),
+                )
+            except ValueError as exc:
+                errors.append(str(exc))
 
         stimulus_set_ids = run.get("stimulus_set_ids")
         if not isinstance(stimulus_set_ids, list) or not stimulus_set_ids:
@@ -295,6 +313,7 @@ class RunService:
 
     def get_run_builder_defaults(self) -> dict[str, Any]:
         experiment = load_experiment_config("pilot/configs/default_experiment.yaml")
+        execution_config = experiment.to_dict()
         return {
             "experiment_id": experiment.experiment_id,
             "task_family": experiment.task_family,
@@ -304,6 +323,7 @@ class RunService:
                     "preset_id": "default_experiment",
                     "label": "Default experiment config",
                     "config": {
+                        "execution": execution_config,
                         "n_blocks": experiment.n_blocks,
                         "trials_per_block": experiment.trials_per_block,
                         "budget_matching_mode": experiment.budget_matching_mode,
