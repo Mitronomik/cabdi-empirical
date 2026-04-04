@@ -128,7 +128,7 @@ def _simulate_session(participant_client: TestClient, session_id: str, rng: Rand
 
         next_res.raise_for_status()
         payload = next_res.json()
-        if payload.get("status") == "completed":
+        if payload.get("status") in {"awaiting_final_submit", "finalized", "completed"}:
             break
 
         condition_counts[payload["policy_decision"]["condition"]] += 1
@@ -200,9 +200,11 @@ def _integrity_checks(output_dir: Path, db_path: Path) -> dict[str, Any]:
     with conn:
         completed_trials = conn.execute("SELECT COUNT(*) AS n FROM session_trials WHERE status = 'completed'").fetchone()["n"]
         summary_trials = conn.execute("SELECT COUNT(*) AS n FROM trial_summary_logs").fetchone()["n"]
-        completed_sessions = conn.execute("SELECT COUNT(*) AS n FROM participant_sessions WHERE status = 'completed'").fetchone()["n"]
+        completed_sessions = conn.execute(
+            "SELECT COUNT(*) AS n FROM participant_sessions WHERE status IN ('finalized', 'completed')"
+        ).fetchone()["n"]
         completed_with_time = conn.execute(
-            "SELECT COUNT(*) AS n FROM participant_sessions WHERE status = 'completed' AND completed_at IS NOT NULL"
+            "SELECT COUNT(*) AS n FROM participant_sessions WHERE status IN ('finalized', 'completed') AND completed_at IS NOT NULL"
         ).fetchone()["n"]
 
         if completed_trials != summary_trials:
@@ -341,6 +343,7 @@ def run_dry_run(config_path: str | Path, output_dir: str | Path) -> dict[str, An
         experiment_id=config["experiment_id"],
         task_family=config["task_family"],
     )
+    run_slug = str(run_service.get_run(run_id)["public_slug"])
 
     session_runs = []
     profile_names = _assign_profiles(config["profile_mix"], int(config["n_sessions"]), rng)
@@ -349,9 +352,8 @@ def run_dry_run(config_path: str | Path, output_dir: str | Path) -> dict[str, An
         create_res = participant_client.post(
             "/api/v1/sessions",
             json={
-                "experiment_id": config["experiment_id"],
                 "participant_id": participant_id,
-                "run_id": run_id,
+                "run_slug": run_slug,
             },
         )
         create_res.raise_for_status()

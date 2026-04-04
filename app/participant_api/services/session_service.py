@@ -18,6 +18,13 @@ from packages.shared_types.pilot_types import ParticipantSession, StimulusItem
 from pilot.config_loader import load_experiment_config
 
 DEFAULT_EXPERIMENT_PATH = "pilot/configs/default_experiment.yaml"
+SESSION_STATUS_CREATED = "created"
+SESSION_STATUS_IN_PROGRESS = "in_progress"
+SESSION_STATUS_PAUSED = "paused"
+SESSION_STATUS_AWAITING_FINAL_SUBMIT = "awaiting_final_submit"
+SESSION_STATUS_FINALIZED = "finalized"
+SESSION_STATUS_ABANDONED = "abandoned"
+TERMINAL_SESSION_STATUSES = {SESSION_STATUS_FINALIZED, "completed"}
 
 
 def _now_iso() -> str:
@@ -56,7 +63,7 @@ class SessionService:
             stimulus_set_map={f"set_{idx + 1}": set_id for idx, set_id in enumerate(run["stimulus_set_ids"])},
             current_block_index=-1,
             current_trial_index=0,
-            status="created",
+            status=SESSION_STATUS_CREATED,
             started_at=_now_iso(),
             completed_at=None,
             device_info={},
@@ -67,8 +74,8 @@ class SessionService:
             """
             INSERT INTO participant_sessions(
                 session_id, participant_id, experiment_id, run_id, assigned_order, stimulus_set_map,
-                current_block_index, current_trial_index, status, started_at, completed_at, device_info, language
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                current_block_index, current_trial_index, status, started_at, completed_at, last_activity_at, device_info, language
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 session.session_id,
@@ -82,6 +89,7 @@ class SessionService:
                 session.status,
                 session.started_at,
                 session.completed_at,
+                session.started_at,
                 dumps(session.device_info),
                 session.language,
             ),
@@ -121,7 +129,7 @@ class SessionService:
 
         return {
             "session_id": session_id,
-            "status": "created",
+            "status": SESSION_STATUS_CREATED,
             "assigned_order": order_id,
             "run_slug": run["public_slug"],
             "language": session.language,
@@ -196,13 +204,13 @@ class SessionService:
 
     def start_session(self, session_id: str) -> dict[str, Any]:
         session = self.get_session(session_id)
-        if session["status"] == "completed":
-            return {"session_id": session_id, "status": "completed"}
+        if session["status"] in TERMINAL_SESSION_STATUSES:
+            return {"session_id": session_id, "status": session["status"]}
         self.store.execute(
-            "UPDATE participant_sessions SET status = ?, started_at = ? WHERE session_id = ?",
-            ("in_progress", _now_iso(), session_id),
+            "UPDATE participant_sessions SET status = ?, started_at = ?, last_activity_at = ? WHERE session_id = ?",
+            (SESSION_STATUS_IN_PROGRESS, _now_iso(), _now_iso(), session_id),
         )
-        return {"session_id": session_id, "status": "in_progress"}
+        return {"session_id": session_id, "status": SESSION_STATUS_IN_PROGRESS}
 
     def get_session(self, session_id: str) -> dict[str, Any]:
         row = self.store.fetchone("SELECT * FROM participant_sessions WHERE session_id = ?", (session_id,))
@@ -220,8 +228,8 @@ class SessionService:
         )
         if not completed:
             self.store.execute(
-                "UPDATE participant_sessions SET current_block_index = ?, current_trial_index = ? WHERE session_id = ?",
-                (-1, 0, session_id),
+                "UPDATE participant_sessions SET current_block_index = ?, current_trial_index = ?, last_activity_at = ? WHERE session_id = ?",
+                (-1, 0, _now_iso(), session_id),
             )
             return
 
@@ -229,11 +237,11 @@ class SessionService:
         current_block_index = int(last["block_index"])
         current_trial_index = int(last["trial_index"]) + 1
         self.store.execute(
-            "UPDATE participant_sessions SET current_block_index = ?, current_trial_index = ? WHERE session_id = ?",
-            (current_block_index, current_trial_index, session_id),
+            "UPDATE participant_sessions SET current_block_index = ?, current_trial_index = ?, last_activity_at = ? WHERE session_id = ?",
+            (current_block_index, current_trial_index, _now_iso(), session_id),
         )
 
-    def mark_completed_if_done(self, session_id: str) -> bool:
+    def mark_awaiting_final_submit_if_done(self, session_id: str) -> bool:
         pending = self.store.fetchone(
             "SELECT trial_id FROM session_trials WHERE session_id = ? AND status != 'completed' LIMIT 1",
             (session_id,),
@@ -254,7 +262,7 @@ class SessionService:
                 return False
 
         self.store.execute(
-            "UPDATE participant_sessions SET status = ?, completed_at = ? WHERE session_id = ?",
-            ("completed", _now_iso(), session_id),
+            "UPDATE participant_sessions SET status = ?, completed_at = NULL, last_activity_at = ? WHERE session_id = ?",
+            (SESSION_STATUS_AWAITING_FINAL_SUBMIT, _now_iso(), session_id),
         )
         return True
