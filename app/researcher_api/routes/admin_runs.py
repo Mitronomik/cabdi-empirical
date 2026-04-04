@@ -34,6 +34,11 @@ def create_run(req: CreateRunRequest, request: Request) -> dict:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.get("/defaults")
+def run_builder_defaults(request: Request) -> dict:
+    return request.app.state.run_service.get_run_builder_defaults()
+
+
 @router.get("")
 def list_runs(request: Request) -> list[dict]:
     return request.app.state.run_service.list_runs()

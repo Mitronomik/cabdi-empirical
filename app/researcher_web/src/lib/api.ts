@@ -41,3 +41,19 @@ export function listStimuli() {
 export function listRuns() {
   return apiGet<Array<Record<string, unknown>>>('/admin/api/v1/runs')
 }
+
+export function getRunBuilderDefaults() {
+  return apiGet<Record<string, unknown>>('/admin/api/v1/runs/defaults')
+}
+
+export function getRunSessions(runId: string) {
+  return apiGet<Record<string, unknown>>(`/admin/api/v1/runs/${runId}/sessions`)
+}
+
+export function getRunDiagnostics(runId: string) {
+  return apiGet<Record<string, unknown>>(`/admin/api/v1/runs/${runId}/diagnostics`)
+}
+
+export function getRunExports(runId: string) {
+  return apiGet<Record<string, unknown>>(`/admin/api/v1/runs/${runId}/exports`)
+}

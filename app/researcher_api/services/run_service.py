@@ -8,6 +8,7 @@ from typing import Any
 from uuid import uuid4
 
 from app.participant_api.persistence.sqlite_store import SQLiteStore, dumps, loads
+from pilot.config_loader import load_experiment_config
 
 
 def _now_iso() -> str:
@@ -85,7 +86,21 @@ class RunService:
                 _now_iso(),
             ),
         )
-        return self.get_run(run_id)
+        created = self.get_run(run_id)
+        return {
+            "ok": True,
+            "success": True,
+            "run_id": created["run_id"],
+            "run_name": created["run_name"],
+            "public_slug": created["public_slug"],
+            "experiment_id": created["experiment_id"],
+            "task_family": created["task_family"],
+            "config": created["config"],
+            "linked_stimulus_set_ids": created["stimulus_set_ids"],
+            "notes": created["notes"],
+            "created_at": created["created_at"],
+            "validation_errors": [],
+        }
 
     def get_run(self, run_id: str) -> dict[str, Any]:
         row = self.store.fetchone("SELECT * FROM researcher_runs WHERE run_id = ?", (run_id,))
@@ -135,4 +150,23 @@ class RunService:
             "counts": counts,
             "mean_completion_seconds": mean_completion_seconds,
             "sessions": rows,
+        }
+
+    def get_run_builder_defaults(self) -> dict[str, Any]:
+        experiment = load_experiment_config("pilot/configs/default_experiment.yaml")
+        return {
+            "experiment_id": experiment.experiment_id,
+            "task_family": experiment.task_family,
+            "config_preset_id": "default_experiment",
+            "config_preset_options": [
+                {
+                    "preset_id": "default_experiment",
+                    "label": "Default experiment config",
+                    "config": {
+                        "n_blocks": experiment.n_blocks,
+                        "trials_per_block": experiment.trials_per_block,
+                        "budget_matching_mode": experiment.budget_matching_mode,
+                    },
+                }
+            ],
         }
