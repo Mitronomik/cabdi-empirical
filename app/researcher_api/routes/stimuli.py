@@ -26,3 +26,11 @@ async def upload_stimuli(
 @router.get("")
 def list_stimuli(request: Request) -> list[dict]:
     return request.app.state.stimulus_service.list_stimulus_sets()
+
+
+@router.get("/{stimulus_set_id}")
+def get_stimulus_set(stimulus_set_id: str, request: Request) -> dict:
+    try:
+        return request.app.state.stimulus_service.get_stimulus_set(stimulus_set_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc

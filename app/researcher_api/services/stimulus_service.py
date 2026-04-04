@@ -49,9 +49,14 @@ class StimulusService:
         if errors:
             return {
                 "ok": False,
+                "success": False,
+                "validation_status": "invalid",
+                "stimulus_set_id": None,
+                "n_items": 0,
                 "errors": errors,
+                "warnings": [],
                 "n_rows": len(rows),
-                "preview": rows[:5],
+                "preview_rows": rows[:5],
             }
 
         stimulus_set_id = f"stim_{uuid4().hex[:10]}"
@@ -80,10 +85,13 @@ class StimulusService:
 
         return {
             "ok": True,
+            "success": True,
+            "validation_status": "validated",
             "stimulus_set_id": stimulus_set_id,
             "task_family": task_family,
             "n_items": len(serialized),
-            "preview": serialized[:5],
+            "warnings": [],
+            "preview_rows": serialized[:5],
             "errors": [],
         }
 
