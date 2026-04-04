@@ -10,6 +10,7 @@ from packages.shared_types.pilot_types import ExperimentConfig, StimulusItem
 from pilot.config_loader import load_latin_square_orders
 
 DEFAULT_LATIN_PATH = "pilot/configs/latin_square_orders.yaml"
+MAIN_MODEL_WRONG_TARGET_SHARE = 1 / 3
 
 
 def _stable_seed(*parts: str) -> int:
@@ -99,13 +100,17 @@ def _build_main_trials(
 
     wrong_pool = [stim for stim in pool if not stim.model_correct]
     correct_pool = [stim for stim in pool if stim.model_correct]
-    per_block_wrong_targets = _distribute_evenly(
-        total=min(len(wrong_pool), total_main_trials),
-        n_bins=experiment.n_blocks,
+    per_block_wrong_targets = _main_wrong_targets(
+        total_main_trials=total_main_trials,
+        n_blocks=experiment.n_blocks,
+        available_wrong=len(wrong_pool),
+        available_correct=len(correct_pool),
+        require_unique=unique_required,
     )
     main_sequence = _allocate_main_sequence(
         n_blocks=experiment.n_blocks,
         trials_per_block=experiment.trials_per_block,
+        wrong_targets=per_block_wrong_targets,
         wrong_pool=wrong_pool,
         correct_pool=correct_pool,
         require_unique=unique_required,
@@ -141,6 +146,7 @@ def _allocate_main_sequence(
     *,
     n_blocks: int,
     trials_per_block: int,
+    wrong_targets: list[int],
     wrong_pool: list[StimulusItem],
     correct_pool: list[StimulusItem],
     require_unique: bool,
@@ -151,10 +157,9 @@ def _allocate_main_sequence(
     if not base_pool:
         raise ValueError("cannot build trial plan from an empty stimulus bank")
 
-    target_wrong = _distribute_evenly(total=min(len(wrong_work), n_blocks * trials_per_block), n_bins=n_blocks)
     blocks: list[list[StimulusItem]] = []
     for block_index in range(n_blocks):
-        block_target_wrong = min(target_wrong[block_index], trials_per_block)
+        block_target_wrong = min(wrong_targets[block_index], trials_per_block)
         block_target_total = trials_per_block
         block: list[StimulusItem] = []
         block_diff_counts = {"low": 0, "medium": 0, "high": 0}
@@ -181,6 +186,36 @@ def _allocate_main_sequence(
             block_diff_counts[stim.difficulty_prior] += 1
         blocks.append(block)
     return blocks
+
+
+def _main_wrong_targets(
+    *,
+    total_main_trials: int,
+    n_blocks: int,
+    available_wrong: int,
+    available_correct: int,
+    require_unique: bool,
+) -> list[int]:
+    """Compute explicit bounded model-wrong targets for main trials only.
+
+    Policy:
+    - Main trials target an intentional `MAIN_MODEL_WRONG_TARGET_SHARE`.
+    - If wrong supply is low, consume what exists and spread evenly across blocks.
+    - If wrong supply is abundant, cap exposure at the share target unless the bank
+      composition makes that infeasible under unique allocation.
+    - Practice trials are excluded from this targeting policy.
+    """
+    capped_wrong_total = int(total_main_trials * MAIN_MODEL_WRONG_TARGET_SHARE)
+    max_bounded_wrong_total = min(capped_wrong_total, available_wrong, total_main_trials)
+    if require_unique:
+        # Feasibility floor: when unique main trials are required, we may need extra
+        # model-wrong stimuli if there are not enough unique model-correct stimuli.
+        min_required_wrong_total = max(0, total_main_trials - available_correct)
+    else:
+        min_required_wrong_total = 0
+    target_wrong_total = max(min_required_wrong_total, max_bounded_wrong_total)
+    target_wrong_total = min(target_wrong_total, available_wrong, total_main_trials)
+    return _distribute_evenly(total=target_wrong_total, n_bins=n_blocks)
 
 
 def _difficulty_targets(n: int) -> dict[str, int]:
