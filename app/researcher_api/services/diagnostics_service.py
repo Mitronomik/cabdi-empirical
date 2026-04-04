@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from typing import Any
 
-from app.participant_api.persistence.sqlite_store import loads
+from app.participant_api.persistence.json_codec import loads
 from app.participant_api.persistence.store_protocol import PilotStore
 from app.researcher_api.services.run_data_service import RunDataService
 from packages.shared_types.pilot_types import RiskBucket

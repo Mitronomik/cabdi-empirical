@@ -124,7 +124,7 @@ class BackupRestoreError(RuntimeError):
 def backup_database(*, db_target: str, output_path: str) -> dict[str, Any]:
     store = create_store(db_target)
     store.init_db()
-    schema_version = _required_schema_version(store)
+    schema_version = store.schema_version
     rows_by_table: dict[str, list[dict[str, Any]]] = {}
     row_counts: dict[str, int] = {}
     for spec in TABLE_SPECS:
@@ -159,20 +159,20 @@ def restore_database(*, db_target: str, backup_path: str, confirm_destructive: b
     _validate_backup_payload(payload)
     store = create_store(db_target)
     store.init_db()
-    schema_version = _required_schema_version(store)
+    schema_version = store.schema_version
     if int(payload["schema_version"]) != int(schema_version):
         raise BackupRestoreError(
             f"Backup schema_version={payload['schema_version']} is incompatible with runtime schema_version={schema_version}."
         )
 
     restored_counts: dict[str, int] = {}
-    with store.connect() as conn:
+    with store.transaction() as conn:
         for spec in reversed(TABLE_SPECS):
             conn.execute(f"DELETE FROM {spec.name}")
         for spec in TABLE_SPECS:
             rows = payload["tables"].get(spec.name, [])
             if rows:
-                placeholders = _placeholders(store, len(spec.columns))
+                placeholders = store.placeholders(len(spec.columns))
                 query = f"INSERT INTO {spec.name}({', '.join(spec.columns)}) VALUES ({placeholders})"
                 values = [tuple(row.get(col) for col in spec.columns) for row in rows]
                 conn.executemany(query, values)
@@ -208,21 +208,6 @@ def _validate_backup_payload(payload: dict[str, Any]) -> None:
         raise BackupRestoreError(
             f"Backup table set mismatch. expected={sorted(expected_tables)} got={sorted(table_keys)}"
         )
-
-
-
-def _required_schema_version(store: Any) -> int:
-    version = getattr(store, "CURRENT_SCHEMA_VERSION", None)
-    if version is None:
-        raise BackupRestoreError("Store backend does not expose CURRENT_SCHEMA_VERSION.")
-    return int(version)
-
-
-
-def _placeholders(store: Any, n: int) -> str:
-    if store.__class__.__name__ == "PostgresStore":
-        return ", ".join("%s" for _ in range(n))
-    return ", ".join("?" for _ in range(n))
 
 
 

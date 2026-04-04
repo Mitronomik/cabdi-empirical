@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
-from app.participant_api.persistence.sqlite_store import dumps, loads
+from app.participant_api.persistence.json_codec import dumps, loads
 from app.participant_api.persistence.store_protocol import PilotStore
 from app.participant_api.services.policy_service import render_policy_decision
 from app.participant_api.services.session_service import (

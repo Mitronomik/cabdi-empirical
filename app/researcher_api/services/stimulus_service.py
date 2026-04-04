@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
-from app.participant_api.persistence.sqlite_store import dumps, loads
+from app.participant_api.persistence.json_codec import dumps, loads
 from app.participant_api.persistence.store_protocol import PilotStore
 from packages.shared_types.pilot_types import StimulusItem
 

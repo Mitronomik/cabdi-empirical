@@ -7,7 +7,7 @@ import io
 import json
 from typing import Any
 
-from app.participant_api.persistence.sqlite_store import loads
+from app.participant_api.persistence.json_codec import loads
 from app.participant_api.persistence.store_protocol import PilotStore
 
 

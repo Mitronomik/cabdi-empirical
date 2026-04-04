@@ -7,7 +7,7 @@ import re
 from typing import Any
 from uuid import uuid4
 
-from app.participant_api.persistence.sqlite_store import dumps, loads
+from app.participant_api.persistence.json_codec import dumps, loads
 from app.participant_api.persistence.store_protocol import PilotStore
 from app.participant_api.services.run_config_service import materialize_run_config_for_storage, resolve_execution_config_from_run
 from pilot.config_loader import load_experiment_config
