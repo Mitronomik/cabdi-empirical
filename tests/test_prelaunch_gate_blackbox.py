@@ -102,6 +102,7 @@ def test_prelaunch_gate_blackbox_http_mode(tmp_path: Path) -> None:
             researcher_password="admin1234",
             require_postgres=False,
             run_restore_drill=False,
+            allow_restore_drill_skip=True,
             participant_base_url=participant_base_url,
             researcher_base_url=researcher_base_url,
         )
@@ -114,9 +115,12 @@ def test_prelaunch_gate_blackbox_http_mode(tmp_path: Path) -> None:
     assert report["launch_ready"] is True
     by_id = {entry["check_id"]: entry for entry in report["checks"]}
     assert by_id["launch_boundary_mode"]["detail"] == "black-box HTTP boundary mode enabled"
+    assert by_id["blackbox_launch_realism_mode"]["passed"] is True
     assert by_id["http_stack_readiness"]["passed"] is True
     assert by_id["researcher_cookie_persistence"]["passed"] is True
     assert by_id["researcher_protected_boundary"]["passed"] is True
     assert by_id["session_progress_resume_final_submit"]["passed"] is True
+    assert by_id["participant_bilingual_path_readiness"]["passed"] is True
+    assert by_id["researcher_cabinet_operational_readiness"]["passed"] is True
     assert by_id["diagnostics_retrieval"]["passed"] is True
     assert by_id["export_retrieval"]["passed"] is True
