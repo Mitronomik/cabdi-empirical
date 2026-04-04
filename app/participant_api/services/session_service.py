@@ -8,7 +8,8 @@ import secrets
 from typing import Any
 from uuid import uuid4
 
-from app.participant_api.persistence.sqlite_store import SQLiteStore, dumps, loads
+from app.participant_api.persistence.sqlite_store import dumps, loads
+from app.participant_api.persistence.store_protocol import PilotStore
 from app.participant_api.services.randomization_service import assign_order_id, build_trial_plan
 from app.researcher_api.services.run_service import (
     RUN_STATUS_ACTIVE,
@@ -40,7 +41,7 @@ def _now_iso() -> str:
 
 
 class SessionService:
-    def __init__(self, store: SQLiteStore) -> None:
+    def __init__(self, store: PilotStore) -> None:
         self.store = store
 
     @staticmethod

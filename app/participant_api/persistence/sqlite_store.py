@@ -6,6 +6,7 @@ import json
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
@@ -52,8 +53,8 @@ class SQLiteStore:
                 if migration.version > current_version:
                     migration.apply(conn)
                     conn.execute(
-                        "INSERT INTO schema_migrations(version, name, applied_at) VALUES (?, ?, datetime('now'))",
-                        (migration.version, migration.name),
+                        "INSERT INTO schema_migrations(version, name, applied_at) VALUES (?, ?, ?)",
+                        (migration.version, migration.name, _now_iso()),
                     )
                     current_version = migration.version
             self._validate_current_schema(conn)
@@ -169,8 +170,8 @@ class SQLiteStore:
         names = {migration.version: migration.name for migration in self._migrations()}
         for index in range(1, version + 1):
             conn.execute(
-                "INSERT INTO schema_migrations(version, name, applied_at) VALUES (?, ?, datetime('now'))",
-                (index, f"{names[index]}:legacy_inferred"),
+                "INSERT INTO schema_migrations(version, name, applied_at) VALUES (?, ?, ?)",
+                (index, f"{names[index]}:legacy_inferred", _now_iso()),
             )
 
     def _validate_current_schema(self, conn: sqlite3.Connection) -> None:
@@ -376,3 +377,7 @@ def dumps(payload: Any) -> str:
 
 def loads(payload: str) -> Any:
     return json.loads(payload)
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()

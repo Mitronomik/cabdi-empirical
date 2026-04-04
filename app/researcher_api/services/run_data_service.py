@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from app.participant_api.persistence.sqlite_store import SQLiteStore, loads
+from app.participant_api.persistence.sqlite_store import loads
+from app.participant_api.persistence.store_protocol import PilotStore
 from app.researcher_api.services.run_service import RunService
 
 
@@ -24,7 +25,7 @@ class RunScopedData:
 class RunDataService:
     """Single source of run/session/trial truth for researcher surfaces."""
 
-    def __init__(self, store: SQLiteStore) -> None:
+    def __init__(self, store: PilotStore) -> None:
         self.store = store
         self.run_service = RunService(store)
 

@@ -7,7 +7,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.participant_api.persistence.sqlite_store import SQLiteStore
+from app.participant_api.persistence.store_factory import create_store
 from app.participant_api.routes import blocks, exports, health, public_runs, sessions, trials
 from app.participant_api.services.export_service import ExportService
 from app.participant_api.services.session_service import SessionService
@@ -30,7 +30,8 @@ def create_app(db_path: str | None = None) -> FastAPI:
         allow_headers=["*"],
     )
 
-    store = SQLiteStore(db_path or os.getenv("PILOT_DB_PATH", "pilot/sessions/pilot_sessions.sqlite3"))
+    db_target = db_path or os.getenv("PILOT_DB_URL") or os.getenv("PILOT_DB_PATH")
+    store = create_store(db_target)
     store.init_db()
     session_service = SessionService(store)
     trial_service = TrialService(store, session_service)

@@ -7,7 +7,8 @@ import re
 from typing import Any
 from uuid import uuid4
 
-from app.participant_api.persistence.sqlite_store import SQLiteStore, dumps, loads
+from app.participant_api.persistence.sqlite_store import dumps, loads
+from app.participant_api.persistence.store_protocol import PilotStore
 from pilot.config_loader import load_experiment_config
 
 RUN_STATUS_DRAFT = "draft"
@@ -28,7 +29,7 @@ def _now_iso() -> str:
 
 
 class RunService:
-    def __init__(self, store: SQLiteStore) -> None:
+    def __init__(self, store: PilotStore) -> None:
         self.store = store
 
     @staticmethod

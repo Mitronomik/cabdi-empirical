@@ -10,7 +10,8 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
-from app.participant_api.persistence.sqlite_store import SQLiteStore, dumps, loads
+from app.participant_api.persistence.sqlite_store import dumps, loads
+from app.participant_api.persistence.store_protocol import PilotStore
 from packages.shared_types.pilot_types import StimulusItem
 
 _ALLOWED_TASK_FAMILIES = {"scam_detection", "scam_not_scam"}
@@ -31,7 +32,7 @@ def _now_iso() -> str:
 
 
 class StimulusService:
-    def __init__(self, store: SQLiteStore) -> None:
+    def __init__(self, store: PilotStore) -> None:
         self.store = store
 
     def upload_stimulus_set(self, *, name: str, content: bytes, source_format: str) -> dict[str, Any]:
