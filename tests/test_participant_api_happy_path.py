@@ -298,7 +298,7 @@ def test_session_creation_rejects_paused_and_closed_runs(tmp_path):
     assert "status is paused" in paused_create.json()["detail"]
 
     assert researcher.post(f"/admin/api/v1/runs/{run_id}/activate").status_code == 200
-    assert researcher.post(f"/admin/api/v1/runs/{run_id}/close").status_code == 200
+    assert researcher.post(f"/admin/api/v1/runs/{run_id}/close", json={"confirm_run_id": run_id}).status_code == 200
     closed_create = client.post(
         "/api/v1/sessions",
         json={"participant_id": "p_closed", "run_slug": run.json()["public_slug"]},

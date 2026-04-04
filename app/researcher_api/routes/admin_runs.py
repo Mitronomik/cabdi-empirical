@@ -20,6 +20,10 @@ class CreateRunRequest(BaseModel):
     notes: str | None = None
 
 
+class CloseRunRequest(BaseModel):
+    confirm_run_id: str
+
+
 @router.post("")
 def create_run(req: CreateRunRequest, request: Request) -> dict:
     try:
@@ -83,7 +87,12 @@ def pause_run(run_id: str, request: Request) -> dict:
 
 
 @router.post("/{run_id}/close")
-def close_run(run_id: str, request: Request) -> dict:
+def close_run(run_id: str, req: CloseRunRequest, request: Request) -> dict:
+    if req.confirm_run_id != run_id:
+        raise HTTPException(
+            status_code=400,
+            detail="close_run requires explicit confirm_run_id equal to run_id",
+        )
     try:
         return request.app.state.run_service.close_run(run_id)
     except KeyError as exc:

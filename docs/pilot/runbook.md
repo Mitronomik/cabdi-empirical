@@ -122,3 +122,58 @@ python experiments/run_pilot_analysis.py \
 - Minimal deployment packaging only (Compose + reverse-proxy posture), not full infrastructure-as-code.
 - Researcher protection remains minimal auth + private routing posture; enterprise IAM is out of scope.
 - Scientific interpretation remains bounded to synthetic/dry-run claims as documented in repository guidance.
+
+## 10) Backup discipline (repository-owned)
+
+Primary source of truth for pilot runtime state is the pilot database (Postgres in staging/VPS-like mode).
+
+Repository-owned backup command:
+
+```bash
+python scripts/pilot_backup.py \
+  --db-target "postgresql://<user>:<pass>@<host>:5432/<db>" \
+  --output artifacts/pilot_ops/backups/pilot_backup_$(date -u +%Y%m%dT%H%M%SZ).json
+```
+
+Notes:
+
+- Backup artifact is a JSON snapshot over critical pilot tables (runs, stimulus sets, sessions, trials, events, summaries, questionnaires, researcher auth table, migrations).
+- `schema_version` is embedded in the backup and checked on restore.
+- Keep backup artifacts outside ephemeral container filesystems.
+
+## 11) Restore discipline (repository-owned, destructive)
+
+Restore command:
+
+```bash
+python scripts/pilot_restore.py \
+  --db-target "postgresql://<user>:<pass>@<host>:5432/<db>" \
+  --backup artifacts/pilot_ops/backups/<backup_file>.json \
+  --confirm-destructive
+```
+
+Safety behavior:
+
+- Restore is blocked unless `--confirm-destructive` is provided.
+- Restore fails clearly if backup format or schema version is incompatible.
+- Restore replaces current pilot table contents with backup contents; do not run against an unknown/untrusted backup artifact.
+
+## 12) Destructive researcher operations safety
+
+- Run close is explicit and confirmation-gated (`confirm_run_id` must match target `run_id`).
+- Preferred operator posture is close/archive semantics for runs (not hard-delete in-app).
+- If an operator closes a run by mistake, recover via DB restore from a known-good backup.
+
+## 13) Export reproducibility and retention posture
+
+- Source of truth: DB tables (sessions/trials/events/summaries/questionnaires/runs/stimulus sets).
+- Derived artifacts: run/session exports and analysis outputs generated from source tables.
+- If export files are lost, regenerate by calling export endpoints again or re-running analysis pipeline from restored DB truth.
+- Do not treat ad-hoc local CSV/JSON export files as the only retained copy of pilot truth.
+
+## 14) Common failure recovery quick procedures
+
+1. **Service restart:** restart containers/services; committed DB rows remain on persistent Postgres volume.
+2. **Accidental run close:** recover by restoring pre-close backup if reopening is required operationally.
+3. **Export file loss:** regenerate exports from DB-backed endpoints and re-run analysis script.
+4. **DB corruption/operator error:** restore latest valid backup with `scripts/pilot_restore.py --confirm-destructive`.

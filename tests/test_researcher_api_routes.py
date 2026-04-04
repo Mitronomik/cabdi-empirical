@@ -163,7 +163,7 @@ def test_run_lifecycle_transitions_and_invalid_transition_errors(tmp_path):
     assert activate_again.status_code == 200
     assert activate_again.json()["status"] == "active"
 
-    close = researcher.post(f"/admin/api/v1/runs/{run_id}/close")
+    close = researcher.post(f"/admin/api/v1/runs/{run_id}/close", json={"confirm_run_id": run_id})
     assert close.status_code == 200
     assert close.json()["status"] == "closed"
 
@@ -195,7 +195,7 @@ def test_closed_runs_remain_readable_for_diagnostics_and_exports(tmp_path):
         "/api/v1/sessions",
         json={"participant_id": "p_hist", "run_slug": run_res.json()["public_slug"]},
     ).status_code == 200
-    closed = researcher.post(f"/admin/api/v1/runs/{run_id}/close")
+    closed = researcher.post(f"/admin/api/v1/runs/{run_id}/close", json={"confirm_run_id": run_id})
     assert closed.status_code == 200
     assert closed.json()["status"] == "closed"
 
@@ -206,6 +206,35 @@ def test_closed_runs_remain_readable_for_diagnostics_and_exports(tmp_path):
     assert diagnostics.status_code == 200
     exports = researcher.get(f"/admin/api/v1/runs/{run_id}/exports")
     assert exports.status_code == 200
+
+
+def test_close_run_requires_explicit_confirmation_payload(tmp_path):
+    db_path = str(tmp_path / "pilot.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    _login_researcher(researcher)
+
+    stimulus_set_id = _upload_stimulus(researcher)
+    run_res = researcher.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "close confirm run",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"n_blocks": 3},
+            "stimulus_set_ids": [stimulus_set_id],
+        },
+    )
+    run_id = run_res.json()["run_id"]
+    assert researcher.post(f"/admin/api/v1/runs/{run_id}/activate").status_code == 200
+
+    missing = researcher.post(f"/admin/api/v1/runs/{run_id}/close")
+    assert missing.status_code == 422
+
+    mismatch = researcher.post(f"/admin/api/v1/runs/{run_id}/close", json={"confirm_run_id": "wrong"})
+    assert mismatch.status_code == 400
+
+    ok = researcher.post(f"/admin/api/v1/runs/{run_id}/close", json={"confirm_run_id": run_id})
+    assert ok.status_code == 200
 
 
 def test_session_monitor_distinguishes_awaiting_final_submit_and_finalized(tmp_path):

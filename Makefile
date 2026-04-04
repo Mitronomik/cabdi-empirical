@@ -1,4 +1,4 @@
-.PHONY: setup test validate run-participant-api run-researcher-api run-participant-web run-researcher-web dry-run run-participant-api run-researcher-api
+.PHONY: setup test validate run-participant-api run-researcher-api run-participant-web run-researcher-web dry-run run-participant-api run-researcher-api pilot-backup pilot-restore
 
 PYTHON ?= python3
 VENV_DIR ?= .venv
@@ -36,3 +36,9 @@ run-researcher-web:
 
 dry-run:
 	$(VENV_PY) experiments/run_toy_pilot_dry_run.py --config pilot/configs/dry_run_experiment.yaml --output-dir artifacts/pilot_dry_run
+
+pilot-backup:
+	$(VENV_PY) scripts/pilot_backup.py --output artifacts/pilot_ops/backups/pilot_backup.json
+
+pilot-restore:
+	$(VENV_PY) scripts/pilot_restore.py --backup artifacts/pilot_ops/backups/pilot_backup.json --confirm-destructive
