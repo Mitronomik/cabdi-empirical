@@ -25,7 +25,8 @@ function AppBody() {
     error,
     completionCode,
     runSlug,
-    setRunSlug,
+    publicRun,
+    onboardingReady,
     setStage,
     beginSession,
     submitCurrentTrial,
@@ -33,6 +34,7 @@ function AppBody() {
     submitFinalSession,
     retryCurrent,
   } = useParticipantFlow();
+
 
   return (
     <main className="app-shell">
@@ -55,20 +57,30 @@ function AppBody() {
       )}
 
       {stage === 'instructions' && (
-        <InstructionsPage
-          runSlug={runSlug}
-          setRunSlug={setRunSlug}
-          loading={loading}
-          onStart={() => beginSession(runSlug)}
-        />
+        <>
+          {!onboardingReady && (
+            <section className="card">
+              <h1>{t('entry.title')}</h1>
+              <p>{t('entry.missingRun')}</p>
+              <p className="muted">{t('entry.contactCoordinator')}</p>
+            </section>
+          )}
+          {onboardingReady && (
+            <InstructionsPage
+              runTitle={publicRun?.public_title ?? t('instructions.defaultRunTitle')}
+              runDescription={publicRun?.public_description}
+              loading={loading}
+              runReady={Boolean(runSlug)}
+              onStart={beginSession}
+            />
+          )}
+        </>
       )}
 
       {stage === 'trial' && currentTrial && (
         <TrialPage
           trial={currentTrial}
           loading={loading}
-          completedTrials={progress.completedTrials}
-          totalTrials={progress.totalTrials}
           onSubmit={submitCurrentTrial}
         />
       )}
@@ -82,7 +94,14 @@ function AppBody() {
       )}
 
       {stage === 'completion' && <CompletionPage completionCode={completionCode} />}
-      {stage === 'awaiting_final_submit' && <FinalSubmitPage loading={loading} onSubmit={submitFinalSession} />}
+      {stage === 'awaiting_final_submit' && (
+        <FinalSubmitPage
+          loading={loading}
+          onSubmit={submitFinalSession}
+          completedTrials={progress.completedTrials}
+          totalTrials={progress.totalTrials}
+        />
+      )}
     </main>
   );
 }

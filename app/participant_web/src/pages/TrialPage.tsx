@@ -6,8 +6,6 @@ import type { TrialPayload } from '../lib/types';
 
 interface Props {
   trial: TrialPayload;
-  completedTrials: number;
-  totalTrials: number;
   loading: boolean;
   onSubmit: (params: {
     humanResponse: string;
@@ -18,7 +16,16 @@ interface Props {
   }) => void;
 }
 
-export function TrialPage({ trial, completedTrials, totalTrials, loading, onSubmit }: Props) {
+function formatResponseOption(value: string, t: (key: string) => string): string {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'scam') return t('trial.response.scam');
+  if (normalized === 'not_scam') return t('trial.response.notScam');
+  if (normalized === 'yes') return t('trial.response.yes');
+  if (normalized === 'no') return t('trial.response.no');
+  return value;
+}
+
+export function TrialPage({ trial, loading, onSubmit }: Props) {
   const { t } = useLocale();
   const [selectedResponse, setSelectedResponse] = useState<string>('');
   const [selfConfidence, setSelfConfidence] = useState<number>(50);
@@ -32,7 +39,10 @@ export function TrialPage({ trial, completedTrials, totalTrials, loading, onSubm
   const stimulusTitle = String(trial.stimulus.payload.title ?? t('trial.caseTitle'));
   const stimulusBody = String(trial.stimulus.payload.body ?? trial.stimulus.payload.prompt ?? t('trial.noPrompt'));
 
-  const progressPct = Math.round((completedTrials / totalTrials) * 100);
+  const progress = trial.progress ?? { completed_trials: 0, total_trials: 0, current_ordinal: 0 };
+  const currentOrdinal = Math.max(1, Number(progress.current_ordinal || 1));
+  const totalTrials = Math.max(currentOrdinal, Number(progress.total_trials || 1));
+  const progressPct = Math.round((Math.max(0, currentOrdinal - 1) / Math.max(totalTrials, 1)) * 100);
 
   const verificationRequired =
     trial.policy_decision.verification_mode === 'forced_checkbox' ||
@@ -42,22 +52,20 @@ export function TrialPage({ trial, completedTrials, totalTrials, loading, onSubm
 
   return (
     <section className="trial-shell" data-testid="trial-layout">
-      <header>
+      <header className="card progress-card">
         <p>
-          {t('trial.progressLabel')} {Math.min(completedTrials + 1, totalTrials)} / {totalTrials}
+          {t('trial.progressLabel')} {currentOrdinal} / {totalTrials}
         </p>
         <div className="progress-track" aria-label={t('trial.progressAria')}>
           <div className="progress-fill" style={{ width: `${progressPct}%` }} />
         </div>
+        <p className="muted">{t('trial.resumeHint')}</p>
       </header>
 
       <div className="trial-grid">
         <article className="card stimulus-card">
           <h2>{stimulusTitle}</h2>
           <p>{stimulusBody}</p>
-          <small>
-            {t('trial.blockLabel')}: {trial.block_id}
-          </small>
         </article>
 
         <AssistancePanel
@@ -80,7 +88,7 @@ export function TrialPage({ trial, completedTrials, totalTrials, loading, onSubm
               className={selectedResponse === option ? 'selected' : ''}
               onClick={() => setSelectedResponse(option)}
             >
-              {option}
+              {formatResponseOption(option, t as unknown as (key: string) => string)}
             </button>
           ))}
         </div>
