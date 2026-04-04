@@ -178,7 +178,7 @@ Safety behavior:
 3. **Export file loss:** regenerate exports from DB-backed endpoints and re-run analysis script.
 4. **DB corruption/operator error:** restore latest valid backup with `scripts/pilot_restore.py --confirm-destructive`.
 
-## 15) Pre-launch gate (PR-16 launch barrier)
+## 15) Final pre-launch sign-off gate (PR-9 consolidation)
 
 Run this only against staging / pre-launch environment with a known active run slug.
 
@@ -186,6 +186,8 @@ Run this only against staging / pre-launch environment with a known active run s
 python scripts/pilot_prelaunch_gate.py \
   --db-target "$PILOT_DB_URL" \
   --run-slug "<active-run-slug>" \
+  --participant-base-url "http://127.0.0.1" \
+  --researcher-base-url "http://127.0.0.1:8081" \
   --researcher-username "${PILOT_RESEARCHER_USERNAME:-admin}" \
   --researcher-password "$PILOT_RESEARCHER_PASSWORD" \
   --run-restore-drill \
@@ -201,12 +203,15 @@ Gate semantics:
 
 - **Blockers** (`severity=blocker`) fail launch readiness immediately.
 - **Warnings** require explicit operator acknowledgement before launch.
-- The gate includes: Postgres posture check, active run check, public slug entry, researcher auth, session progress/resume/final-submit integrity, concurrent session smoke, diagnostics/export checks, analysis-ready export availability, and backup/restore checks.
+- The gate includes one consolidated readiness chain: Postgres posture, black-box launch realism boundary, active run + public slug readiness, participant progression/resume/final-submit (EN + RU path), researcher auth + protected boundary + cabinet route reachability, diagnostics/export + analysis-ready outputs, concurrent smoke, and backup/restore discipline.
+- The markdown checklist is the operator-facing **go/no-go artifact**. It includes execution timestamps/id, full check results, and explicit blocker/warning sections.
 
 Notes:
 
 - Pre-launch gate defaults to requiring Postgres target; use `--allow-sqlite` only for local rehearsals.
 - `--run-restore-drill` is destructive by design and should be executed only on staging datasets or approved maintenance windows.
+- Skipping restore drill is now launch-blocking unless `--allow-restore-drill-skip` is explicitly provided for rehearsal-only runs.
+- Running without black-box HTTP mode is now launch-blocking unless `--allow-inprocess-gate` is explicitly provided for local rehearsal.
 
 ### Black-box HTTP launch realism mode (PR-5 audit remediation)
 
@@ -228,4 +233,20 @@ This mode validates launch realism over the external HTTP/process boundary, incl
 
 - participant public routes and run-bound flow (`run_slug` lookup, session create/start, resume, questionnaire gate, final submit),
 - researcher auth cookie issuance/persistence and protected-route rejection when unauthenticated,
-- diagnostics/export reachability through researcher API boundary.
+- researcher cabinet operational routes (run defaults, session monitor route, stimulus library),
+- diagnostics/export reachability through researcher API boundary,
+- bilingual practical operator readiness via RU participant flow finalization.
+
+## 16) Final operator sign-off procedure (required order)
+
+1. **Ensure packaged staging topology is running** (`docker compose ... up`) and private/public boundaries are reachable.
+2. **Identify target active run slug** from researcher cabinet (must be active/launchable).
+3. **Run pre-launch gate in black-box mode with restore drill** (command above).
+4. **Open `prelaunch_gate_checklist.md` first** (operator artifact), then `prelaunch_gate_report.json` if deeper metadata is needed.
+5. **Decision rule:**
+   - any blocker => **NO-GO**;
+   - zero blockers + acknowledged warnings => operator may approve **GO**.
+6. **If sign-off fails:**
+   - remediate failed checks,
+   - rerun the gate,
+   - use latest execution id/timestamps to avoid stale artifact interpretation.

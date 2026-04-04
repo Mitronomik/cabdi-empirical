@@ -55,6 +55,8 @@ def test_prelaunch_gate_fails_without_active_run(tmp_path):
         researcher_username="admin",
         researcher_password="admin1234",
         require_postgres=False,
+        require_blackbox_http=False,
+        allow_restore_drill_skip=True,
         run_restore_drill=False,
         concurrent_sessions=2,
         concurrent_trials_per_session=1,
@@ -79,6 +81,7 @@ def test_prelaunch_gate_passes_full_integrity_path_with_restore_drill(tmp_path):
         researcher_username="admin",
         researcher_password="admin1234",
         require_postgres=False,
+        require_blackbox_http=False,
         run_restore_drill=True,
         concurrent_sessions=3,
         concurrent_trials_per_session=2,
@@ -91,6 +94,8 @@ def test_prelaunch_gate_passes_full_integrity_path_with_restore_drill(tmp_path):
     assert by_id["researcher_auth"]["passed"] is True
     assert by_id["session_progress_resume_final_submit"]["passed"] is True
     assert by_id["concurrent_session_smoke"]["passed"] is True
+    assert by_id["participant_bilingual_path_readiness"]["passed"] is True
+    assert by_id["researcher_cabinet_operational_readiness"]["passed"] is True
     assert by_id["diagnostics_retrieval"]["passed"] is True
     assert by_id["export_retrieval"]["passed"] is True
     assert by_id["analysis_ready_outputs"]["passed"] is True
@@ -109,6 +114,7 @@ def test_prelaunch_gate_blocks_when_postgres_required_but_sqlite_target(tmp_path
         researcher_username="admin",
         researcher_password="admin1234",
         require_postgres=True,
+        require_blackbox_http=False,
         run_restore_drill=True,
         concurrent_sessions=2,
         concurrent_trials_per_session=1,
@@ -117,3 +123,23 @@ def test_prelaunch_gate_blocks_when_postgres_required_but_sqlite_target(tmp_path
     assert report["launch_ready"] is False
     blocker_ids = {entry["check_id"] for entry in report["blocking_failures"]}
     assert "staging_postgres_posture" in blocker_ids
+
+
+def test_prelaunch_gate_blocks_when_restore_drill_skipped_without_override(tmp_path):
+    db_path = str(tmp_path / "pilot.sqlite3")
+    run_slug = _bootstrap_active_run(db_path)
+
+    report = run_prelaunch_gate(
+        db_target=db_path,
+        run_slug=run_slug,
+        output_dir=tmp_path / "gate_restore_skip_blocked",
+        researcher_username="admin",
+        researcher_password="admin1234",
+        require_postgres=False,
+        require_blackbox_http=False,
+        run_restore_drill=False,
+    )
+
+    assert report["launch_ready"] is False
+    blocker_ids = {entry["check_id"] for entry in report["blocking_failures"]}
+    assert "backup_restore_drill" in blocker_ids

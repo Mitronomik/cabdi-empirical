@@ -141,9 +141,13 @@ def _submit_trial(participant: TestClient, session_id: str, trial_payload: dict[
 
 
 def _exercise_session_integrity(participant: TestClient, run_slug: str) -> dict[str, Any]:
+    return _exercise_session_integrity_language(participant, run_slug, "en")
+
+
+def _exercise_session_integrity_language(participant: TestClient, run_slug: str, language: str) -> dict[str, Any]:
     create = participant.post(
         "/api/v1/sessions",
-        json={"run_slug": run_slug, "language": "en"},
+        json={"run_slug": run_slug, "language": language},
     )
     create.raise_for_status()
     session = create.json()
@@ -187,6 +191,7 @@ def _exercise_session_integrity(participant: TestClient, run_slug: str) -> dict[
 
     return {
         "session_id": session_id,
+        "language": language,
         "resume_before_final": resume_payload,
         "resume_after_final": resume_after.json(),
         "final_submit_status": final_submit.json().get("status"),
@@ -209,7 +214,11 @@ def _submit_trial_http(participant: httpx.Client, session_id: str, trial_payload
 
 
 def _exercise_session_integrity_http(participant: httpx.Client, run_slug: str) -> dict[str, Any]:
-    create = participant.post("/api/v1/sessions", json={"run_slug": run_slug, "language": "en"})
+    return _exercise_session_integrity_http_language(participant, run_slug, "en")
+
+
+def _exercise_session_integrity_http_language(participant: httpx.Client, run_slug: str, language: str) -> dict[str, Any]:
+    create = participant.post("/api/v1/sessions", json={"run_slug": run_slug, "language": language})
     create.raise_for_status()
     session = create.json()
     session_id = session["session_id"]
@@ -246,6 +255,7 @@ def _exercise_session_integrity_http(participant: httpx.Client, run_slug: str) -
 
     return {
         "session_id": session_id,
+        "language": language,
         "resume_before_final": resume_payload,
         "resume_after_final": resume_after.json(),
         "final_submit_status": final_submit.json().get("status"),
@@ -312,6 +322,61 @@ def _run_concurrent_smoke(
     }
 
 
+def _run_concurrent_smoke_http(
+    *, participant_base_url: str, run_slug: str, concurrent_sessions: int, trials_per_session: int
+) -> dict[str, Any]:
+    def worker(i: int) -> dict[str, Any]:
+        with httpx.Client(base_url=participant_base_url, timeout=20.0) as client:
+            create = client.post("/api/v1/sessions", json={"run_slug": run_slug, "language": "en"})
+            create.raise_for_status()
+            payload = create.json()
+            session_id = payload["session_id"]
+            resume_token = payload["resume_token"]
+            client.post(f"/api/v1/sessions/{session_id}/start").raise_for_status()
+
+            completed = 0
+            while completed < trials_per_session:
+                nxt = client.get(f"/api/v1/sessions/{session_id}/next-trial")
+                if nxt.status_code == 409:
+                    block_id = nxt.json()["detail"]["block_id"]
+                    client.post(
+                        f"/api/v1/sessions/{session_id}/blocks/{block_id}/questionnaire",
+                        json={"burden": 25, "trust": 50, "usefulness": 65},
+                    ).raise_for_status()
+                    continue
+                nxt.raise_for_status()
+                trial_payload = nxt.json()
+                if trial_payload.get("status") in {"awaiting_final_submit", "finalized", "completed"}:
+                    break
+                _submit_trial_http(client, session_id, trial_payload)
+                completed += 1
+
+            resume = client.post("/api/v1/sessions/resume-info", json={"run_slug": run_slug, "resume_token": resume_token})
+            resume.raise_for_status()
+            return {
+                "session_id": session_id,
+                "trials_submitted": completed,
+                "resume_status": resume.json().get("resume_status"),
+            }
+
+    results: list[dict[str, Any]] = []
+    errors: list[str] = []
+    with ThreadPoolExecutor(max_workers=concurrent_sessions) as pool:
+        futures = [pool.submit(worker, i) for i in range(concurrent_sessions)]
+        for future in as_completed(futures):
+            try:
+                results.append(future.result())
+            except Exception as exc:  # pragma: no cover - captured as gate failure metadata
+                errors.append(str(exc))
+
+    return {
+        "requested_sessions": concurrent_sessions,
+        "completed_workers": len(results),
+        "errors": errors,
+        "results": sorted(results, key=lambda row: row["session_id"]),
+    }
+
+
 def _write_report(output_dir: Path, report: dict[str, Any]) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     json_path = output_dir / "prelaunch_gate_report.json"
@@ -321,6 +386,9 @@ def _write_report(output_dir: Path, report: dict[str, Any]) -> None:
         "# Pilot Pre-Launch Gate Report",
         "",
         f"- Generated at: `{report['generated_at']}`",
+        f"- Execution started at: `{report['execution_started_at']}`",
+        f"- Execution finished at: `{report['execution_finished_at']}`",
+        f"- Execution id: `{report['execution_id']}`",
         f"- Launch ready: `{report['launch_ready']}`",
         f"- Blocking failures: `{len(report['blocking_failures'])}`",
         f"- Warning failures: `{len(report['warning_failures'])}`",
@@ -332,12 +400,18 @@ def _write_report(output_dir: Path, report: dict[str, Any]) -> None:
         marker = "[PASS]" if check["passed"] else ("[BLOCKER]" if check["severity"] == "blocker" else "[WARN]")
         lines.append(f"- {marker} `{check['check_id']}` — {check['detail']}")
 
+    if report["blocking_failures"]:
+        lines.extend(["", "## Blocking failures", *[f"- `{check['check_id']}` — {check['detail']}" for check in report["blocking_failures"]]])
+    if report["warning_failures"]:
+        lines.extend(["", "## Warning failures", *[f"- `{check['check_id']}` — {check['detail']}" for check in report["warning_failures"]]])
+
     lines.extend(
         [
             "",
             "## Operator notes",
             "- Blocking failures must be remediated before live launch.",
             "- Warning failures require explicit operator acknowledgement and documented rationale.",
+            "- Report is trustworthy only when this execution id matches the latest gate run and no blocking checks were skipped.",
             "",
         ]
     )
@@ -355,9 +429,13 @@ def run_prelaunch_gate(
     concurrent_sessions: int = 6,
     concurrent_trials_per_session: int = 3,
     run_restore_drill: bool = False,
+    require_blackbox_http: bool = True,
+    allow_restore_drill_skip: bool = False,
     participant_base_url: str | None = None,
     researcher_base_url: str | None = None,
 ) -> dict[str, Any]:
+    execution_started_at = _utc_now()
+    execution_id = f"prelaunch-{int(time.time() * 1000)}"
     checks: list[GateCheck] = []
     out_dir = Path(output_dir)
 
@@ -376,6 +454,18 @@ def run_prelaunch_gate(
     )
 
     use_blackbox_http = bool(participant_base_url and researcher_base_url)
+    _record(
+        checks,
+        check_id="blackbox_launch_realism_mode",
+        severity="blocker",
+        passed=(use_blackbox_http if require_blackbox_http else True),
+        detail=(
+            "black-box HTTP launch realism mode enabled"
+            if use_blackbox_http
+            else "black-box launch realism mode is required for final sign-off; provide participant/researcher base URLs"
+        ),
+        metadata={"require_blackbox_http": require_blackbox_http},
+    )
     _record(
         checks,
         check_id="launch_boundary_mode",
@@ -499,30 +589,75 @@ def run_prelaunch_gate(
                 metadata=integrity,
             )
 
-            if not use_blackbox_http:
+            if use_blackbox_http:
+                concurrent = _run_concurrent_smoke_http(
+                    participant_base_url=str(participant_base_url),
+                    run_slug=run_slug,
+                    concurrent_sessions=concurrent_sessions,
+                    trials_per_session=concurrent_trials_per_session,
+                )
+            else:
                 concurrent = _run_concurrent_smoke(
                     participant_app=participant_app,
                     run_slug=run_slug,
                     concurrent_sessions=concurrent_sessions,
                     trials_per_session=concurrent_trials_per_session,
                 )
-                concurrent_ok = (
-                    concurrent["completed_workers"] == concurrent["requested_sessions"]
-                    and not concurrent["errors"]
-                    and all(row["trials_submitted"] >= 1 for row in concurrent["results"])
+            concurrent_ok = (
+                concurrent["completed_workers"] == concurrent["requested_sessions"]
+                and not concurrent["errors"]
+                and all(row["trials_submitted"] >= 1 for row in concurrent["results"])
+            )
+            _record(
+                checks,
+                check_id="concurrent_session_smoke",
+                severity="blocker",
+                passed=concurrent_ok,
+                detail=(
+                    f"concurrent smoke completed {concurrent['completed_workers']}/{concurrent['requested_sessions']} sessions"
+                ),
+                metadata=concurrent,
+            )
+
+            if use_blackbox_http:
+                integrity_ru = _exercise_session_integrity_http_language(participant_client, run_slug, "ru")
+            else:
+                integrity_ru = _exercise_session_integrity_language(participant_client, run_slug, "ru")
+            ru_finalized = integrity_ru["resume_after_final"].get("resume_status") == "finalized"
+            ru_submit_ok = integrity_ru.get("final_submit_status") in {"finalized", "completed"}
+            _record(
+                checks,
+                check_id="participant_bilingual_path_readiness",
+                severity="blocker",
+                passed=ru_finalized and ru_submit_ok,
+                detail="participant RU-language flow reached final submit and finalized resume state",
+                metadata=integrity_ru,
+            )
+
+            if run_id:
+                cabinet_runs_defaults = researcher_client.get("/admin/api/v1/runs/defaults")
+                cabinet_sessions = researcher_client.get(f"/admin/api/v1/runs/{run_id}/sessions")
+                cabinet_stimuli = researcher_client.get("/admin/api/v1/stimuli")
+                cabinet_ok = (
+                    cabinet_runs_defaults.status_code == 200
+                    and cabinet_sessions.status_code == 200
+                    and cabinet_stimuli.status_code == 200
                 )
                 _record(
                     checks,
-                    check_id="concurrent_session_smoke",
+                    check_id="researcher_cabinet_operational_readiness",
                     severity="blocker",
-                    passed=concurrent_ok,
+                    passed=cabinet_ok,
                     detail=(
-                        f"concurrent smoke completed {concurrent['completed_workers']}/{concurrent['requested_sessions']} sessions"
+                        "researcher cabinet routes (run defaults, sessions monitor, stimuli library) are reachable"
                     ),
-                    metadata=concurrent,
+                    metadata={
+                        "run_defaults_status": cabinet_runs_defaults.status_code,
+                        "run_sessions_status": cabinet_sessions.status_code,
+                        "stimuli_status": cabinet_stimuli.status_code,
+                    },
                 )
 
-            if run_id:
                 diagnostics = researcher_client.get(f"/admin/api/v1/runs/{run_id}/diagnostics")
                 _record(
                     checks,
@@ -605,10 +740,14 @@ def run_prelaunch_gate(
         _record(
             checks,
             check_id="backup_restore_drill",
-            severity="warning",
-            passed=False,
-            detail="restore drill skipped; run with --run-restore-drill on staging clone before launch",
-            metadata={},
+            severity=("warning" if allow_restore_drill_skip else "blocker"),
+            passed=allow_restore_drill_skip,
+            detail=(
+                "restore drill skipped with explicit override; operator must document rationale before launch"
+                if allow_restore_drill_skip
+                else "restore drill skipped; run with --run-restore-drill on staging clone before launch"
+            ),
+            metadata={"allow_restore_drill_skip": allow_restore_drill_skip},
         )
 
     serialized_checks = [asdict(check) for check in checks]
@@ -617,6 +756,9 @@ def run_prelaunch_gate(
 
     report = {
         "generated_at": _utc_now(),
+        "execution_started_at": execution_started_at,
+        "execution_finished_at": _utc_now(),
+        "execution_id": execution_id,
         "db_target": db_target,
         "run_slug": run_slug,
         "launch_ready": len(blocking_failures) == 0,
@@ -639,6 +781,8 @@ def main() -> None:
     parser.add_argument("--concurrent-sessions", type=int, default=6)
     parser.add_argument("--concurrent-trials-per-session", type=int, default=3)
     parser.add_argument("--run-restore-drill", action="store_true")
+    parser.add_argument("--allow-restore-drill-skip", action="store_true")
+    parser.add_argument("--allow-inprocess-gate", action="store_true")
     parser.add_argument("--fail-on-warning", action="store_true")
     parser.add_argument("--participant-base-url", default=None)
     parser.add_argument("--researcher-base-url", default=None)
@@ -657,6 +801,8 @@ def main() -> None:
         concurrent_sessions=max(1, int(args.concurrent_sessions)),
         concurrent_trials_per_session=max(1, int(args.concurrent_trials_per_session)),
         run_restore_drill=args.run_restore_drill,
+        require_blackbox_http=not args.allow_inprocess_gate,
+        allow_restore_drill_skip=args.allow_restore_drill_skip,
         participant_base_url=args.participant_base_url,
         researcher_base_url=args.researcher_base_url,
     )
