@@ -18,7 +18,7 @@ from app.participant_api.services.session_service import (
     SessionService,
 )
 from packages.logging_schema.pilot_logs import TrialEventLog, TrialSummaryLog
-from packages.shared_types.pilot_types import StimulusItem, TrialContext
+from packages.shared_types.pilot_types import SESSION_STATUS_ABANDONED, StimulusItem, TrialContext
 
 
 CONFIDENCE_SCALE = {"min": 0, "max": 100, "step": 1}
@@ -36,9 +36,9 @@ class TrialService:
     def next_trial(self, session_id: str) -> dict[str, Any] | None:
         session = self.session_service.get_session(session_id)
         progress = self._progress(session_id)
-        if session["status"] in {SESSION_STATUS_AWAITING_FINAL_SUBMIT, SESSION_STATUS_FINALIZED, "completed"}:
+        if session["status"] in {SESSION_STATUS_AWAITING_FINAL_SUBMIT, SESSION_STATUS_FINALIZED}:
             return {"status": session["status"], "session_id": session_id, "no_more_trials": True, "progress": progress}
-        if session["status"] in {SESSION_STATUS_PAUSED, "abandoned"}:
+        if session["status"] in {SESSION_STATUS_PAUSED, SESSION_STATUS_ABANDONED}:
             return {"status": session["status"], "session_id": session_id, "progress": progress}
         if session["status"] not in {SESSION_STATUS_IN_PROGRESS, SESSION_STATUS_CREATED}:
             return {"status": session["status"], "session_id": session_id, "progress": progress}
@@ -121,7 +121,7 @@ class TrialService:
 
     def submit_trial(self, session_id: str, trial_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         session = self.session_service.get_session(session_id)
-        if session["status"] in {SESSION_STATUS_FINALIZED, "completed"}:
+        if session["status"] == SESSION_STATUS_FINALIZED:
             raise ValueError("session_finalized")
         trial = self.store.fetchone(
             "SELECT * FROM session_trials WHERE session_id = ? AND trial_id = ?",
@@ -206,7 +206,7 @@ class TrialService:
 
     def submit_block_questionnaire(self, session_id: str, block_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         session = self.session_service.get_session(session_id)
-        if session["status"] in {SESSION_STATUS_FINALIZED, "completed"}:
+        if session["status"] == SESSION_STATUS_FINALIZED:
             raise ValueError("session_finalized")
         self.store.execute(
             """

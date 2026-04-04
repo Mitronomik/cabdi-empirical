@@ -773,3 +773,46 @@ def test_awaiting_final_submit_session_resumes_without_reopening_trials(tmp_path
     next_trial = client.get(f"/api/v1/sessions/{session_id}/next-trial")
     assert next_trial.status_code == 200
     assert next_trial.json()["status"] == "awaiting_final_submit"
+
+
+def test_start_session_is_idempotent_for_in_progress_and_preserves_awaiting_final_submit(tmp_path):
+    client = _make_client(tmp_path)
+    run_slug = _bootstrap_run(tmp_path)
+
+    created = client.post("/api/v1/sessions", json={"run_slug": run_slug}).json()
+    session_id = created["session_id"]
+    first_start = client.post(f"/api/v1/sessions/{session_id}/start")
+    second_start = client.post(f"/api/v1/sessions/{session_id}/start")
+    assert first_start.status_code == 200
+    assert second_start.status_code == 200
+    assert first_start.json()["status"] == "in_progress"
+    assert second_start.json()["status"] == "in_progress"
+
+    _progress_session_to_awaiting_final_submit(client, session_id)
+    waiting_start = client.post(f"/api/v1/sessions/{session_id}/start")
+    assert waiting_start.status_code == 200
+    assert waiting_start.json()["status"] == "awaiting_final_submit"
+
+
+def test_legacy_completed_status_is_treated_as_finalized_compatibility(tmp_path):
+    client = _make_client(tmp_path)
+    run_slug = _bootstrap_run(tmp_path)
+    created = client.post("/api/v1/sessions", json={"run_slug": run_slug}).json()
+    session_id = created["session_id"]
+    resume_token = created["resume_token"]
+
+    client.app.state.store.execute(
+        "UPDATE participant_sessions SET status = 'completed', completed_at = '2026-01-01T00:00:00+00:00' WHERE session_id = ?",
+        (session_id,),
+    )
+
+    resume_info = client.post(
+        "/api/v1/sessions/resume-info",
+        json={"run_slug": run_slug, "resume_token": resume_token},
+    )
+    assert resume_info.status_code == 200
+    assert resume_info.json()["resume_status"] == "finalized"
+
+    next_trial = client.get(f"/api/v1/sessions/{session_id}/next-trial")
+    assert next_trial.status_code == 200
+    assert next_trial.json()["status"] == "finalized"
