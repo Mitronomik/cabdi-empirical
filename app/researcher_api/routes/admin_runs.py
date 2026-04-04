@@ -10,6 +10,7 @@ router = APIRouter(prefix="/admin/api/v1/runs", tags=["admin-runs"])
 
 class CreateRunRequest(BaseModel):
     run_name: str
+    public_slug: str | None = None
     experiment_id: str
     task_family: str
     config: dict[str, Any]
@@ -22,6 +23,7 @@ def create_run(req: CreateRunRequest, request: Request) -> dict:
     try:
         return request.app.state.run_service.create_run(
             run_name=req.run_name,
+            public_slug=req.public_slug,
             experiment_id=req.experiment_id,
             task_family=req.task_family,
             config=req.config,

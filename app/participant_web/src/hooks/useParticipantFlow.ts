@@ -14,7 +14,6 @@ import type { QuestionnairePayload, TrialPayload } from '../lib/types';
 type Stage = 'consent' | 'instructions' | 'trial' | 'questionnaire' | 'completion';
 
 const DEFAULT_EXPERIMENT_ID = 'pilot_scam_not_scam_v1';
-const DEFAULT_RUN_ID = import.meta.env.VITE_PARTICIPANT_RUN_ID ?? 'run_local_dev';
 const TOTAL_TRIALS = 54;
 
 function getCurrentLocale(): Locale {
@@ -44,6 +43,13 @@ export function useParticipantFlow() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [completionCode, setCompletionCode] = useState<string | null>(null);
+  const [runSlug, setRunSlug] = useState(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get('run_slug');
+    if (fromUrl && fromUrl.trim()) {
+      return fromUrl.trim();
+    }
+    return import.meta.env.VITE_PARTICIPANT_RUN_SLUG ?? '';
+  });
 
   const trialStartMsRef = useRef<number>(0);
 
@@ -81,11 +87,11 @@ export function useParticipantFlow() {
     }
   }
 
-  async function beginSession(participantId: string) {
+  async function beginSession(participantId: string, activeRunSlug: string) {
     setLoading(true);
     setError(null);
     try {
-      const created = await createSession(DEFAULT_EXPERIMENT_ID, participantId, DEFAULT_RUN_ID, detectLocale());
+      const created = await createSession(DEFAULT_EXPERIMENT_ID, participantId, activeRunSlug, detectLocale());
       setSessionId(created.session_id);
       await startSession(created.session_id);
       await loadNextTrial(created.session_id);
@@ -153,6 +159,8 @@ export function useParticipantFlow() {
     loading,
     error,
     completionCode,
+    runSlug,
+    setRunSlug,
     setStage,
     beginSession,
     submitCurrentTrial,

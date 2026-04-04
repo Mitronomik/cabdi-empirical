@@ -77,8 +77,8 @@ python experiments/run_pilot_analysis.py \
 ## 8) Service behavior notes
 
 - Both APIs share one SQLite DB by default (`pilot/sessions/pilot_sessions.sqlite3`) via `PILOT_DB_PATH`.
-- Participant session creation is run-bound: `POST /api/v1/sessions` requires a concrete `run_id` that exists in `researcher_runs` and matches `experiment_id`.
-- Participant web includes `run_id` from `VITE_PARTICIPANT_RUN_ID` (set this to a real run before participant starts).
+- Participant session creation is run-bound: `POST /api/v1/sessions` requires either `run_slug` (public entry, recommended) or `run_id` (backward compatibility), and it must resolve to a run matching `experiment_id`.
+- Participant web entry now uses public slug (via `?run_slug=<public-slug>` or manual input in instructions); optional local default can be set with `VITE_PARTICIPANT_RUN_SLUG`.
 - Researcher run creation requires existing uploaded stimulus set IDs.
 
 ## 9) Current limitations

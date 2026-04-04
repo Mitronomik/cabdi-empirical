@@ -24,6 +24,8 @@ function AppBody() {
     loading,
     error,
     completionCode,
+    runSlug,
+    setRunSlug,
     setStage,
     beginSession,
     submitCurrentTrial,
@@ -55,8 +57,10 @@ function AppBody() {
         <InstructionsPage
           participantId={participantId}
           setParticipantId={setParticipantId}
+          runSlug={runSlug}
+          setRunSlug={setRunSlug}
           loading={loading}
-          onStart={() => beginSession(participantId)}
+          onStart={() => beginSession(participantId, runSlug)}
         />
       )}
 

@@ -41,6 +41,7 @@ def test_create_run_and_session_monitor_and_diagnostics(tmp_path):
     )
     assert create_run.status_code == 200
     run_id = create_run.json()["run_id"]
+    assert create_run.json()["public_slug"] == "run-alpha"
 
     session_res = participant.post(
         "/api/v1/sessions",
