@@ -38,6 +38,8 @@ def _bootstrap_run(tmp_path) -> str:
             "stimulus_set_ids": [stimulus_set_id],
         },
     )
+    activate = researcher.post(f"/admin/api/v1/runs/{run.json()['run_id']}/activate")
+    assert activate.status_code == 200
     return run.json()["public_slug"]
 
 
@@ -65,6 +67,8 @@ def _bootstrap_run_with_details(tmp_path) -> dict[str, str]:
             "stimulus_set_ids": [stimulus_set_id],
         },
     )
+    activate = researcher.post(f"/admin/api/v1/runs/{run.json()['run_id']}/activate")
+    assert activate.status_code == 200
     return {
         "run_id": run.json()["run_id"],
         "run_slug": run.json()["public_slug"],
@@ -200,12 +204,91 @@ def test_session_creation_accepts_run_id_for_backward_compatibility(tmp_path):
             "stimulus_set_ids": [upload.json()["stimulus_set_id"]],
         },
     )
+    activate = researcher.post(f"/admin/api/v1/runs/{run.json()['run_id']}/activate")
+    assert activate.status_code == 200
     run_id = run.json()["run_id"]
     create_res = client.post(
         "/api/v1/sessions",
         json={"experiment_id": "toy_v1", "participant_id": "p_with_run_id", "run_id": run_id},
     )
     assert create_res.status_code == 200
+
+
+def test_session_creation_rejects_non_active_run(tmp_path):
+    client = _make_client(tmp_path)
+    db_path = str(tmp_path / "pilot_api.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    payload = (
+        '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"title":"Case","body":"a"},'
+        '"true_label":"scam","difficulty_prior":"low","model_prediction":"scam","model_confidence":"high",'
+        '"model_correct":true,"eligible_sets":["demo"]}\n'
+    )
+    upload = researcher.post(
+        "/admin/api/v1/stimuli/upload",
+        files={"file": ("stimuli.jsonl", payload, "application/json")},
+        data={"name": "set1", "source_format": "jsonl"},
+    )
+    run = researcher.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "draft run",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"mode": "test"},
+            "stimulus_set_ids": [upload.json()["stimulus_set_id"]],
+        },
+    )
+    create_res = client.post(
+        "/api/v1/sessions",
+        json={"experiment_id": "toy_v1", "participant_id": "p_non_active", "run_id": run.json()["run_id"]},
+    )
+    assert create_res.status_code == 400
+    assert "not launchable" in create_res.json()["detail"]
+
+
+def test_session_creation_rejects_paused_and_closed_runs(tmp_path):
+    client = _make_client(tmp_path)
+    db_path = str(tmp_path / "pilot_api.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    payload = (
+        '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"title":"Case","body":"a"},'
+        '"true_label":"scam","difficulty_prior":"low","model_prediction":"scam","model_confidence":"high",'
+        '"model_correct":true,"eligible_sets":["demo"]}\n'
+    )
+    upload = researcher.post(
+        "/admin/api/v1/stimuli/upload",
+        files={"file": ("stimuli.jsonl", payload, "application/json")},
+        data={"name": "set1", "source_format": "jsonl"},
+    )
+    run = researcher.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "status-checked run",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"mode": "test"},
+            "stimulus_set_ids": [upload.json()["stimulus_set_id"]],
+        },
+    )
+    run_id = run.json()["run_id"]
+    assert researcher.post(f"/admin/api/v1/runs/{run_id}/activate").status_code == 200
+    assert researcher.post(f"/admin/api/v1/runs/{run_id}/pause").status_code == 200
+
+    paused_create = client.post(
+        "/api/v1/sessions",
+        json={"experiment_id": "toy_v1", "participant_id": "p_paused", "run_id": run_id},
+    )
+    assert paused_create.status_code == 400
+    assert "status=paused" in paused_create.json()["detail"]
+
+    assert researcher.post(f"/admin/api/v1/runs/{run_id}/activate").status_code == 200
+    assert researcher.post(f"/admin/api/v1/runs/{run_id}/close").status_code == 200
+    closed_create = client.post(
+        "/api/v1/sessions",
+        json={"experiment_id": "toy_v1", "participant_id": "p_closed", "run_id": run_id},
+    )
+    assert closed_create.status_code == 400
+    assert "status=closed" in closed_create.json()["detail"]
 
 
 def test_session_trials_are_frozen_snapshots_even_if_stimulus_set_changes(tmp_path):

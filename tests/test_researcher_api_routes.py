@@ -46,10 +46,12 @@ def test_create_run_and_session_monitor_and_diagnostics(tmp_path):
     assert create_run.json()["public_slug"] == "run-alpha"
     assert create_run.json()["ok"] is True
     assert create_run.json()["linked_stimulus_set_ids"] == [stimulus_set_id]
+    assert create_run.json()["status"] == "draft"
 
     list_runs_res = researcher.get("/admin/api/v1/runs")
     assert list_runs_res.status_code == 200
     assert list_runs_res.json()[0]["run_id"] == run_id
+    assert list_runs_res.json()[0]["status"] == "draft"
 
     list_stimuli_res = researcher.get("/admin/api/v1/stimuli")
     assert list_stimuli_res.status_code == 200
@@ -65,6 +67,10 @@ def test_create_run_and_session_monitor_and_diagnostics(tmp_path):
     assert defaults_res.status_code == 200
     assert defaults_res.json()["config_preset_id"] == "default_experiment"
 
+    activate_res = researcher.post(f"/admin/api/v1/runs/{run_id}/activate")
+    assert activate_res.status_code == 200
+    assert activate_res.json()["status"] == "active"
+
     session_res = participant.post(
         "/api/v1/sessions",
         json={"experiment_id": "toy_v1", "participant_id": "p_admin_1", "run_id": run_id, "language": "ru"},
@@ -76,9 +82,88 @@ def test_create_run_and_session_monitor_and_diagnostics(tmp_path):
     sessions_body = sessions_res.json()
     assert sessions_body["counts"]["created"] >= 1
     assert sessions_body["sessions"][0]["language"] == "ru"
+    assert sessions_body["run_status"] == "active"
 
     diagnostics_res = researcher.get(f"/admin/api/v1/runs/{run_id}/diagnostics")
     assert diagnostics_res.status_code == 200
     diagnostics_body = diagnostics_res.json()
     assert "missing_core_fields_count" in diagnostics_body
     assert "session_counts" in diagnostics_body
+
+
+def test_run_lifecycle_transitions_and_invalid_transition_errors(tmp_path):
+    db_path = str(tmp_path / "pilot.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+
+    stimulus_set_id = _upload_stimulus(researcher)
+    run_res = researcher.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "lifecycle run",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"n_blocks": 3},
+            "stimulus_set_ids": [stimulus_set_id],
+        },
+    )
+    run_id = run_res.json()["run_id"]
+    assert run_res.json()["status"] == "draft"
+
+    pause_from_draft = researcher.post(f"/admin/api/v1/runs/{run_id}/pause")
+    assert pause_from_draft.status_code == 400
+    assert "Invalid run status transition" in pause_from_draft.json()["detail"]
+
+    activate = researcher.post(f"/admin/api/v1/runs/{run_id}/activate")
+    assert activate.status_code == 200
+    assert activate.json()["status"] == "active"
+
+    pause = researcher.post(f"/admin/api/v1/runs/{run_id}/pause")
+    assert pause.status_code == 200
+    assert pause.json()["status"] == "paused"
+
+    activate_again = researcher.post(f"/admin/api/v1/runs/{run_id}/activate")
+    assert activate_again.status_code == 200
+    assert activate_again.json()["status"] == "active"
+
+    close = researcher.post(f"/admin/api/v1/runs/{run_id}/close")
+    assert close.status_code == 200
+    assert close.json()["status"] == "closed"
+
+    activate_closed = researcher.post(f"/admin/api/v1/runs/{run_id}/activate")
+    assert activate_closed.status_code == 400
+    assert "Invalid run status transition" in activate_closed.json()["detail"]
+
+
+def test_closed_runs_remain_readable_for_diagnostics_and_exports(tmp_path):
+    db_path = str(tmp_path / "pilot.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    participant = TestClient(create_participant_app(db_path))
+
+    stimulus_set_id = _upload_stimulus(researcher)
+    run_res = researcher.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "close-compatible run",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"n_blocks": 3},
+            "stimulus_set_ids": [stimulus_set_id],
+        },
+    )
+    run_id = run_res.json()["run_id"]
+    assert researcher.post(f"/admin/api/v1/runs/{run_id}/activate").status_code == 200
+    assert participant.post(
+        "/api/v1/sessions",
+        json={"experiment_id": "toy_v1", "participant_id": "p_hist", "run_id": run_id},
+    ).status_code == 200
+    closed = researcher.post(f"/admin/api/v1/runs/{run_id}/close")
+    assert closed.status_code == 200
+    assert closed.json()["status"] == "closed"
+
+    sessions = researcher.get(f"/admin/api/v1/runs/{run_id}/sessions")
+    assert sessions.status_code == 200
+    assert sessions.json()["run_status"] == "closed"
+    diagnostics = researcher.get(f"/admin/api/v1/runs/{run_id}/diagnostics")
+    assert diagnostics.status_code == 200
+    exports = researcher.get(f"/admin/api/v1/runs/{run_id}/exports")
+    assert exports.status_code == 200

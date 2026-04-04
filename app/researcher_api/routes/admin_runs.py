@@ -58,3 +58,33 @@ def run_sessions(run_id: str, request: Request) -> dict:
         return request.app.state.run_service.list_run_sessions(run_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/{run_id}/activate")
+def activate_run(run_id: str, request: Request) -> dict:
+    try:
+        return request.app.state.run_service.activate_run(run_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/{run_id}/pause")
+def pause_run(run_id: str, request: Request) -> dict:
+    try:
+        return request.app.state.run_service.pause_run(run_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/{run_id}/close")
+def close_run(run_id: str, request: Request) -> dict:
+    try:
+        return request.app.state.run_service.close_run(run_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

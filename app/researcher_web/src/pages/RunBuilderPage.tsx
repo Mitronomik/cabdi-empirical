@@ -144,6 +144,7 @@ export function RunBuilderPage() {
           <h3>Run create result</h3>
           <p>run_id: {String(response.run_id)}</p>
           <p>public_slug: {String(response.public_slug)}</p>
+          <p>status: {String(response.status)}</p>
           <p>task_family: {String(response.task_family)}</p>
           <p>linked stimulus sets: {JSON.stringify(response.linked_stimulus_set_ids ?? [])}</p>
         </div>
@@ -152,7 +153,7 @@ export function RunBuilderPage() {
       <ul>
         {recentRuns.map((run) => (
           <li key={String(run.run_id)}>
-            {String(run.run_id)} · {String(run.run_name)} · {String(run.public_slug)} · {String(run.task_family)}
+            {String(run.run_id)} · {String(run.run_name)} · {String(run.public_slug)} · {String(run.status)} · {String(run.task_family)}
           </li>
         ))}
       </ul>

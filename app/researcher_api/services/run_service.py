@@ -10,6 +10,18 @@ from uuid import uuid4
 from app.participant_api.persistence.sqlite_store import SQLiteStore, dumps, loads
 from pilot.config_loader import load_experiment_config
 
+RUN_STATUS_DRAFT = "draft"
+RUN_STATUS_ACTIVE = "active"
+RUN_STATUS_PAUSED = "paused"
+RUN_STATUS_CLOSED = "closed"
+RUN_STATUSES = {RUN_STATUS_DRAFT, RUN_STATUS_ACTIVE, RUN_STATUS_PAUSED, RUN_STATUS_CLOSED}
+_ALLOWED_TRANSITIONS: dict[str, set[str]] = {
+    RUN_STATUS_DRAFT: {RUN_STATUS_ACTIVE},
+    RUN_STATUS_ACTIVE: {RUN_STATUS_PAUSED, RUN_STATUS_CLOSED},
+    RUN_STATUS_PAUSED: {RUN_STATUS_ACTIVE, RUN_STATUS_CLOSED},
+    RUN_STATUS_CLOSED: set(),
+}
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -72,14 +84,15 @@ class RunService:
         self.store.execute(
             """
             INSERT INTO researcher_runs(
-                run_id, run_name, public_slug, experiment_id, task_family, config_json,
+                run_id, run_name, public_slug, status, experiment_id, task_family, config_json,
                 stimulus_set_ids_json, notes, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 run_id,
                 run_name,
                 resolved_public_slug,
+                RUN_STATUS_DRAFT,
                 experiment_id,
                 task_family,
                 dumps(config),
@@ -95,6 +108,7 @@ class RunService:
             "run_id": created["run_id"],
             "run_name": created["run_name"],
             "public_slug": created["public_slug"],
+            "status": created["status"],
             "experiment_id": created["experiment_id"],
             "task_family": created["task_family"],
             "config": created["config"],
@@ -108,6 +122,9 @@ class RunService:
         row = self.store.fetchone("SELECT * FROM researcher_runs WHERE run_id = ?", (run_id,))
         if row is None:
             raise KeyError("run not found")
+        if row.get("status") not in RUN_STATUSES:
+            row["status"] = RUN_STATUS_DRAFT
+            self.store.execute("UPDATE researcher_runs SET status = ? WHERE run_id = ?", (RUN_STATUS_DRAFT, run_id))
         if not row.get("public_slug"):
             synthesized_slug = self._build_unique_public_slug(row["run_name"], None)
             self.store.execute("UPDATE researcher_runs SET public_slug = ? WHERE run_id = ?", (synthesized_slug, run_id))
@@ -119,7 +136,7 @@ class RunService:
     def list_runs(self) -> list[dict[str, Any]]:
         rows = self.store.fetchall(
             """
-            SELECT run_id, run_name, public_slug, experiment_id, task_family, notes, created_at
+            SELECT run_id, run_name, public_slug, status, experiment_id, task_family, notes, created_at
             FROM researcher_runs
             ORDER BY created_at DESC
             """,
@@ -127,8 +144,87 @@ class RunService:
         )
         return rows
 
+    def transition_run_status(self, run_id: str, target_status: str) -> dict[str, Any]:
+        if target_status not in RUN_STATUSES:
+            raise ValueError(f"Unsupported run status: {target_status}")
+        run = self.get_run(run_id)
+        current_status = str(run.get("status", RUN_STATUS_DRAFT))
+        if current_status == target_status:
+            return self._transition_response(run, validation_errors=[])
+        if target_status not in _ALLOWED_TRANSITIONS[current_status]:
+            allowed = sorted(_ALLOWED_TRANSITIONS[current_status])
+            raise ValueError(
+                f"Invalid run status transition: {current_status} -> {target_status}. "
+                f"Allowed transitions: {allowed or 'none'}"
+            )
+        validation_errors = self._validate_launchability(run) if target_status == RUN_STATUS_ACTIVE else []
+        if validation_errors:
+            raise ValueError(f"Run cannot be activated: {'; '.join(validation_errors)}")
+
+        self.store.execute("UPDATE researcher_runs SET status = ? WHERE run_id = ?", (target_status, run_id))
+        updated = self.get_run(run_id)
+        return self._transition_response(updated, validation_errors=[])
+
+    def activate_run(self, run_id: str) -> dict[str, Any]:
+        return self.transition_run_status(run_id, RUN_STATUS_ACTIVE)
+
+    def pause_run(self, run_id: str) -> dict[str, Any]:
+        return self.transition_run_status(run_id, RUN_STATUS_PAUSED)
+
+    def close_run(self, run_id: str) -> dict[str, Any]:
+        return self.transition_run_status(run_id, RUN_STATUS_CLOSED)
+
+    def _transition_response(self, run: dict[str, Any], *, validation_errors: list[str]) -> dict[str, Any]:
+        return {
+            "ok": True,
+            "success": True,
+            "run_id": run["run_id"],
+            "public_slug": run["public_slug"],
+            "status": run["status"],
+            "task_family": run["task_family"],
+            "linked_stimulus_set_ids": run["stimulus_set_ids"],
+            "validation_errors": validation_errors,
+        }
+
+    def _validate_launchability(self, run: dict[str, Any]) -> list[str]:
+        errors: list[str] = []
+        if not str(run.get("experiment_id", "")).strip():
+            errors.append("run.experiment_id must be non-empty")
+        if not str(run.get("task_family", "")).strip():
+            errors.append("run.task_family must be non-empty")
+
+        config = run.get("config")
+        if not isinstance(config, dict) or not config:
+            errors.append("run.config must be a non-empty object")
+
+        stimulus_set_ids = run.get("stimulus_set_ids")
+        if not isinstance(stimulus_set_ids, list) or not stimulus_set_ids:
+            errors.append("run must reference at least one stimulus_set_id")
+            return errors
+
+        for stimulus_set_id in stimulus_set_ids:
+            row = self.store.fetchone(
+                """
+                SELECT stimulus_set_id, task_family, validation_status, items_json
+                FROM researcher_stimulus_sets
+                WHERE stimulus_set_id = ?
+                """,
+                (stimulus_set_id,),
+            )
+            if row is None:
+                errors.append(f"run references missing stimulus_set_id: {stimulus_set_id}")
+                continue
+            if row["task_family"] != run["task_family"]:
+                errors.append(f"stimulus_set_id task_family mismatch: {stimulus_set_id}")
+            if row.get("validation_status") not in {"valid", "warning_only"}:
+                errors.append(f"stimulus_set_id is not run-compatible: {stimulus_set_id}")
+            items = loads(row["items_json"])
+            if not isinstance(items, list) or not items:
+                errors.append(f"stimulus_set_id has no usable items: {stimulus_set_id}")
+        return errors
+
     def list_run_sessions(self, run_id: str) -> dict[str, Any]:
-        self.get_run(run_id)
+        run = self.get_run(run_id)
         rows = self.store.fetchall(
             "SELECT session_id, participant_id, experiment_id, run_id, status, started_at, completed_at, COALESCE(language, 'en') AS language FROM participant_sessions WHERE run_id = ? ORDER BY started_at",
             (run_id,),
@@ -149,6 +245,8 @@ class RunService:
         mean_completion_seconds = sum(completion_seconds) / len(completion_seconds) if completion_seconds else None
         return {
             "run_id": run_id,
+            "public_slug": run["public_slug"],
+            "run_status": run["status"],
             "counts": counts,
             "mean_completion_seconds": mean_completion_seconds,
             "sessions": rows,

@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from app.participant_api.persistence.sqlite_store import SQLiteStore, dumps, loads
 from app.participant_api.services.randomization_service import assign_order_id, build_trial_plan
+from app.researcher_api.services.run_service import RUN_STATUS_ACTIVE
 from packages.shared_types.pilot_types import ExperimentConfig, ParticipantSession, StimulusItem
 from pilot.config_loader import load_experiment_config
 
@@ -157,6 +158,11 @@ class SessionService:
             raise ValueError("run and experiment_id mismatch")
         if requested_experiment_id == experiment.experiment_id and run["task_family"] != experiment.task_family:
             raise ValueError("run task_family is incompatible with experiment task_family")
+        if run.get("status") != RUN_STATUS_ACTIVE:
+            raise ValueError(f"run is not launchable for new participant sessions (status={run.get('status')})")
+        config = loads(run["config_json"])
+        if not isinstance(config, dict) or not config:
+            raise ValueError("run is missing required config for participant execution")
 
         run["stimulus_set_ids"] = loads(run["stimulus_set_ids_json"])
         if not isinstance(run["stimulus_set_ids"], list) or not run["stimulus_set_ids"]:
