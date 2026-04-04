@@ -177,3 +177,33 @@ Safety behavior:
 2. **Accidental run close:** recover by restoring pre-close backup if reopening is required operationally.
 3. **Export file loss:** regenerate exports from DB-backed endpoints and re-run analysis script.
 4. **DB corruption/operator error:** restore latest valid backup with `scripts/pilot_restore.py --confirm-destructive`.
+
+## 15) Pre-launch gate (PR-16 launch barrier)
+
+Run this only against staging / pre-launch environment with a known active run slug.
+
+```bash
+python scripts/pilot_prelaunch_gate.py \
+  --db-target "$PILOT_DB_URL" \
+  --run-slug "<active-run-slug>" \
+  --researcher-username "${PILOT_RESEARCHER_USERNAME:-admin}" \
+  --researcher-password "$PILOT_RESEARCHER_PASSWORD" \
+  --run-restore-drill \
+  --output-dir artifacts/pilot_ops/prelaunch_gate
+```
+
+Outputs:
+
+- `artifacts/pilot_ops/prelaunch_gate/prelaunch_gate_report.json`
+- `artifacts/pilot_ops/prelaunch_gate/prelaunch_gate_checklist.md`
+
+Gate semantics:
+
+- **Blockers** (`severity=blocker`) fail launch readiness immediately.
+- **Warnings** require explicit operator acknowledgement before launch.
+- The gate includes: Postgres posture check, active run check, public slug entry, researcher auth, session progress/resume/final-submit integrity, concurrent session smoke, diagnostics/export checks, analysis-ready export availability, and backup/restore checks.
+
+Notes:
+
+- Pre-launch gate defaults to requiring Postgres target; use `--allow-sqlite` only for local rehearsals.
+- `--run-restore-drill` is destructive by design and should be executed only on staging datasets or approved maintenance windows.
