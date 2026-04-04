@@ -29,6 +29,8 @@ export function TrialPage({ trial, completedTrials, totalTrials, loading, onSubm
   const responseOptions = Array.isArray(trial.stimulus.payload.response_options)
     ? (trial.stimulus.payload.response_options as string[])
     : ['scam', 'not_scam'];
+  const stimulusTitle = String(trial.stimulus.payload.title ?? t('trial.caseTitle'));
+  const stimulusBody = String(trial.stimulus.payload.body ?? trial.stimulus.payload.prompt ?? t('trial.noPrompt'));
 
   const progressPct = Math.round((completedTrials / totalTrials) * 100);
 
@@ -51,8 +53,8 @@ export function TrialPage({ trial, completedTrials, totalTrials, loading, onSubm
 
       <div className="trial-grid">
         <article className="card stimulus-card">
-          <h2>{t('trial.caseTitle')}</h2>
-          <p>{String(trial.stimulus.payload.prompt ?? t('trial.noPrompt'))}</p>
+          <h2>{stimulusTitle}</h2>
+          <p>{stimulusBody}</p>
           <small>
             {t('trial.blockLabel')}: {trial.block_id}
           </small>

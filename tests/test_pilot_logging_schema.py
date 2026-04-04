@@ -15,7 +15,7 @@ def _bootstrap_run(tmp_path) -> str:
     db_path = str(tmp_path / "pilot.sqlite3")
     researcher = TestClient(create_researcher_app(db_path))
     payload = (
-        '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"text":"a"},'
+        '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"title":"Case 1","body":"a"},'
         '"true_label":"scam","difficulty_prior":"low","model_prediction":"scam","model_confidence":"high",'
         '"model_correct":true,"eligible_sets":["demo"]}\n'
     )

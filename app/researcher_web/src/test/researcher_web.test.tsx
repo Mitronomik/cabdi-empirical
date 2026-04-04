@@ -107,7 +107,7 @@ describe('researcher web shell', () => {
             ok: true,
             stimulus_set_id: 'stim_new',
             n_items: 2,
-            validation_status: 'validated',
+            validation_status: 'valid',
             warnings: [],
             errors: [],
             preview_rows: [{ stimulus_id: 's1' }],

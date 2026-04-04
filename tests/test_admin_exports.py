@@ -8,7 +8,7 @@ from app.researcher_api.main import create_app as create_researcher_app
 
 def _bootstrap_run(researcher: TestClient) -> str:
     payload = (
-        '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"text":"a"},'
+        '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"title":"Case 1","body":"a"},'
         '"true_label":"scam","difficulty_prior":"low","model_prediction":"scam","model_confidence":"high",'
         '"model_correct":true,"eligible_sets":["demo"]}\n'
     )
