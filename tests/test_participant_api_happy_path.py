@@ -183,6 +183,9 @@ def test_session_flow_happy_path_with_exports(tmp_path):
     assert "raw_event_log_jsonl" in export_data
     assert "trial_summary_csv" in export_data
     assert "block_questionnaire_csv" in export_data
+    assert export_data["data_layer"] == "source_of_truth_extract"
+    assert export_data["run_scope"]["scope_level"] == "session"
+    assert export_data["provenance"]["derived_artifacts"] == []
     assert export_data["participant_session_summary"]["n_trial_summaries"] == expected_total
     assert export_data["participant_session_summary"]["language"] == "en"
     assert export_data["participant_session_summary"]["status"] == "awaiting_final_submit"

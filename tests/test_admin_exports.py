@@ -68,9 +68,18 @@ def test_run_exports_include_expected_sections(tmp_path):
     assert body["session_summary_json"][0]["language"] == "ru"
     assert "No trial summaries available" in body["warnings"][0]
     assert body["artifact_policy"]["mode"] == "replace_current"
+    assert body["manifest_version"] == "pilot_export_manifest.v1"
+    assert body["run_scope"]["scope_level"] == "run"
+    assert body["artifact_layers"]["source_of_truth_extracts"]
+    assert "trial_level_csv" in body["artifact_layers"]["derived_analysis_artifacts"]
     artifact_types = {item["artifact_type"] for item in body["artifacts"]}
     assert "raw_event_log_jsonl" in artifact_types
     assert "trial_level_csv" in artifact_types
+    by_type = {item["artifact_type"]: item for item in body["artifacts"]}
+    assert by_type["trial_summary_csv"]["data_layer"] == "source_of_truth_extract"
+    assert by_type["trial_level_csv"]["data_layer"] == "derived_analysis_artifact"
+    manifest = json.loads((Path(body["artifact_root"]) / "manifest.json").read_text(encoding="utf-8"))
+    assert "trial_summary_rows" in manifest["completeness"]["incomplete_source_streams"]
 
 
 def test_run_exports_include_analysis_ready_outputs_when_trial_data_exists(tmp_path):
@@ -133,6 +142,10 @@ def test_run_exports_include_analysis_ready_outputs_when_trial_data_exists(tmp_p
     assert manifest_path.exists()
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest["run_id"] == run_info["run_id"]
+    assert manifest["manifest_version"] == "pilot_export_manifest.v1"
+    assert manifest["scope"]["scope_level"] == "run"
+    assert manifest["source_of_truth_counts"]["trial_summary_rows"] >= 1
+    assert "trial_summary_csv" in manifest["provenance"]["derived_from_artifacts"]
 
 
 def test_run_export_generation_replaces_current_artifacts(tmp_path):

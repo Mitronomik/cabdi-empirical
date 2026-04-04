@@ -25,6 +25,7 @@ from app.researcher_api.services.run_data_service import RunDataService
 class ExportArtifact:
     artifact_type: str
     category: str
+    data_layer: str
     filename: str
     media_type: str
     relative_path: str
@@ -33,6 +34,8 @@ class ExportArtifact:
 
 
 class AdminExportService:
+    MANIFEST_VERSION = "pilot_export_manifest.v1"
+
     def __init__(self, store: PilotStore, export_root: str | Path = "artifacts/pilot_exports") -> None:
         self.store = store
         self.run_data_service = RunDataService(store)
@@ -198,6 +201,7 @@ class AdminExportService:
         return path, artifact.get("media_type", "application/octet-stream")
 
     def _export_response(self, payload: dict[str, Any]) -> dict[str, Any]:
+        artifact_types = {item["artifact_type"]: item for item in payload.get("artifacts", [])}
         payload["artifact_policy"] = {"mode": "replace_current", "notes": "Re-generating exports overwrites run/current artifacts."}
         payload["source_of_truth"] = {
             "persisted_tables": [
@@ -209,6 +213,20 @@ class AdminExportService:
                 "pilot_runs",
             ],
             "derived_artifacts_root": str(self.export_root),
+        }
+        payload["artifact_layers"] = {
+            "source_of_truth_extracts": sorted(
+                item["artifact_type"] for item in artifact_types.values() if item["data_layer"] == "source_of_truth_extract"
+            ),
+            "derived_analysis_artifacts": sorted(
+                item["artifact_type"] for item in artifact_types.values() if item["data_layer"] == "derived_analysis_artifact"
+            ),
+        }
+        payload["manifest_version"] = self.MANIFEST_VERSION
+        payload["run_scope"] = {
+            "scope_level": "run",
+            "run_id": payload.get("run_id"),
+            "artifact_root": payload.get("artifact_root"),
         }
         return payload
 
@@ -227,17 +245,27 @@ class AdminExportService:
         export_dir.mkdir(parents=True, exist_ok=True)
         artifacts: list[ExportArtifact] = []
         catalog = {
-            "raw_event_log_jsonl": ("raw", "raw_event_log.jsonl", "application/x-ndjson"),
-            "trial_summary_csv": ("raw", "trial_summary.csv", "text/csv"),
-            "block_questionnaire_csv": ("raw", "block_questionnaire.csv", "text/csv"),
-            "session_summary_csv": ("raw", "session_summary.csv", "text/csv"),
-            "session_summary_json": ("raw", "session_summary.json", "application/json"),
-            "trial_level_csv": ("derived", "trial_level.csv", "text/csv"),
-            "participant_summary_csv": ("derived", "participant_summary.csv", "text/csv"),
-            "mixed_effects_ready_csv": ("derived", "mixed_effects_ready.csv", "text/csv"),
-            "pilot_summary_md": ("report", "pilot_summary.md", "text/markdown"),
+            "raw_event_log_jsonl": ("raw", "source_of_truth_extract", "raw_event_log.jsonl", "application/x-ndjson"),
+            "trial_summary_csv": ("raw", "source_of_truth_extract", "trial_summary.csv", "text/csv"),
+            "block_questionnaire_csv": ("raw", "source_of_truth_extract", "block_questionnaire.csv", "text/csv"),
+            "session_summary_csv": ("raw", "source_of_truth_extract", "session_summary.csv", "text/csv"),
+            "session_summary_json": ("raw", "source_of_truth_extract", "session_summary.json", "application/json"),
+            "trial_level_csv": ("derived", "derived_analysis_artifact", "trial_level.csv", "text/csv"),
+            "participant_summary_csv": (
+                "derived",
+                "derived_analysis_artifact",
+                "participant_summary.csv",
+                "text/csv",
+            ),
+            "mixed_effects_ready_csv": (
+                "derived",
+                "derived_analysis_artifact",
+                "mixed_effects_ready.csv",
+                "text/csv",
+            ),
+            "pilot_summary_md": ("report", "derived_analysis_artifact", "pilot_summary.md", "text/markdown"),
         }
-        for artifact_type, (category, filename, media_type) in catalog.items():
+        for artifact_type, (category, data_layer, filename, media_type) in catalog.items():
             path = export_dir / filename
             content = payloads.get(artifact_type, "")
             path.write_text(content, encoding="utf-8")
@@ -245,6 +273,7 @@ class AdminExportService:
                 ExportArtifact(
                     artifact_type=artifact_type,
                     category=category,
+                    data_layer=data_layer,
                     filename=filename,
                     media_type=media_type,
                     relative_path=str(path.relative_to(self.export_root)),
@@ -253,12 +282,34 @@ class AdminExportService:
                 )
             )
 
+        incomplete_sources = [name for name, count in source_data.items() if count == 0]
+
         manifest = {
+            "manifest_version": self.MANIFEST_VERSION,
             "run_id": run_id,
+            "scope": {"scope_level": "run", "run_id": run_id},
             "generated_at": generated_at,
             "export_state": "available" if source_data["session_rows"] > 0 else "empty",
             "artifact_policy": "replace_current",
-            "source_data_counts": source_data,
+            "source_of_truth_counts": source_data,
+            "provenance": {
+                "source_tables": [
+                    "participant_sessions",
+                    "session_trials",
+                    "trial_summary_logs",
+                    "trial_event_logs",
+                    "block_questionnaires",
+                ],
+                "derived_from_artifacts": [
+                    "trial_summary_csv",
+                    "session_summary_csv",
+                    "block_questionnaire_csv",
+                ],
+            },
+            "completeness": {
+                "incomplete_source_streams": incomplete_sources,
+                "warnings_present": bool(warnings),
+            },
             "warnings": warnings,
             "artifacts": [asdict(item) for item in artifacts],
         }
