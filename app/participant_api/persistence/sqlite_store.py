@@ -21,7 +21,7 @@ class Migration:
 class SQLiteStore:
     """SQLite-backed persistence with explicit schema migration ownership."""
 
-    CURRENT_SCHEMA_VERSION = 5
+    CURRENT_SCHEMA_VERSION = 6
 
     def __init__(self, db_path: str) -> None:
         self.db_path = db_path
@@ -77,6 +77,7 @@ class SQLiteStore:
             Migration(3, "add_run_slug_and_status_columns", self._migration_003_add_run_columns),
             Migration(4, "add_stimulus_validation_columns", self._migration_004_add_stimulus_validation_columns),
             Migration(5, "enforce_participant_session_run_not_null", self._migration_005_enforce_run_not_null),
+            Migration(6, "add_researcher_users_table", self._migration_006_add_researcher_users_table),
         ]
 
     def _ensure_migration_table(self, conn: sqlite3.Connection) -> None:
@@ -349,6 +350,20 @@ class SQLiteStore:
 
             DROP TABLE participant_sessions;
             ALTER TABLE participant_sessions_new RENAME TO participant_sessions;
+            """
+        )
+
+    def _migration_006_add_researcher_users_table(self, conn: sqlite3.Connection) -> None:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS researcher_users (
+                user_id TEXT PRIMARY KEY,
+                username TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                is_admin INTEGER NOT NULL DEFAULT 1,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL
+            )
             """
         )
 

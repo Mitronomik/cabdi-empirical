@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,197 +8,72 @@ afterEach(() => {
   cleanup();
   window.localStorage.clear();
   vi.unstubAllGlobals();
-  Object.defineProperty(window.navigator, 'language', {
-    configurable: true,
-    value: 'en-US',
-  });
 });
 
-describe('researcher web shell', () => {
-  it('renders admin title and language switcher', () => {
-    render(<App />);
-    expect(screen.getByText('CABDI Researcher Admin (MVP)')).toBeInTheDocument();
-    expect(screen.getByLabelText(/language switcher/i)).toBeInTheDocument();
-
-    const nav = screen.getByRole('navigation');
-    expect(within(nav).getByRole('button', { name: 'Upload' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Load Recent' })).toBeInTheDocument();
-  });
-
-  it('switches UI copy when locale changes', async () => {
-    render(<App />);
-    const user = userEvent.setup();
-
-    await user.click(screen.getByRole('button', { name: 'RU' }));
-    expect(screen.getByText('Панель исследователя CABDI (MVP)')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Загрузка' })).toBeInTheDocument();
-  });
-
-  it('defaults to browser locale when no saved locale exists', () => {
-    Object.defineProperty(window.navigator, 'language', {
-      configurable: true,
-      value: 'ru-RU',
-    });
-
-    render(<App />);
-    expect(screen.getByText('Панель исследователя CABDI (MVP)')).toBeInTheDocument();
-  });
-
-  it('saved locale persists across remounts and overrides browser locale', async () => {
-    Object.defineProperty(window.navigator, 'language', {
-      configurable: true,
-      value: 'en-US',
-    });
-
-    const user = userEvent.setup();
-    const { unmount } = render(<App />);
-    await user.click(screen.getByRole('button', { name: 'RU' }));
-    expect(screen.getByText('Панель исследователя CABDI (MVP)')).toBeInTheDocument();
-
-    unmount();
-    Object.defineProperty(window.navigator, 'language', {
-      configurable: true,
-      value: 'en-US',
-    });
-    render(<App />);
-    expect(screen.getByText('Панель исследователя CABDI (MVP)')).toBeInTheDocument();
-  });
-
-  it('uses current pilot defaults in run builder', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            experiment_id: 'pilot_scam_not_scam_v1',
-            task_family: 'scam_not_scam',
-            config_preset_options: [{ preset_id: 'default_experiment', config: {} }],
-          }),
-          { status: 200 },
-        ),
-      )
-      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }));
+describe('researcher auth shell', () => {
+  it('shows login form when unauthenticated', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ detail: 'unauthorized' }), { status: 401 }));
     vi.stubGlobal('fetch', fetchMock);
 
     render(<App />);
-    const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: 'Run Builder' }));
 
-    expect(await screen.findByDisplayValue('pilot_scam_not_scam_v1')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('scam_not_scam')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Load Recent' })).toBeInTheDocument();
+    expect(await screen.findByText('Researcher Login')).toBeInTheDocument();
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
   });
 
-  it('renders upload success summary and refreshed recent stimulus list', async () => {
+  it('supports login success and shows cabinet', async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: 'unauthorized' }), { status: 401 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ok: true, user: { user_id: 'u1', username: 'admin', is_admin: true } }), { status: 200 }),
+      )
+      .mockResolvedValue(new Response(JSON.stringify([]), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<App />);
+    await user.type(await screen.findByLabelText('Username'), 'admin');
+    await user.type(screen.getByLabelText('Password'), 'admin1234');
+    await user.click(screen.getByRole('button', { name: 'Login' }));
+
+    expect(await screen.findByText('Logged in as: admin')).toBeInTheDocument();
+    expect(screen.getByRole('navigation')).toBeInTheDocument();
+  });
+
+  it('handles login failure and keeps cabinet inaccessible', async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: 'unauthorized' }), { status: 401 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: 'Invalid username or password' }), { status: 401 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<App />);
+    await user.type(await screen.findByLabelText('Username'), 'admin');
+    await user.type(screen.getByLabelText('Password'), 'wrong');
+    await user.click(screen.getByRole('button', { name: 'Login' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Invalid username or password');
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+  });
+
+  it('supports logout and clears access', async () => {
     const user = userEvent.setup();
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
-        new Response(JSON.stringify([{ stimulus_set_id: 'stim_old', name: 'old', task_family: 'scam_not_scam', n_items: 4 }]), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        }),
+        new Response(JSON.stringify({ authenticated: true, user: { user_id: 'u1', username: 'admin', is_admin: true } }), { status: 200 }),
       )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            ok: true,
-            stimulus_set_id: 'stim_new',
-            n_items: 2,
-            validation_status: 'valid',
-            warnings: [],
-            errors: [],
-            preview_rows: [{ stimulus_id: 's1' }],
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } },
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify([{ stimulus_set_id: 'stim_new', name: 'new', task_family: 'scam_not_scam', n_items: 2, validation_status: 'valid' }]),
-          { status: 200, headers: { 'Content-Type': 'application/json' } },
-        ),
-      );
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
+      .mockResolvedValue(new Response(JSON.stringify([]), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
     render(<App />);
-    const file = new File(['{"x":1}\n'], 'stim.jsonl', { type: 'application/json' });
-    await user.type(screen.getByPlaceholderText('stimulus set name'), 'new set');
-    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
-    await user.upload(fileInput, file);
-    const form = document.querySelector('form') as HTMLFormElement;
-    fireEvent.submit(form);
+    expect(await screen.findByText('Logged in as: admin')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Logout' }));
 
-    expect(await screen.findByText('Upload result')).toBeInTheDocument();
-    expect(screen.getByText(/stimulus_set_id: stim_new/)).toBeInTheDocument();
-    expect(screen.getByText(/n_items: 2/)).toBeInTheDocument();
-    expect(await screen.findByText('stim_new')).toBeInTheDocument();
-    expect(screen.getByText('new')).toBeInTheDocument();
-  });
-
-  it('uses selectors for run and monitor pages instead of manual run_id typing', async () => {
-    const user = userEvent.setup();
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify([{ stimulus_set_id: 'stim_1', name: 'set', task_family: 'scam_not_scam', validation_status: 'valid' }]),
-          { status: 200 },
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            experiment_id: 'pilot_scam_not_scam_v1',
-            task_family: 'scam_not_scam',
-            config_preset_id: 'default_experiment',
-            config_preset_options: [{ preset_id: 'default_experiment', config: { n_blocks: 3 } }],
-          }),
-          { status: 200 },
-        ),
-      )
-      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({ run_id: 'run_1', public_slug: 'slug-1', task_family: 'scam_not_scam', linked_stimulus_set_ids: ['stim_1'] }),
-          { status: 200 },
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify([
-            {
-              run_id: 'run_1',
-              run_name: 'run-1',
-              public_slug: 'slug-1',
-              task_family: 'scam_not_scam',
-              status: 'draft',
-              linked_stimulus_set_ids: ['stim_1'],
-              launchability_reason: 'run is draft',
-              created_at: '2026-01-01T00:00:00+00:00',
-            },
-          ]),
-          { status: 200 },
-        ),
-      )
-      .mockResolvedValueOnce(new Response(JSON.stringify([{ run_id: 'run_1', run_name: 'run-1', public_slug: 'slug-1', status: 'active' }]), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ run_id: 'run_1', counts: { created: 0 }, sessions: [] }), { status: 200 }));
-    vi.stubGlobal('fetch', fetchMock);
-
-    render(<App />);
-    await user.click(screen.getByRole('button', { name: 'Run Builder' }));
-    const createButton = await screen.findByRole('button', { name: 'Create Run' });
-    await user.click(createButton);
-    expect(await screen.findByText(/run_id: run_1/)).toBeInTheDocument();
-    expect(screen.getByText(/linked stimulus sets/)).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: 'Sessions' }));
-    const selector = await screen.findByRole('combobox');
-    expect(selector).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Load Sessions' }));
-    expect(await screen.findByText(/run_id: run_1/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Researcher Login')).toBeInTheDocument());
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
   });
 });

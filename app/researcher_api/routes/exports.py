@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
-router = APIRouter(prefix="/admin/api/v1/runs", tags=["admin-exports"])
+from app.researcher_api.auth import require_researcher_auth
+
+router = APIRouter(prefix="/admin/api/v1/runs", tags=["admin-exports"], dependencies=[Depends(require_researcher_auth)])
 
 
 @router.get("/{run_id}/exports")

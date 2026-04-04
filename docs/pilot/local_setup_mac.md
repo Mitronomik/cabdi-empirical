@@ -138,7 +138,7 @@ npm run dev -- --host 127.0.0.1 --port 5174
 
 ### Not implemented / limited today
 
-- No production auth/authorization model (MVP only).
+- Minimal researcher/admin auth only; no full production auth/authorization model yet.
 - No production deployment packaging/orchestration.
 - Persistence supports SQLite (local default) and Postgres (staging-parity backend).
 - This repo does not provide real-world/clinical validation claims.

@@ -144,6 +144,8 @@ def test_upgrade_from_v1_schema_applies_all_migrations(tmp_path: Path) -> None:
         assert {"run_id", "public_session_code", "resume_token_hash", "language", "last_activity_at"}.issubset(
             participant_columns
         )
+        user_columns = {row["name"] for row in conn.execute("SELECT name FROM pragma_table_info('researcher_users')")}
+        assert {"user_id", "username", "password_hash", "is_admin", "is_active", "created_at"}.issubset(user_columns)
     finally:
         conn.close()
 

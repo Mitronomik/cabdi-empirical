@@ -13,6 +13,11 @@ from app.participant_api.persistence.store_factory import create_store
 from app.researcher_api.main import create_app as create_researcher_app
 
 
+def _login_researcher(client: TestClient) -> None:
+    res = client.post("/admin/api/v1/auth/login", json={"username": "admin", "password": "admin1234"})
+    assert res.status_code == 200
+
+
 def test_store_factory_defaults_to_sqlite() -> None:
     store = create_store("pilot/sessions/test.sqlite3")
     assert isinstance(store, SQLiteStore)
@@ -39,6 +44,7 @@ def test_postgres_backend_end_to_end_parity_flow() -> None:
     scoped_dsn = f"{base_dsn}?options=-csearch_path%3D{schema}"
     try:
         researcher = TestClient(create_researcher_app(scoped_dsn))
+        _login_researcher(researcher)
         participant = TestClient(create_participant_app(scoped_dsn))
         payload = (
             '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"title":"Case","body":"a"},'

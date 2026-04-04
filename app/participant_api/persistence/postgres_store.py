@@ -23,7 +23,7 @@ class Migration:
 
 
 class PostgresStore:
-    CURRENT_SCHEMA_VERSION = 5
+    CURRENT_SCHEMA_VERSION = 6
 
     def __init__(self, db_url: str) -> None:
         if psycopg is None:
@@ -77,6 +77,7 @@ class PostgresStore:
             Migration(3, "add_run_slug_and_status_columns", self._migration_003_add_run_columns),
             Migration(4, "add_stimulus_validation_columns", self._migration_004_add_stimulus_validation_columns),
             Migration(5, "enforce_participant_session_run_not_null", self._migration_005_enforce_run_not_null),
+            Migration(6, "add_researcher_users_table", self._migration_006_add_researcher_users_table),
         ]
 
     def _ensure_migration_table(self, conn: Any) -> None:
@@ -269,6 +270,20 @@ class PostgresStore:
                 "Cannot enforce participant_sessions.run_id NOT NULL: found existing rows with NULL/empty run_id."
             )
         conn.execute("ALTER TABLE participant_sessions ALTER COLUMN run_id SET NOT NULL")
+
+    def _migration_006_add_researcher_users_table(self, conn: Any) -> None:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS researcher_users (
+                user_id TEXT PRIMARY KEY,
+                username TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                is_admin INTEGER NOT NULL DEFAULT 1,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
 
     def fetchone(self, query: str, params: tuple[Any, ...]) -> dict[str, Any] | None:
         with self.connect() as conn:
