@@ -2,6 +2,12 @@
 
 This runbook now includes both local development and staging/VPS-like deployment posture for PR-14.
 
+## Scope and mode boundary
+
+- **Synthetic mode** remains script-driven (`make validate`, `python experiments/run_minimal_validation.py`) and is used for stylized empirical checks.
+- **Human-pilot mode** is the operator runtime covered in this runbook (participant + researcher services, run operations, diagnostics/exports, and pre-launch gates).
+- Human-pilot outputs remain bounded pilot evidence; this runbook does not imply whole-framework real-world validation.
+
 ## 1) One-time local developer setup
 
 ```bash
@@ -71,12 +77,13 @@ Required in `deploy/.env` (staging/production-like mode):
 - `PILOT_RESEARCHER_CORS_ORIGINS`
 - `PILOT_RESEARCHER_PASSWORD`
 - `PILOT_RESEARCHER_SESSION_SECRET`
+- `PILOT_RESEARCHER_COOKIE_SECURE=true`
 
 Runtime behavior:
 
 - In `PILOT_ENV=staging|production`, APIs fail fast if required deployment configuration is missing.
 - In production-like mode, `PILOT_DB_URL` must be Postgres.
-- Researcher session cookie defaults to `Secure=true` in production-like mode.
+- Researcher session cookie must be explicitly configured and secure (`PILOT_RESEARCHER_COOKIE_SECURE=true`) in production-like mode.
 
 ## 6) Bring-up checks (packaged posture)
 

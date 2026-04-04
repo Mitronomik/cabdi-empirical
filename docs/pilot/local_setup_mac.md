@@ -139,7 +139,7 @@ npm run dev -- --host 127.0.0.1 --port 5174
 ### Not implemented / limited today
 
 - Minimal researcher/admin auth only; no full production auth/authorization model yet.
-- No production deployment packaging/orchestration.
+- Deployment packaging exists as a minimal staging/VPS-like Compose posture (see `docs/pilot/runbook.md`), but not full infrastructure-as-code platform automation.
 - Persistence supports SQLite (local default) and Postgres (staging-parity backend).
 - This repo does not provide real-world/clinical validation claims.
 
