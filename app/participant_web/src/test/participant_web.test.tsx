@@ -273,3 +273,26 @@ test('block-end questionnaire submits and completion flow appears', async () => 
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(7));
   await screen.findByRole('heading', { name: /complete/i });
 });
+
+test('saved resume token is checked server-side and reused for session resume', async () => {
+  window.localStorage.setItem('participant_web.resume_token.public-run-a', 'resume-token-1');
+  const fetchMock = mockFetchSequence([
+    {
+      status: 200,
+      body: { run_slug: 'public-run-a', public_title: 'Run A', launchable: true, run_status: 'active' },
+    },
+    { status: 200, body: { resume_status: 'resumable', session_id: 'sess_1', session_status: 'in_progress' } },
+    { status: 200, body: { session_id: 'sess_1', status: 'in_progress', entry_mode: 'resumed', resume_token: 'resume-token-1' } },
+    { status: 200, body: { session_id: 'sess_1', status: 'in_progress' } },
+    { status: 200, body: makeTrial() },
+  ]);
+
+  render(<App />);
+  const user = userEvent.setup();
+  await proceedToInstructionsAndStart(user);
+  await screen.findByTestId('trial-layout');
+
+  expect(fetchMock.mock.calls[1][0]).toContain('/api/v1/sessions/resume-info');
+  expect(String((fetchMock.mock.calls[2][1] as RequestInit).body)).toContain('"resume_token":"resume-token-1"');
+  expect(window.localStorage.getItem('participant_web.resume_token.public-run-a')).toBe('resume-token-1');
+});

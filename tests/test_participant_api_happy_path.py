@@ -514,3 +514,141 @@ def test_final_submit_unknown_session_returns_404(tmp_path):
     client = _make_client(tmp_path)
     res = client.post("/api/v1/sessions/sess_missing/final-submit")
     assert res.status_code == 404
+
+
+def test_session_creation_returns_resume_identity(tmp_path):
+    client = _make_client(tmp_path)
+    run_slug = _bootstrap_run(tmp_path)
+
+    created = client.post("/api/v1/sessions", json={"participant_id": "p_resume_identity", "run_slug": run_slug})
+    assert created.status_code == 200
+    body = created.json()
+    assert body["entry_mode"] == "created"
+    assert body["resume_token"]
+    assert body["public_session_code"]
+
+    row = client.app.state.store.fetchone(
+        "SELECT resume_token_hash, public_session_code FROM participant_sessions WHERE session_id = ?",
+        (body["session_id"],),
+    )
+    assert row is not None
+    assert row["resume_token_hash"]
+    assert row["public_session_code"] == body["public_session_code"]
+
+
+def test_resume_info_and_create_session_resume_existing_unfinished_session(tmp_path):
+    client = _make_client(tmp_path)
+    run_slug = _bootstrap_run(tmp_path)
+
+    first = client.post("/api/v1/sessions", json={"participant_id": "p_resume", "run_slug": run_slug}).json()
+    session_id = first["session_id"]
+    resume_token = first["resume_token"]
+    assert client.post(f"/api/v1/sessions/{session_id}/start").status_code == 200
+
+    trial = client.get(f"/api/v1/sessions/{session_id}/next-trial").json()
+    submit = client.post(
+        f"/api/v1/sessions/{session_id}/trials/{trial['trial_id']}/submit",
+        json={
+            "human_response": trial["stimulus"]["true_label"],
+            "reaction_time_ms": 900,
+            "self_confidence": 70,
+            "reason_clicked": False,
+            "evidence_opened": False,
+            "verification_completed": False,
+        },
+    )
+    assert submit.status_code == 200
+
+    resume_info = client.post(
+        "/api/v1/sessions/resume-info",
+        json={"run_slug": run_slug, "resume_token": resume_token},
+    )
+    assert resume_info.status_code == 200
+    assert resume_info.json()["resume_status"] == "resumable"
+    assert resume_info.json()["session_id"] == session_id
+
+    resumed = client.post(
+        "/api/v1/sessions",
+        json={"participant_id": "p_resume_other_name", "run_slug": run_slug, "resume_token": resume_token},
+    )
+    assert resumed.status_code == 200
+    assert resumed.json()["entry_mode"] == "resumed"
+    assert resumed.json()["session_id"] == session_id
+
+    session_count = client.app.state.store.fetchone(
+        "SELECT COUNT(*) AS n FROM participant_sessions WHERE run_id = (SELECT run_id FROM researcher_runs WHERE public_slug = ?)",
+        (run_slug,),
+    )
+    assert session_count is not None
+    assert session_count["n"] == 1
+
+
+def test_resume_invalid_token_is_explicit_and_falls_back_to_new_session(tmp_path):
+    client = _make_client(tmp_path)
+    run_slug = _bootstrap_run(tmp_path)
+
+    invalid_info = client.post(
+        "/api/v1/sessions/resume-info",
+        json={"run_slug": run_slug, "resume_token": "invalid-token"},
+    )
+    assert invalid_info.status_code == 200
+    assert invalid_info.json()["resume_status"] == "invalid"
+
+    created = client.post(
+        "/api/v1/sessions",
+        json={"participant_id": "p_new_after_invalid", "run_slug": run_slug, "resume_token": "invalid-token"},
+    )
+    assert created.status_code == 200
+    assert created.json()["entry_mode"] == "created"
+
+
+def test_finalized_session_is_not_resumable_and_does_not_reopen(tmp_path):
+    client = _make_client(tmp_path)
+    run_slug = _bootstrap_run(tmp_path)
+
+    created = client.post("/api/v1/sessions", json={"participant_id": "p_finalized_resume", "run_slug": run_slug}).json()
+    session_id = created["session_id"]
+    resume_token = created["resume_token"]
+    assert client.post(f"/api/v1/sessions/{session_id}/start").status_code == 200
+    _progress_session_to_awaiting_final_submit(client, session_id)
+    assert client.post(f"/api/v1/sessions/{session_id}/final-submit").status_code == 200
+
+    resume_info = client.post(
+        "/api/v1/sessions/resume-info",
+        json={"run_slug": run_slug, "resume_token": resume_token},
+    )
+    assert resume_info.status_code == 200
+    assert resume_info.json()["resume_status"] == "finalized"
+
+    resumed = client.post(
+        "/api/v1/sessions",
+        json={"participant_id": "p_finalized_resume_attempt", "run_slug": run_slug, "resume_token": resume_token},
+    )
+    assert resumed.status_code == 409
+    assert resumed.json()["detail"] == "resume_not_allowed:session_finalized"
+
+
+def test_awaiting_final_submit_session_resumes_without_reopening_trials(tmp_path):
+    client = _make_client(tmp_path)
+    run_slug = _bootstrap_run(tmp_path)
+
+    created = client.post("/api/v1/sessions", json={"participant_id": "p_wait_resume", "run_slug": run_slug}).json()
+    session_id = created["session_id"]
+    resume_token = created["resume_token"]
+    assert client.post(f"/api/v1/sessions/{session_id}/start").status_code == 200
+    _progress_session_to_awaiting_final_submit(client, session_id)
+
+    resumed = client.post(
+        "/api/v1/sessions",
+        json={"participant_id": "p_wait_resume_new", "run_slug": run_slug, "resume_token": resume_token},
+    )
+    assert resumed.status_code == 200
+    assert resumed.json()["entry_mode"] == "resumed"
+
+    start = client.post(f"/api/v1/sessions/{session_id}/start")
+    assert start.status_code == 200
+    assert start.json()["status"] == "awaiting_final_submit"
+
+    next_trial = client.get(f"/api/v1/sessions/{session_id}/next-trial")
+    assert next_trial.status_code == 200
+    assert next_trial.json()["status"] == "awaiting_final_submit"

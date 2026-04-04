@@ -35,6 +35,8 @@ class SQLiteStore:
                     participant_id TEXT NOT NULL,
                     experiment_id TEXT NOT NULL,
                     run_id TEXT NOT NULL,
+                    public_session_code TEXT,
+                    resume_token_hash TEXT,
                     assigned_order TEXT NOT NULL,
                     stimulus_set_map TEXT NOT NULL,
                     current_block_index INTEGER NOT NULL,
@@ -123,6 +125,8 @@ class SQLiteStore:
                 """
             )
             self._ensure_column(conn, "participant_sessions", "run_id", "TEXT")
+            self._ensure_column(conn, "participant_sessions", "public_session_code", "TEXT")
+            self._ensure_column(conn, "participant_sessions", "resume_token_hash", "TEXT")
             self._ensure_column(conn, "participant_sessions", "language", "TEXT NOT NULL DEFAULT 'en'")
             self._ensure_column(conn, "participant_sessions", "last_activity_at", "TEXT")
             self._ensure_column(conn, "researcher_runs", "public_slug", "TEXT")
