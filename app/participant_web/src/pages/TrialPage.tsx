@@ -40,9 +40,10 @@ export function TrialPage({ trial, loading, onSubmit }: Props) {
   const stimulusBody = String(trial.stimulus.payload.body ?? trial.stimulus.payload.prompt ?? t('trial.noPrompt'));
 
   const progress = trial.progress ?? { completed_trials: 0, total_trials: 0, current_ordinal: 0 };
-  const currentOrdinal = Math.max(1, Number(progress.current_ordinal || 1));
-  const totalTrials = Math.max(currentOrdinal, Number(progress.total_trials || 1));
-  const progressPct = Math.round((Math.max(0, currentOrdinal - 1) / Math.max(totalTrials, 1)) * 100);
+  const currentOrdinal = Math.max(0, Number(progress.current_ordinal || 0));
+  const totalTrials = Math.max(0, Number(progress.total_trials || 0));
+  const completedTrials = Math.max(0, Number(progress.completed_trials || 0));
+  const progressPct = totalTrials > 0 ? Math.round((Math.min(completedTrials, totalTrials) / totalTrials) * 100) : 0;
 
   const verificationRequired =
     trial.policy_decision.verification_mode === 'forced_checkbox' ||

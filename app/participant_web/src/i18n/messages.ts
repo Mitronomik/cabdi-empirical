@@ -23,6 +23,10 @@ export type MessageKey =
   | 'entry.title'
   | 'entry.missingRun'
   | 'entry.contactCoordinator'
+  | 'entry.resumeResumed'
+  | 'entry.resumeInvalid'
+  | 'entry.resumeFinalized'
+  | 'entry.resumeNotResumable'
   | 'consent.title'
   | 'consent.description'
   | 'consent.checkbox'
@@ -104,6 +108,10 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
     'entry.title': 'Study link needed',
     'entry.missingRun': 'To begin, open the invitation link provided by the study team.',
     'entry.contactCoordinator': 'If this keeps happening, contact your study coordinator.',
+    'entry.resumeResumed': 'We found your saved progress and will resume this session.',
+    'entry.resumeInvalid': 'Saved resume data was invalid, so a new session will be started.',
+    'entry.resumeFinalized': 'Your previous session was already finalized. You may start a new session.',
+    'entry.resumeNotResumable': 'Your previous session cannot be resumed, so a new session will be started.',
     'consent.title': 'Consent',
     'consent.description': 'This is a research task. Your responses will be recorded for pilot research purposes.',
     'consent.checkbox': 'I consent to participate in this research task.',
@@ -184,6 +192,10 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
     'entry.title': 'Нужна ссылка на исследование',
     'entry.missingRun': 'Чтобы начать, откройте ссылку-приглашение от исследовательской команды.',
     'entry.contactCoordinator': 'Если проблема повторяется, свяжитесь с координатором исследования.',
+    'entry.resumeResumed': 'Мы нашли сохраненный прогресс и продолжим эту сессию.',
+    'entry.resumeInvalid': 'Сохраненные данные продолжения некорректны, будет начата новая сессия.',
+    'entry.resumeFinalized': 'Предыдущая сессия уже финализирована. Вы можете начать новую сессию.',
+    'entry.resumeNotResumable': 'Предыдущую сессию нельзя продолжить, будет начата новая сессия.',
     'consent.title': 'Согласие',
     'consent.description': 'Это исследовательское задание. Ваши ответы будут записаны для пилотного исследования.',
     'consent.checkbox': 'Я согласен(на) участвовать в этом исследовательском задании.',

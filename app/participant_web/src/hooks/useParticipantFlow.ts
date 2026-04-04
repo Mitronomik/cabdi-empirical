@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   createSession,
@@ -15,6 +15,11 @@ import { messages, type Locale } from '../i18n/messages';
 import type { QuestionnairePayload, TrialPayload } from '../lib/types';
 
 type Stage = 'consent' | 'instructions' | 'trial' | 'questionnaire' | 'awaiting_final_submit' | 'completion';
+type ResumeBannerKey =
+  | 'entry.resumeResumed'
+  | 'entry.resumeInvalid'
+  | 'entry.resumeFinalized'
+  | 'entry.resumeNotResumable';
 
 interface PublicRunInfo {
   run_slug: string;
@@ -66,6 +71,9 @@ function toFriendlyError(detail: unknown): string {
   if (detail.includes('Unknown run_slug')) {
     return localizedError('error.runSlugInvalid');
   }
+  if (detail.includes('run not found')) {
+    return localizedError('error.runSlugInvalid');
+  }
   if (detail.includes('run_slug is required')) {
     return localizedError('error.runSlugRequired');
   }
@@ -90,6 +98,7 @@ export function useParticipantFlow() {
   const [completionCode, setCompletionCode] = useState<string | null>(null);
   const [runSlug] = useState(resolveRunSlugFromUrl);
   const [publicRun, setPublicRun] = useState<PublicRunInfo | null>(null);
+  const [resumeBannerKey, setResumeBannerKey] = useState<ResumeBannerKey | null>(null);
 
   const trialStartMsRef = useRef<number>(0);
 
@@ -155,6 +164,27 @@ export function useParticipantFlow() {
     }
   }
 
+  async function loadResumeSurfaceHint() {
+    if (!runSlug.trim()) return;
+    const savedResumeToken = window.localStorage.getItem(resumeStorageKey(runSlug));
+    if (!savedResumeToken) return;
+    try {
+      const resumeInfo = await fetchResumeInfo(runSlug, savedResumeToken);
+      if (resumeInfo.resume_status === 'resumable') {
+        setResumeBannerKey('entry.resumeResumed');
+      } else if (resumeInfo.resume_status === 'finalized') {
+        setResumeBannerKey('entry.resumeFinalized');
+        window.localStorage.removeItem(resumeStorageKey(runSlug));
+      } else if (resumeInfo.resume_status === 'invalid') {
+        setResumeBannerKey('entry.resumeInvalid');
+      } else if (resumeInfo.resume_status === 'not_resumable') {
+        setResumeBannerKey('entry.resumeNotResumable');
+      }
+    } catch {
+      // Keep entry flow resilient; run launchability still gates start.
+    }
+  }
+
   async function beginSession() {
     if (!runSlug.trim()) {
       setError(localizedError('error.runSlugRequired'));
@@ -165,15 +195,29 @@ export function useParticipantFlow() {
     try {
       const runInfo = publicRun ?? (await fetchPublicRun(runSlug));
       setPublicRun(runInfo);
+      if (!runInfo.launchable) {
+        setError(localizedError('error.runNotOpen'));
+        setLoading(false);
+        return;
+      }
       const savedResumeToken = window.localStorage.getItem(resumeStorageKey(runSlug));
       let resumeTokenForCreate: string | null = null;
+      setResumeBannerKey(null);
       if (savedResumeToken) {
         const resumeInfo = await fetchResumeInfo(runSlug, savedResumeToken);
         if (resumeInfo.resume_status === 'resumable') {
           resumeTokenForCreate = savedResumeToken;
+          setResumeBannerKey('entry.resumeResumed');
         }
         if (resumeInfo.resume_status === 'finalized') {
           window.localStorage.removeItem(resumeStorageKey(runSlug));
+          setResumeBannerKey('entry.resumeFinalized');
+        }
+        if (resumeInfo.resume_status === 'invalid') {
+          setResumeBannerKey('entry.resumeInvalid');
+        }
+        if (resumeInfo.resume_status === 'not_resumable') {
+          setResumeBannerKey('entry.resumeNotResumable');
         }
       }
       const created = await createSession(runSlug, detectLocale(), resumeTokenForCreate);
@@ -187,6 +231,13 @@ export function useParticipantFlow() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (!runSlug.trim()) return;
+    void loadPublicRunInfo();
+    void loadResumeSurfaceHint();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runSlug]);
 
   async function submitCurrentTrial(params: {
     humanResponse: string;
@@ -270,6 +321,7 @@ export function useParticipantFlow() {
     runSlug,
     publicRun,
     onboardingReady,
+    resumeBannerKey,
     setStage,
     loadPublicRunInfo,
     beginSession,
