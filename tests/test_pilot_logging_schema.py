@@ -14,6 +14,8 @@ from packages.logging_schema.pilot_logs import TrialEventLog, TrialSummaryLog
 def _bootstrap_run(tmp_path) -> str:
     db_path = str(tmp_path / "pilot.sqlite3")
     researcher = TestClient(create_researcher_app(db_path))
+    login = researcher.post("/admin/api/v1/auth/login", json={"username": "admin", "password": "admin1234"})
+    assert login.status_code == 200
     payload = (
         '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"title":"Case 1","body":"a"},'
         '"true_label":"scam","difficulty_prior":"low","model_prediction":"scam","model_confidence":"high",'
@@ -92,7 +94,7 @@ def test_completed_trials_have_summary_rows_and_required_fields(tmp_path):
     db_path = str(tmp_path / "pilot.sqlite3")
     run_slug = _bootstrap_run(tmp_path)
     client = TestClient(create_app(db_path))
-    created = client.post("/api/v1/sessions", json={"participant_id": "p_log", "run_slug": run_slug}).json()
+    created = client.post("/api/v1/sessions", json={"run_slug": run_slug}).json()
     session_id = created["session_id"]
     client.post(f"/api/v1/sessions/{session_id}/start")
 

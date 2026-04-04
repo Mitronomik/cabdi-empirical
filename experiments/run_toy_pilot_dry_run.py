@@ -350,11 +350,9 @@ def run_dry_run(config_path: str | Path, output_dir: str | Path) -> dict[str, An
     session_runs = []
     profile_names = _assign_profiles(config["profile_mix"], int(config["n_sessions"]), rng)
     for session_idx in range(int(config["n_sessions"])):
-        participant_id = f"dry_p_{session_idx + 1:03d}"
         create_res = participant_client.post(
             "/api/v1/sessions",
             json={
-                "participant_id": participant_id,
                 "run_slug": run_slug,
             },
         )

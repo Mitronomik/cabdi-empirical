@@ -106,7 +106,7 @@ export function useParticipantFlow() {
     }
   }
 
-  async function beginSession(participantId: string, activeRunSlug: string) {
+  async function beginSession(activeRunSlug: string) {
     const normalizedRunSlug = activeRunSlug.trim();
     if (!normalizedRunSlug) {
       setError('run_slug is required');
@@ -127,7 +127,7 @@ export function useParticipantFlow() {
           window.localStorage.removeItem(resumeStorageKey(normalizedRunSlug));
         }
       }
-      const created = await createSession(participantId, normalizedRunSlug, detectLocale(), resumeTokenForCreate);
+      const created = await createSession(normalizedRunSlug, detectLocale(), resumeTokenForCreate);
       setSessionId(created.session_id);
       setCompletedTrials(0);
       setTotalTrials(1);

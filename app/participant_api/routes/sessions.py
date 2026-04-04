@@ -10,7 +10,6 @@ router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
 
 class CreateSessionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    participant_id: str
     run_slug: str
     language: Literal["en", "ru"] | None = None
     resume_token: str | None = None
@@ -26,7 +25,6 @@ class ResumeInfoRequest(BaseModel):
 def create_session(req: CreateSessionRequest, request: Request) -> dict:
     try:
         return request.app.state.session_service.create_session(
-            req.participant_id,
             run_slug=req.run_slug,
             language=req.language,
             resume_token=req.resume_token,

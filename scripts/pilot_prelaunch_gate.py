@@ -9,7 +9,6 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
@@ -95,7 +94,7 @@ def _submit_trial(participant: TestClient, session_id: str, trial_payload: dict[
 def _exercise_session_integrity(participant: TestClient, run_slug: str) -> dict[str, Any]:
     create = participant.post(
         "/api/v1/sessions",
-        json={"participant_id": f"gate_p_{uuid4().hex[:8]}", "run_slug": run_slug, "language": "en"},
+        json={"run_slug": run_slug, "language": "en"},
     )
     create.raise_for_status()
     session = create.json()
@@ -152,7 +151,7 @@ def _run_concurrent_smoke(
         with TestClient(participant_app) as client:
             create = client.post(
                 "/api/v1/sessions",
-                json={"participant_id": f"smoke_{i}_{uuid4().hex[:6]}", "run_slug": run_slug, "language": "en"},
+                json={"run_slug": run_slug, "language": "en"},
             )
             create.raise_for_status()
             payload = create.json()

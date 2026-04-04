@@ -24,8 +24,6 @@ export type MessageKey =
   | 'instructions.item.aiWrong'
   | 'instructions.item.noBlindFollow'
   | 'instructions.item.practice'
-  | 'instructions.participantIdLabel'
-  | 'instructions.participantIdPlaceholder'
   | 'instructions.runSlugLabel'
   | 'instructions.runSlugPlaceholder'
   | 'instructions.startPractice'
@@ -91,8 +89,6 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
     'instructions.item.aiWrong': 'The AI can be wrong.',
     'instructions.item.noBlindFollow': 'Do not blindly follow the AI recommendation.',
     'instructions.item.practice': 'You will complete practice trials before the main blocks.',
-    'instructions.participantIdLabel': 'Participant ID',
-    'instructions.participantIdPlaceholder': 'e.g., p_001',
     'instructions.runSlugLabel': 'Run link slug',
     'instructions.runSlugPlaceholder': 'e.g., spring-2026-cohort-a',
     'instructions.startPractice': 'Start practice',
@@ -158,8 +154,6 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
     'instructions.item.noBlindFollow': 'Не следуйте рекомендации ИИ вслепую.',
     'instructions.item.practice':
       'Перед основными блоками вы пройдёте тренировочные раунды.',
-    'instructions.participantIdLabel': 'ID участника',
-    'instructions.participantIdPlaceholder': 'например, p_001',
     'instructions.runSlugLabel': 'Публичный slug запуска',
     'instructions.runSlugPlaceholder': 'например, spring-2026-cohort-a',
     'instructions.startPractice': 'Начать тренировку',

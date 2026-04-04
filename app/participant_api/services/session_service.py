@@ -50,7 +50,6 @@ class SessionService:
 
     def create_session(
         self,
-        participant_id: str,
         run_slug: str,
         language: str | None = None,
         resume_token: str | None = None,
@@ -80,6 +79,7 @@ class SessionService:
             run_task_family=run["task_family"],
         )
         stimuli = self._load_run_stimuli(run)
+        participant_id = self._generate_participant_id()
         order_id, assigned_order = assign_order_id(participant_id, experiment.experiment_id)
         session_id = f"sess_{uuid4().hex[:12]}"
         public_session_code = self._generate_public_session_code()
@@ -185,6 +185,16 @@ class SessionService:
             candidate = secrets.token_hex(4).upper()
             existing = self.store.fetchone(
                 "SELECT session_id FROM participant_sessions WHERE public_session_code = ?",
+                (candidate,),
+            )
+            if existing is None:
+                return candidate
+
+    def _generate_participant_id(self) -> str:
+        while True:
+            candidate = f"anon_{secrets.token_hex(8)}"
+            existing = self.store.fetchone(
+                "SELECT session_id FROM participant_sessions WHERE participant_id = ? LIMIT 1",
                 (candidate,),
             )
             if existing is None:

@@ -14,7 +14,6 @@ import './styles.css';
 
 function AppBody() {
   const [consentChecked, setConsentChecked] = useState(false);
-  const [participantId, setParticipantId] = useState('p_001');
   const { t } = useLocale();
 
   const {
@@ -57,12 +56,10 @@ function AppBody() {
 
       {stage === 'instructions' && (
         <InstructionsPage
-          participantId={participantId}
-          setParticipantId={setParticipantId}
           runSlug={runSlug}
           setRunSlug={setRunSlug}
           loading={loading}
-          onStart={() => beginSession(participantId, runSlug)}
+          onStart={() => beginSession(runSlug)}
         />
       )}
 

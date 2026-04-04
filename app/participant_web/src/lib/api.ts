@@ -28,14 +28,13 @@ export interface NextTrialResponseCompleted {
 }
 
 export async function createSession(
-  participantId: string,
   runSlug: string,
   language: "en" | "ru",
   resumeToken?: string | null,
 ): Promise<{ session_id: string; status: string; entry_mode: 'created' | 'resumed'; resume_token: string }> {
   return request('/api/v1/sessions', {
     method: 'POST',
-    body: JSON.stringify({ participant_id: participantId, run_slug: runSlug, language, resume_token: resumeToken ?? undefined }),
+    body: JSON.stringify({ run_slug: runSlug, language, resume_token: resumeToken ?? undefined }),
   });
 }
 
