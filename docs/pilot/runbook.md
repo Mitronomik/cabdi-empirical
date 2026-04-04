@@ -45,7 +45,7 @@ make run-researcher-web
 
 - Participant API docs: `http://localhost:8000/docs`
 - Participant API health: `http://localhost:8000/health`
-- Researcher API docs: `http://localhost:8001/docs`
+- Researcher API docs: disabled in PR-13 (admin surface no longer publicly introspectable)
 - Participant web: `http://localhost:5173`
 - Researcher web: `http://localhost:5174`
 
@@ -78,11 +78,14 @@ python experiments/run_pilot_analysis.py \
 
 - Both APIs share one DB target. Default remains SQLite (`pilot/sessions/pilot_sessions.sqlite3`) via `PILOT_DB_PATH`.
 - For staging-parity runs, set `PILOT_DB_URL` to Postgres (for example: `postgresql://user:pass@localhost:5432/cabdi_pilot`).
+- Researcher/admin auth bootstrap defaults (local only): username `admin`, password `admin1234`.
+- Override researcher/admin bootstrap credentials with `PILOT_RESEARCHER_USERNAME` and `PILOT_RESEARCHER_PASSWORD`.
+- In production-like mode (`PILOT_ENV=production|staging`), set `PILOT_RESEARCHER_PASSWORD` and `PILOT_RESEARCHER_SESSION_SECRET` explicitly.
 - Participant session creation is run-bound: `POST /api/v1/sessions` requires `run_slug` (public entry), and only `active` runs accept new participant sessions.
 - Participant web entry now uses public slug (via `?run_slug=<public-slug>` or manual input in instructions); optional local default can be set with `VITE_PARTICIPANT_RUN_SLUG`.
 - Researcher run creation defaults to `draft`; run must be explicitly activated (`POST /admin/api/v1/runs/{run_id}/activate`) before participant session creation is allowed.
 
 ## 9) Current limitations
 
-- MVP local mode only (no auth, no hardened ops).
+- MVP local mode only (minimal researcher auth added; no reverse-proxy or hardened deployment controls yet).
 - Scientific interpretation remains bounded to synthetic/dry-run claims as documented in repository guidance.

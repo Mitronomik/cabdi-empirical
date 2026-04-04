@@ -7,6 +7,11 @@ from app.participant_api.persistence.sqlite_store import dumps
 from app.researcher_api.main import create_app as create_researcher_app
 
 
+def _login_researcher(client: TestClient) -> None:
+    res = client.post("/admin/api/v1/auth/login", json={"username": "admin", "password": "admin1234"})
+    assert res.status_code == 200
+
+
 def _upload_stimulus(client: TestClient) -> str:
     payload = (
         '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"title":"Case 1","body":"a"},'
@@ -51,6 +56,7 @@ def _complete_one_non_practice_trial(participant: TestClient, session_id: str) -
 def test_create_run_and_session_monitor_and_diagnostics(tmp_path):
     db_path = str(tmp_path / "pilot.sqlite3")
     researcher = TestClient(create_researcher_app(db_path))
+    _login_researcher(researcher)
     participant = TestClient(create_participant_app(db_path))
 
     stimulus_set_id = _upload_stimulus(researcher)
@@ -125,6 +131,7 @@ def test_create_run_and_session_monitor_and_diagnostics(tmp_path):
 def test_run_lifecycle_transitions_and_invalid_transition_errors(tmp_path):
     db_path = str(tmp_path / "pilot.sqlite3")
     researcher = TestClient(create_researcher_app(db_path))
+    _login_researcher(researcher)
 
     stimulus_set_id = _upload_stimulus(researcher)
     run_res = researcher.post(
@@ -168,6 +175,7 @@ def test_run_lifecycle_transitions_and_invalid_transition_errors(tmp_path):
 def test_closed_runs_remain_readable_for_diagnostics_and_exports(tmp_path):
     db_path = str(tmp_path / "pilot.sqlite3")
     researcher = TestClient(create_researcher_app(db_path))
+    _login_researcher(researcher)
     participant = TestClient(create_participant_app(db_path))
 
     stimulus_set_id = _upload_stimulus(researcher)
@@ -203,6 +211,7 @@ def test_closed_runs_remain_readable_for_diagnostics_and_exports(tmp_path):
 def test_session_monitor_distinguishes_awaiting_final_submit_and_finalized(tmp_path):
     db_path = str(tmp_path / "pilot.sqlite3")
     researcher = TestClient(create_researcher_app(db_path))
+    _login_researcher(researcher)
     participant = TestClient(create_participant_app(db_path))
 
     stimulus_set_id = _upload_stimulus(researcher)
@@ -248,6 +257,7 @@ def test_session_monitor_distinguishes_awaiting_final_submit_and_finalized(tmp_p
 def test_run_diagnostics_and_exports_share_run_scoped_truth(tmp_path):
     db_path = str(tmp_path / "pilot.sqlite3")
     researcher = TestClient(create_researcher_app(db_path))
+    _login_researcher(researcher)
     participant = TestClient(create_participant_app(db_path))
 
     stimulus_set_id = _upload_stimulus(researcher)
@@ -290,6 +300,7 @@ def test_run_diagnostics_and_exports_share_run_scoped_truth(tmp_path):
 def test_budget_diagnostics_detect_display_and_interaction_drift(tmp_path):
     db_path = str(tmp_path / "pilot.sqlite3")
     researcher = TestClient(create_researcher_app(db_path))
+    _login_researcher(researcher)
     participant = TestClient(create_participant_app(db_path))
     stimulus_set_id = _upload_stimulus(researcher)
     run_res = researcher.post(
@@ -390,6 +401,7 @@ def test_budget_diagnostics_detect_display_and_interaction_drift(tmp_path):
 def test_budget_diagnostics_warn_on_incomplete_basis(tmp_path):
     db_path = str(tmp_path / "pilot.sqlite3")
     researcher = TestClient(create_researcher_app(db_path))
+    _login_researcher(researcher)
     participant = TestClient(create_participant_app(db_path))
     stimulus_set_id = _upload_stimulus(researcher)
     run_res = researcher.post(

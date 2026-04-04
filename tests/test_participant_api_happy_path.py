@@ -8,6 +8,11 @@ from app.participant_api.main import create_app
 from app.researcher_api.main import create_app as create_researcher_app
 
 
+def _login_researcher(client: TestClient) -> None:
+    res = client.post("/admin/api/v1/auth/login", json={"username": "admin", "password": "admin1234"})
+    assert res.status_code == 200
+
+
 def _make_client(tmp_path):
     db_path = tmp_path / "pilot_api.sqlite3"
     app = create_app(str(db_path))
@@ -46,6 +51,7 @@ def _progress_session_to_awaiting_final_submit(client: TestClient, session_id: s
 def _bootstrap_run(tmp_path) -> str:
     db_path = str(tmp_path / "pilot_api.sqlite3")
     researcher = TestClient(create_researcher_app(db_path))
+    _login_researcher(researcher)
     payload = (
         '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"title":"Case","body":"a"},'
         '"true_label":"scam","difficulty_prior":"low","model_prediction":"scam","model_confidence":"high",'
@@ -75,6 +81,7 @@ def _bootstrap_run(tmp_path) -> str:
 def _bootstrap_run_with_details(tmp_path) -> dict[str, str]:
     db_path = str(tmp_path / "pilot_api.sqlite3")
     researcher = TestClient(create_researcher_app(db_path))
+    _login_researcher(researcher)
     payload = (
         '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"title":"Case","body":"original"},'
         '"true_label":"scam","difficulty_prior":"low","model_prediction":"scam","model_confidence":"high",'
@@ -225,6 +232,7 @@ def test_session_creation_rejects_non_active_run(tmp_path):
     client = _make_client(tmp_path)
     db_path = str(tmp_path / "pilot_api.sqlite3")
     researcher = TestClient(create_researcher_app(db_path))
+    _login_researcher(researcher)
     payload = (
         '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"title":"Case","body":"a"},'
         '"true_label":"scam","difficulty_prior":"low","model_prediction":"scam","model_confidence":"high",'
@@ -257,6 +265,7 @@ def test_session_creation_rejects_paused_and_closed_runs(tmp_path):
     client = _make_client(tmp_path)
     db_path = str(tmp_path / "pilot_api.sqlite3")
     researcher = TestClient(create_researcher_app(db_path))
+    _login_researcher(researcher)
     payload = (
         '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"title":"Case","body":"a"},'
         '"true_label":"scam","difficulty_prior":"low","model_prediction":"scam","model_confidence":"high",'

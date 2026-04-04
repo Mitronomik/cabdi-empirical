@@ -13,7 +13,7 @@ async function parseError(res: Response): Promise<string> {
 }
 
 export async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`)
+  const res = await fetch(`${BASE}${path}`, { credentials: 'include' })
   if (!res.ok) throw new Error(await parseError(res))
   return res.json()
 }
@@ -21,6 +21,7 @@ export async function apiGet<T>(path: string): Promise<T> {
 export async function createRun(payload: Record<string, unknown>) {
   const res = await fetch(`${BASE}/admin/api/v1/runs`, {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
@@ -31,6 +32,7 @@ export async function createRun(payload: Record<string, unknown>) {
 export async function apiPost<T>(path: string, payload?: Record<string, unknown>): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: payload ? JSON.stringify(payload) : undefined,
   })
@@ -39,9 +41,26 @@ export async function apiPost<T>(path: string, payload?: Record<string, unknown>
 }
 
 export async function uploadStimuli(form: FormData) {
-  const res = await fetch(`${BASE}/admin/api/v1/stimuli/upload`, { method: 'POST', body: form })
+  const res = await fetch(`${BASE}/admin/api/v1/stimuli/upload`, { method: 'POST', credentials: 'include', body: form })
   if (!res.ok) throw new Error(await parseError(res))
   return res.json()
+}
+
+export function login(username: string, password: string) {
+  return apiPost<{ ok: boolean; user: { user_id: string; username: string; is_admin: boolean } }>(
+    '/admin/api/v1/auth/login',
+    { username, password },
+  )
+}
+
+export function logout() {
+  return apiPost<{ ok: boolean }>('/admin/api/v1/auth/logout')
+}
+
+export function getCurrentUser() {
+  return apiGet<{ authenticated: boolean; user: { user_id: string; username: string; is_admin: boolean } }>(
+    '/admin/api/v1/auth/me',
+  )
 }
 
 export function listStimuli() {

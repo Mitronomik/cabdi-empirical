@@ -9,6 +9,11 @@ from app.participant_api.main import create_app as create_participant_app
 from app.researcher_api.main import create_app as create_researcher_app
 
 
+def _login_researcher(client: TestClient) -> None:
+    res = client.post("/admin/api/v1/auth/login", json={"username": "admin", "password": "admin1234"})
+    assert res.status_code == 200
+
+
 def _bootstrap_run(researcher: TestClient) -> dict[str, str]:
     payload = (
         '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"title":"Case 1","body":"a"},'
@@ -39,6 +44,7 @@ def _bootstrap_run(researcher: TestClient) -> dict[str, str]:
 def test_run_exports_include_expected_sections(tmp_path):
     db_path = str(tmp_path / "pilot.sqlite3")
     researcher = TestClient(create_researcher_app(db_path))
+    _login_researcher(researcher)
     participant = TestClient(create_participant_app(db_path))
 
     run_info = _bootstrap_run(researcher)
@@ -70,6 +76,7 @@ def test_run_exports_include_expected_sections(tmp_path):
 def test_run_exports_include_analysis_ready_outputs_when_trial_data_exists(tmp_path):
     db_path = str(tmp_path / "pilot.sqlite3")
     researcher = TestClient(create_researcher_app(db_path))
+    _login_researcher(researcher)
     participant = TestClient(create_participant_app(db_path))
 
     run_info = _bootstrap_run(researcher)

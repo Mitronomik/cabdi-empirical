@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-router = APIRouter(prefix="/admin/api/v1/runs", tags=["admin-runs"])
+from app.researcher_api.auth import require_researcher_auth
+
+router = APIRouter(prefix="/admin/api/v1/runs", tags=["admin-runs"], dependencies=[Depends(require_researcher_auth)])
 
 
 class CreateRunRequest(BaseModel):

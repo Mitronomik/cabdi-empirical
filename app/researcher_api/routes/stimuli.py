@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 
-router = APIRouter(prefix="/admin/api/v1/stimuli", tags=["admin-stimuli"])
+from app.researcher_api.auth import require_researcher_auth
+
+router = APIRouter(prefix="/admin/api/v1/stimuli", tags=["admin-stimuli"], dependencies=[Depends(require_researcher_auth)])
 
 
 @router.post("/upload")
