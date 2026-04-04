@@ -15,6 +15,43 @@ from app.researcher_api.services.export_service import AdminExportService
 from app.researcher_api.services.run_service import RunService
 from app.researcher_api.services.stimulus_service import StimulusService
 
+LOCAL_RESEARCHER_ORIGINS = ("http://127.0.0.1:5174", "http://localhost:5174")
+PRODUCTION_LIKE_ENVS = {"prod", "production", "staging"}
+
+
+def _is_production_like_env() -> bool:
+    return os.getenv("PILOT_ENV", "local").strip().lower() in PRODUCTION_LIKE_ENVS
+
+
+def _resolve_allowed_origins() -> list[str]:
+    configured = os.getenv("PILOT_RESEARCHER_CORS_ORIGINS", "")
+    if configured.strip():
+        return [origin.strip() for origin in configured.split(",") if origin.strip()]
+    if _is_production_like_env():
+        raise RuntimeError(
+            "Missing PILOT_RESEARCHER_CORS_ORIGINS in production-like mode. "
+            "Set explicit researcher web origins (comma-separated)."
+        )
+    return list(LOCAL_RESEARCHER_ORIGINS)
+
+
+def _resolve_db_target(db_path: str | None) -> str | None:
+    resolved = db_path or os.getenv("PILOT_DB_URL") or os.getenv("PILOT_DB_PATH")
+    if _is_production_like_env():
+        db_url = os.getenv("PILOT_DB_URL", "")
+        if not db_url:
+            raise RuntimeError("Missing PILOT_DB_URL in production-like mode for deployment packaging.")
+        if not db_url.startswith(("postgres://", "postgresql://")):
+            raise RuntimeError("PILOT_DB_URL must be a Postgres URL in production-like mode.")
+    return resolved
+
+
+def _resolve_cookie_security() -> bool:
+    secure_override = os.getenv("PILOT_RESEARCHER_COOKIE_SECURE")
+    if secure_override is not None:
+        return secure_override.strip().lower() in {"1", "true", "yes", "on"}
+    return _is_production_like_env()
+
 
 def create_app(db_path: str | None = None) -> FastAPI:
     app = FastAPI(
@@ -26,7 +63,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
     )
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://127.0.0.1:5174", "http://localhost:5174"],
+        allow_origins=_resolve_allowed_origins(),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -35,13 +72,13 @@ def create_app(db_path: str | None = None) -> FastAPI:
     env_mode = os.getenv("PILOT_ENV", "local").strip().lower()
     session_secret = os.getenv("PILOT_RESEARCHER_SESSION_SECRET")
     if not session_secret:
-        if env_mode in {"prod", "production", "staging"}:
+        if env_mode in PRODUCTION_LIKE_ENVS:
             raise RuntimeError(
                 "Missing PILOT_RESEARCHER_SESSION_SECRET in production-like mode for researcher/admin auth."
             )
         session_secret = "dev-only-insecure-session-secret-change-me"
-    db_target = db_path or os.getenv("PILOT_DB_URL") or os.getenv("PILOT_DB_PATH")
-    store = create_store(db_target)
+
+    store = create_store(_resolve_db_target(db_path))
     store.init_db()
 
     app.state.store = store
@@ -51,6 +88,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
     app.state.admin_export_service = AdminExportService(store)
     app.state.auth_service = AuthService(store)
     app.state.researcher_session_secret = session_secret
+    app.state.researcher_cookie_secure = _resolve_cookie_security()
     app.state.auth_service.bootstrap_initial_user()
 
     app.include_router(auth.router)
