@@ -17,6 +17,8 @@ from app.researcher_api.services.stimulus_service import StimulusService
 
 LOCAL_RESEARCHER_ORIGINS = ("http://127.0.0.1:5174", "http://localhost:5174")
 PRODUCTION_LIKE_ENVS = {"prod", "production", "staging"}
+MIN_SESSION_SECRET_LENGTH = 32
+INSECURE_SESSION_SECRET_MARKERS = ("change-me", "insecure", "example", "placeholder", "dev-only")
 
 
 def _is_production_like_env() -> bool:
@@ -48,13 +50,33 @@ def _resolve_db_target(db_path: str | None) -> str | None:
 
 def _resolve_cookie_security() -> bool:
     secure_override = os.getenv("PILOT_RESEARCHER_COOKIE_SECURE")
+    if _is_production_like_env():
+        if secure_override is None:
+            raise RuntimeError(
+                "Missing PILOT_RESEARCHER_COOKIE_SECURE in production-like mode. "
+                "Set it explicitly to true for launch-facing researcher/admin deployment."
+            )
+        if secure_override.strip().lower() not in {"1", "true", "yes", "on"}:
+            raise RuntimeError(
+                "PILOT_RESEARCHER_COOKIE_SECURE must be true in production-like mode."
+            )
+        return True
     if secure_override is not None:
         return secure_override.strip().lower() in {"1", "true", "yes", "on"}
-    return _is_production_like_env()
+    return False
 
 
 def _resolve_export_root() -> str:
     return os.getenv("PILOT_EXPORT_ARTIFACT_ROOT", "artifacts/pilot_exports")
+
+
+def _is_insecure_session_secret(secret: str) -> bool:
+    normalized = secret.strip().lower()
+    if len(secret) < MIN_SESSION_SECRET_LENGTH:
+        return True
+    if normalized in {"secret", "changeme", "change-me", "password", "researcher-session-secret"}:
+        return True
+    return any(marker in normalized for marker in INSECURE_SESSION_SECRET_MARKERS)
 
 
 def create_app(db_path: str | None = None) -> FastAPI:
@@ -81,6 +103,11 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 "Missing PILOT_RESEARCHER_SESSION_SECRET in production-like mode for researcher/admin auth."
             )
         session_secret = "dev-only-insecure-session-secret-change-me"
+    elif env_mode in PRODUCTION_LIKE_ENVS and _is_insecure_session_secret(session_secret):
+        raise RuntimeError(
+            "PILOT_RESEARCHER_SESSION_SECRET is insecure for production-like mode. "
+            "Use a high-entropy secret with at least 32 characters and no placeholder text."
+        )
 
     store = create_store(_resolve_db_target(db_path))
     store.init_db()

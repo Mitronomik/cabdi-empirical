@@ -38,8 +38,11 @@ def _decode_payload(token: str, secret: str) -> dict[str, Any] | None:
     if not hmac.compare_digest(signature, expected_signature):
         return None
 
-    data = json.loads(payload_json)
-    expires_at = int(data.get("exp", 0))
+    try:
+        data = json.loads(payload_json)
+        expires_at = int(data.get("exp", 0))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return None
     if expires_at <= int(time.time()):
         return None
     return data
