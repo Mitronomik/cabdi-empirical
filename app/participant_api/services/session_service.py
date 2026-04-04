@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hashlib
+import secrets
 from typing import Any
 from uuid import uuid4
 
@@ -25,6 +27,12 @@ SESSION_STATUS_AWAITING_FINAL_SUBMIT = "awaiting_final_submit"
 SESSION_STATUS_FINALIZED = "finalized"
 SESSION_STATUS_ABANDONED = "abandoned"
 TERMINAL_SESSION_STATUSES = {SESSION_STATUS_FINALIZED, "completed"}
+RESUMABLE_SESSION_STATUSES = {
+    SESSION_STATUS_CREATED,
+    SESSION_STATUS_IN_PROGRESS,
+    SESSION_STATUS_PAUSED,
+    SESSION_STATUS_AWAITING_FINAL_SUBMIT,
+}
 
 
 def _now_iso() -> str:
@@ -46,12 +54,32 @@ class SessionService:
         participant_id: str,
         run_slug: str,
         language: str | None = None,
+        resume_token: str | None = None,
     ) -> dict[str, Any]:
         run = self._resolve_public_run(run_slug=run_slug)
+        if resume_token:
+            resume_info = self.get_resume_info(run_slug=run_slug, resume_token=resume_token)
+            if resume_info["resume_status"] == "resumable":
+                session = self.get_session(str(resume_info["session_id"]))
+                return {
+                    "session_id": session["session_id"],
+                    "status": session["status"],
+                    "assigned_order": session["assigned_order"],
+                    "run_slug": run["public_slug"],
+                    "language": session.get("language") or "en",
+                    "entry_mode": "resumed",
+                    "public_session_code": session.get("public_session_code"),
+                    "resume_token": resume_token,
+                }
+            if resume_info["resume_status"] == "finalized":
+                raise ValueError("resume_not_allowed:session_finalized")
+
         experiment = load_experiment_config(DEFAULT_EXPERIMENT_PATH)
         stimuli = self._load_run_stimuli(run)
         order_id, assigned_order = assign_order_id(participant_id, experiment.experiment_id)
         session_id = f"sess_{uuid4().hex[:12]}"
+        public_session_code = self._generate_public_session_code()
+        resolved_resume_token = self._generate_resume_token()
         normalized_language = self._normalize_language(language)
 
         session = ParticipantSession(
@@ -73,15 +101,17 @@ class SessionService:
         self.store.execute(
             """
             INSERT INTO participant_sessions(
-                session_id, participant_id, experiment_id, run_id, assigned_order, stimulus_set_map,
+                session_id, participant_id, experiment_id, run_id, public_session_code, resume_token_hash, assigned_order, stimulus_set_map,
                 current_block_index, current_trial_index, status, started_at, completed_at, last_activity_at, device_info, language
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 session.session_id,
                 session.participant_id,
                 session.experiment_id,
                 session.run_id,
+                public_session_code,
+                self._hash_resume_token(resolved_resume_token),
                 session.assigned_order,
                 dumps(session.stimulus_set_map),
                 session.current_block_index,
@@ -133,6 +163,80 @@ class SessionService:
             "assigned_order": order_id,
             "run_slug": run["public_slug"],
             "language": session.language,
+            "entry_mode": "created",
+            "public_session_code": public_session_code,
+            "resume_token": resolved_resume_token,
+        }
+
+    @staticmethod
+    def _hash_resume_token(token: str) -> str:
+        return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _generate_resume_token() -> str:
+        return secrets.token_urlsafe(24)
+
+    def _generate_public_session_code(self) -> str:
+        while True:
+            candidate = secrets.token_hex(4).upper()
+            existing = self.store.fetchone(
+                "SELECT session_id FROM participant_sessions WHERE public_session_code = ?",
+                (candidate,),
+            )
+            if existing is None:
+                return candidate
+
+    def get_resume_info(self, run_slug: str, resume_token: str) -> dict[str, Any]:
+        normalized_run_slug = (run_slug or "").strip()
+        if not normalized_run_slug:
+            raise ValueError("run_slug is required")
+        normalized_resume_token = (resume_token or "").strip()
+        if not normalized_resume_token:
+            raise ValueError("resume_token is required")
+        run = self.store.fetchone(
+            "SELECT run_id, public_slug FROM researcher_runs WHERE public_slug = ?",
+            (normalized_run_slug,),
+        )
+        if run is None:
+            raise KeyError("run not found")
+
+        session = self.store.fetchone(
+            """
+            SELECT session_id, run_id, status, current_block_index, current_trial_index, public_session_code
+            FROM participant_sessions
+            WHERE run_id = ? AND resume_token_hash = ?
+            """,
+            (run["run_id"], self._hash_resume_token(normalized_resume_token)),
+        )
+        if session is None:
+            return {"run_slug": run["public_slug"], "resume_status": "invalid"}
+
+        if session["status"] in RESUMABLE_SESSION_STATUSES:
+            return {
+                "run_slug": run["public_slug"],
+                "resume_status": "resumable",
+                "session_id": session["session_id"],
+                "session_status": session["status"],
+                "public_session_code": session.get("public_session_code"),
+                "current_block_index": session["current_block_index"],
+                "current_trial_index": session["current_trial_index"],
+            }
+
+        if session["status"] in TERMINAL_SESSION_STATUSES:
+            return {
+                "run_slug": run["public_slug"],
+                "resume_status": "finalized",
+                "session_id": session["session_id"],
+                "session_status": SESSION_STATUS_FINALIZED,
+                "public_session_code": session.get("public_session_code"),
+            }
+
+        return {
+            "run_slug": run["public_slug"],
+            "resume_status": "not_resumable",
+            "session_id": session["session_id"],
+            "session_status": session["status"],
+            "public_session_code": session.get("public_session_code"),
         }
 
     def _resolve_public_run(self, *, run_slug: str) -> dict[str, Any]:
@@ -204,7 +308,7 @@ class SessionService:
 
     def start_session(self, session_id: str) -> dict[str, Any]:
         session = self.get_session(session_id)
-        if session["status"] in TERMINAL_SESSION_STATUSES:
+        if session["status"] in TERMINAL_SESSION_STATUSES | {SESSION_STATUS_AWAITING_FINAL_SUBMIT}:
             return {"session_id": session_id, "status": session["status"]}
         self.store.execute(
             "UPDATE participant_sessions SET status = ?, started_at = ?, last_activity_at = ? WHERE session_id = ?",

@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 
 import {
   createSession,
+  fetchResumeInfo,
   fetchPublicRun,
   fetchNextTrial,
   finalSubmitSession,
@@ -38,6 +39,10 @@ function localizedError(
 
 function detailError(detail: unknown): string | null {
   return typeof detail === 'string' ? detail : null;
+}
+
+function resumeStorageKey(runSlug: string): string {
+  return `participant_web.resume_token.${runSlug}`;
 }
 
 export function useParticipantFlow() {
@@ -108,8 +113,20 @@ export function useParticipantFlow() {
     setError(null);
     try {
       await fetchPublicRun(normalizedRunSlug);
-      const created = await createSession(participantId, normalizedRunSlug, detectLocale());
+      const savedResumeToken = window.localStorage.getItem(resumeStorageKey(normalizedRunSlug));
+      let resumeTokenForCreate: string | null = null;
+      if (savedResumeToken) {
+        const resumeInfo = await fetchResumeInfo(normalizedRunSlug, savedResumeToken);
+        if (resumeInfo.resume_status === 'resumable') {
+          resumeTokenForCreate = savedResumeToken;
+        }
+        if (resumeInfo.resume_status === 'finalized') {
+          window.localStorage.removeItem(resumeStorageKey(normalizedRunSlug));
+        }
+      }
+      const created = await createSession(participantId, normalizedRunSlug, detectLocale(), resumeTokenForCreate);
       setSessionId(created.session_id);
+      window.localStorage.setItem(resumeStorageKey(normalizedRunSlug), created.resume_token);
       await startSession(created.session_id);
       await loadNextTrial(created.session_id);
     } catch (err: unknown) {
@@ -181,6 +198,9 @@ export function useParticipantFlow() {
       if (res.status === 'finalized') {
         setStage('completion');
         setCompletionCode(sessionId.slice(0, 8).toUpperCase());
+        if (runSlug.trim()) {
+          window.localStorage.removeItem(resumeStorageKey(runSlug.trim()));
+        }
       }
     } catch {
       setError(localizedError('error.finalSubmit'));

@@ -26,10 +26,22 @@ export async function createSession(
   participantId: string,
   runSlug: string,
   language: "en" | "ru",
-): Promise<{ session_id: string }> {
+  resumeToken?: string | null,
+): Promise<{ session_id: string; status: string; entry_mode: 'created' | 'resumed'; resume_token: string }> {
   return request('/api/v1/sessions', {
     method: 'POST',
-    body: JSON.stringify({ participant_id: participantId, run_slug: runSlug, language }),
+    body: JSON.stringify({ participant_id: participantId, run_slug: runSlug, language, resume_token: resumeToken ?? undefined }),
+  });
+}
+
+export async function fetchResumeInfo(runSlug: string, resumeToken: string): Promise<{
+  resume_status: 'resumable' | 'finalized' | 'invalid' | 'not_resumable';
+  session_id?: string;
+  session_status?: string;
+}> {
+  return request('/api/v1/sessions/resume-info', {
+    method: 'POST',
+    body: JSON.stringify({ run_slug: runSlug, resume_token: resumeToken }),
   });
 }
 
