@@ -110,7 +110,7 @@ def test_create_run_and_session_monitor_and_diagnostics(tmp_path):
 
     session_res = participant.post(
         "/api/v1/sessions",
-        json={"participant_id": "p_admin_1", "run_slug": create_run.json()["public_slug"], "language": "ru"},
+        json={"run_slug": create_run.json()["public_slug"], "language": "ru"},
     )
     assert session_res.status_code == 200
 
@@ -193,7 +193,7 @@ def test_closed_runs_remain_readable_for_diagnostics_and_exports(tmp_path):
     assert researcher.post(f"/admin/api/v1/runs/{run_id}/activate").status_code == 200
     assert participant.post(
         "/api/v1/sessions",
-        json={"participant_id": "p_hist", "run_slug": run_res.json()["public_slug"]},
+        json={"run_slug": run_res.json()["public_slug"]},
     ).status_code == 200
     closed = researcher.post(f"/admin/api/v1/runs/{run_id}/close", json={"confirm_run_id": run_id})
     assert closed.status_code == 200
@@ -260,11 +260,11 @@ def test_session_monitor_distinguishes_awaiting_final_submit_and_finalized(tmp_p
 
     awaiting_session = participant.post(
         "/api/v1/sessions",
-        json={"participant_id": "p_waiting", "run_slug": run_slug},
+        json={"run_slug": run_slug},
     ).json()["session_id"]
     finalized_session = participant.post(
         "/api/v1/sessions",
-        json={"participant_id": "p_finalized", "run_slug": run_slug},
+        json={"run_slug": run_slug},
     ).json()["session_id"]
 
     participant.app.state.store.execute(
@@ -304,8 +304,8 @@ def test_run_diagnostics_and_exports_share_run_scoped_truth(tmp_path):
     run_slug = run_res.json()["public_slug"]
     assert researcher.post(f"/admin/api/v1/runs/{run_id}/activate").status_code == 200
 
-    s1 = participant.post("/api/v1/sessions", json={"participant_id": "p1", "run_slug": run_slug}).json()["session_id"]
-    s2 = participant.post("/api/v1/sessions", json={"participant_id": "p2", "run_slug": run_slug}).json()["session_id"]
+    s1 = participant.post("/api/v1/sessions", json={"run_slug": run_slug}).json()["session_id"]
+    s2 = participant.post("/api/v1/sessions", json={"run_slug": run_slug}).json()["session_id"]
     participant.app.state.store.execute(
         "UPDATE participant_sessions SET status = 'awaiting_final_submit' WHERE session_id = ?",
         (s1,),
@@ -348,7 +348,7 @@ def test_budget_diagnostics_detect_display_and_interaction_drift(tmp_path):
 
     session_id = participant.post(
         "/api/v1/sessions",
-        json={"participant_id": "p_budget", "run_slug": run_slug},
+        json={"run_slug": run_slug},
     ).json()["session_id"]
     trial_id = _complete_one_non_practice_trial(participant, session_id)
     participant.app.state.store.execute(
@@ -384,7 +384,7 @@ def test_budget_diagnostics_detect_display_and_interaction_drift(tmp_path):
         (
             dumps(
                 {
-                    "participant_id": "p_budget",
+                    "participant_id": "opaque_budget_subject",
                     "session_id": session_id,
                     "experiment_id": "toy_v1",
                     "condition": "static_help",
@@ -448,7 +448,7 @@ def test_budget_diagnostics_warn_on_incomplete_basis(tmp_path):
     assert researcher.post(f"/admin/api/v1/runs/{run_id}/activate").status_code == 200
     session_id = participant.post(
         "/api/v1/sessions",
-        json={"participant_id": "p_incomplete", "run_slug": run_slug},
+        json={"run_slug": run_slug},
     ).json()["session_id"]
     _complete_one_non_practice_trial(participant, session_id)
     participant.app.state.store.execute(

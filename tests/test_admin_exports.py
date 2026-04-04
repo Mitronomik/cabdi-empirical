@@ -50,7 +50,7 @@ def test_run_exports_include_expected_sections(tmp_path):
     run_info = _bootstrap_run(researcher)
     create_session = participant.post(
         "/api/v1/sessions",
-        json={"participant_id": "p_export_1", "run_slug": run_info["run_slug"], "language": "ru"},
+        json={"run_slug": run_info["run_slug"], "language": "ru"},
     )
     assert create_session.status_code == 200
 
@@ -82,7 +82,7 @@ def test_run_exports_include_analysis_ready_outputs_when_trial_data_exists(tmp_p
     run_info = _bootstrap_run(researcher)
     create_session = participant.post(
         "/api/v1/sessions",
-        json={"participant_id": "p_export_full", "run_slug": run_info["run_slug"], "language": "en"},
+        json={"run_slug": run_info["run_slug"], "language": "en"},
     )
     assert create_session.status_code == 200
     session_id = create_session.json()["session_id"]

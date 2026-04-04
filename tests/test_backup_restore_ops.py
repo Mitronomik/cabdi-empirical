@@ -47,7 +47,7 @@ def _seed_minimal_run(tmp_db: str) -> tuple[str, str]:
     run_slug = run.json()["public_slug"]
     assert researcher.post(f"/admin/api/v1/runs/{run_id}/activate").status_code == 200
 
-    session = participant.post("/api/v1/sessions", json={"participant_id": "p_backup", "run_slug": run_slug})
+    session = participant.post("/api/v1/sessions", json={"run_slug": run_slug})
     assert session.status_code == 200
     session_id = session.json()["session_id"]
     assert participant.post(f"/api/v1/sessions/{session_id}/start").status_code == 200

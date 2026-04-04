@@ -72,7 +72,7 @@ def test_postgres_backend_end_to_end_parity_flow() -> None:
 
         session = participant.post(
             "/api/v1/sessions",
-            json={"participant_id": "p_pg", "run_slug": run.json()["public_slug"]},
+            json={"run_slug": run.json()["public_slug"]},
         )
         assert session.status_code == 200
         session_id = session.json()["session_id"]
