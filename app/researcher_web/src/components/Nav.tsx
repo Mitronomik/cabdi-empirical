@@ -25,13 +25,15 @@ export function Nav({ page, setPage }: { page: PageKey; setPage: (p: PageKey) =>
   const { t } = useLocale();
 
   return (
-    <nav aria-label={t('nav.workflow')}>
+    <nav aria-label={t('nav.workflow')} className="panel">
       <p>{t('nav.workflow')}</p>
-      {pages.map((p) => (
-        <button key={p} onClick={() => setPage(p)} disabled={p === page} style={{ marginRight: 8 }}>
-          {t(pageStepKey[p])}: {t(pageKey[p])}
-        </button>
-      ))}
+      <div className="nav-steps">
+        {pages.map((p) => (
+          <button key={p} onClick={() => setPage(p)} disabled={p === page} className={p === page ? 'primary-btn' : 'secondary-btn'}>
+            {t(pageStepKey[p])}: {t(pageKey[p])}
+          </button>
+        ))}
+      </div>
     </nav>
   );
 }

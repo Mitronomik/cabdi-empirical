@@ -111,7 +111,8 @@ describe('researcher auth shell', () => {
     await screen.findByText('Logged in as: admin');
     await user.click(screen.getByRole('button', { name: 'Step 3: Monitor Sessions' }));
 
-    expect(await screen.findByText('Selected run: pilot-run • /pilot-run • Active · run_1')).toBeInTheDocument();
+    expect(await screen.findByText(/Selected run: pilot-run • \/pilot-run • Active/)).toBeInTheDocument();
+    expect(screen.getByText('run_1')).toBeInTheDocument();
   });
 
   it('switches language and persists researcher locale', async () => {
@@ -161,7 +162,8 @@ describe('researcher auth shell', () => {
     await user.click(await screen.findByRole('button', { name: 'Загрузить сессии' }));
 
     expect(await screen.findByText(/Выбранный запуск: pilot-run • \/pilot-run • Активен/)).toBeInTheDocument();
-    expect(await screen.findByText(/Статус запуска: На паузе/)).toBeInTheDocument();
+    expect(await screen.findByText('Сводка сессий')).toBeInTheDocument();
+    expect(screen.getByText('На паузе')).toBeInTheDocument();
   });
 
   it('confirms lifecycle action before close', async () => {
@@ -212,4 +214,56 @@ describe('researcher auth shell', () => {
 
     expect(confirmMock).toHaveBeenCalled();
   });
+  it('shows session summary cards and localized status badges after loading sessions', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith('/auth/me')) {
+          return new Response(JSON.stringify({ authenticated: true, user: { user_id: 'u1', username: 'admin', is_admin: true } }), { status: 200 });
+        }
+        if (url.endsWith('/runs')) {
+          return new Response(
+            JSON.stringify([
+              { run_id: 'run_1', run_name: 'pilot-run', public_slug: 'pilot-run', status: 'active', task_family: 'scam_detection', linked_stimulus_set_ids: ['stim_1'], launchable: true, launchability_reason: 'ok' },
+            ]),
+            { status: 200 },
+          );
+        }
+        if (url.endsWith('/runs/run_1/sessions')) {
+          return new Response(
+            JSON.stringify({
+              run_status: 'active',
+              counts: { in_progress: 1, completed: 1 },
+              sessions: [
+                {
+                  session_id: 's_1',
+                  participant_id: 'p_1',
+                  status: 'in_progress',
+                  current_block_index: 1,
+                  current_trial_index: 2,
+                  started_at: '2026-01-01T00:00:00Z',
+                  last_activity_at: '2026-01-01T00:10:00Z',
+                  completed_at: null,
+                },
+              ],
+            }),
+            { status: 200 },
+          );
+        }
+        return new Response(JSON.stringify([]), { status: 200 });
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText('Logged in as: admin');
+    await user.click(screen.getByRole('button', { name: 'Step 3: Monitor Sessions' }));
+    await user.click(await screen.findByRole('button', { name: 'Load Sessions' }));
+
+    expect(await screen.findByText('Session snapshot')).toBeInTheDocument();
+    expect(screen.getByText('In progress: 1')).toBeInTheDocument();
+    expect(screen.getByText('Session details')).toBeInTheDocument();
+  });
+
 });
