@@ -1,15 +1,35 @@
-# CABDI Empirical Scaffold
+# CABDI Empirical (dual-mode research platform)
 
-This repository contains a synthetic empirical validation scaffold for the CABDI v4.5 preprint.
+This repository is a **dual-mode CABDI research platform** for the CABDI v4.5 preprint:
 
-It is designed to:
-- operationalize the reduced slow routing model family F_d,
+1. **Synthetic validation mode** (scripted empirical scaffold), and
+2. **Human-pilot mode** (run-bound participant/researcher runtime for narrow observable pilot claims).
+
+The repository is used to:
+- operationalize the reduced slow routing model family `F_d`,
 - compare CABDI-style routing against matched-budget baselines,
-- support, narrow, or falsify selected CABDI claims in stylized simulation.
+- support, narrow, falsify, or fail to support selected CABDI claims under bounded setups.
 
-It does NOT establish real-world validation.
+It does **not** claim whole-framework real-world validation, latent-state truth recovery, or physiology-grounded proof.
+
+## Mode boundaries (what each mode is for)
+
+### Synthetic validation mode
+- Purpose: reproducible falsification/support checks in stylized simulation.
+- Primary entrypoints: `experiments/run_minimal_validation.py`, `experiments/run_non_monotone_region_scan.py`, `experiments/run_full_suite.py`.
+- Outputs: reproducible artifacts under `artifacts/` and markdown summaries under `reports/`.
+
+### Human-pilot mode
+- Purpose: local/staging pilot runtime for adjudicable observable task claims with explicit run management.
+- Surfaces:
+  - participant API + participant web,
+  - researcher/admin API + researcher web.
+- Pilot flow is **run-based**: create/manage run on researcher surface, launch participant flow against active run, then use diagnostics/exports/analysis.
+- This remains a bounded research runtime, not a production SaaS platform.
 
 ## Quick start
+
+### Synthetic validation quick start
 
 ```bash
 pip install -r requirements.txt
@@ -17,7 +37,19 @@ pytest -q
 python experiments/run_minimal_validation.py
 ```
 
-## Outputs
+### Human-pilot local quick start (four-process dev loop)
+
+```bash
+make setup
+make run-participant-api
+make run-researcher-api
+make run-participant-web
+make run-researcher-web
+```
+
+Then use researcher surface to create/activate a run and launch participants against that run. For end-to-end operator workflow, use the runbook linked below.
+
+## Synthetic outputs
 
 Running minimal validation writes:
 - `artifacts/minimal_first_validation/policy_metrics.csv`
@@ -27,15 +59,15 @@ Running minimal validation writes:
 - `artifacts/minimal_first_validation/catastrophic_risk_comparison.svg`
 - `reports/minimal_first_validation.md`
 
-## Local development
+## Operator and maintainer docs
 
-For macOS local setup and launch workflows (synthetic + human-pilot services), use:
+For setup, launch posture, service boundaries, and operator procedures:
 
 - `docs/pilot/local_setup_mac.md`
 - `docs/pilot/runbook.md`
 - `docs/pilot/service_matrix.md`
 
-You can also use the root `Makefile` shortcuts:
+The root `Makefile` provides aligned shortcuts:
 
 ```bash
 make setup
@@ -46,4 +78,8 @@ make run-researcher-api
 make run-participant-web
 make run-researcher-web
 make dry-run
+make pilot-backup
+make pilot-restore
+make pilot-prelaunch-gate
+make pilot-prelaunch-gate-blackbox
 ```
