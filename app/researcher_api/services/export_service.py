@@ -5,6 +5,9 @@ from __future__ import annotations
 import csv
 import io
 import json
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from analysis.pilot.derive_metrics import derive_trial_level_rows
@@ -18,31 +21,61 @@ from app.researcher_api.services.diagnostics_service import DiagnosticsService
 from app.researcher_api.services.run_data_service import RunDataService
 
 
+@dataclass(frozen=True)
+class ExportArtifact:
+    artifact_type: str
+    category: str
+    filename: str
+    media_type: str
+    relative_path: str
+    size_bytes: int
+    available: bool
+
+
 class AdminExportService:
-    def __init__(self, store: PilotStore) -> None:
+    def __init__(self, store: PilotStore, export_root: str | Path = "artifacts/pilot_exports") -> None:
         self.store = store
         self.run_data_service = RunDataService(store)
         self.diagnostics_service = DiagnosticsService(store)
+        self.export_root = Path(export_root)
 
     def export_run(self, run_id: str) -> dict[str, Any]:
         run_data = self.run_data_service.load_run_scoped_data(run_id)
         session_payload = run_data.session_payload
         session_ids = run_data.session_ids
+        export_dir = self._run_export_dir(run_id)
+        generated_at = datetime.now(timezone.utc).isoformat()
 
         if not session_ids:
-            return {
+            artifacts = self._persist_run_artifacts(
+                run_id=run_id,
+                generated_at=generated_at,
+                warnings=["No sessions linked to this run yet"],
+                source_data={
+                    "session_rows": 0,
+                    "trial_rows": 0,
+                    "trial_summary_rows": 0,
+                    "event_rows": 0,
+                    "questionnaire_rows": 0,
+                },
+                payloads={
+                    "raw_event_log_jsonl": "",
+                    "trial_summary_csv": "",
+                    "block_questionnaire_csv": "",
+                    "session_summary_csv": "",
+                    "session_summary_json": "[]\n",
+                    "trial_level_csv": "",
+                    "participant_summary_csv": "",
+                    "mixed_effects_ready_csv": "",
+                    "pilot_summary_md": "",
+                },
+            )
+            return self._export_response({
                 "run_id": run_id,
                 "export_state": "empty",
+                "generated_at": generated_at,
                 "message": "No sessions for this run yet. Start participant sessions before exporting.",
-                "raw_event_log_jsonl": "",
-                "trial_summary_csv": "",
-                "block_questionnaire_csv": "",
-                "session_summary_csv": "",
                 "session_summary_json": [],
-                "trial_level_csv": "",
-                "participant_summary_csv": "",
-                "mixed_effects_ready_csv": "",
-                "pilot_summary_md": "",
                 "available_outputs": {
                     "raw_event_log_jsonl": False,
                     "trial_summary_csv": False,
@@ -53,8 +86,10 @@ class AdminExportService:
                     "mixed_effects_ready_csv": False,
                     "pilot_summary_md": False,
                 },
+                "artifacts": artifacts,
+                "artifact_root": str(export_dir),
                 "warnings": ["No sessions linked to this run yet"],
-            }
+            })
 
         raw_event_log_jsonl = "\n".join(
             json.dumps(
@@ -102,19 +137,37 @@ class AdminExportService:
         else:
             warnings.append("No trial summaries available; derived analysis-ready outputs are unavailable")
 
-        return {
-            "run_id": run_id,
-            "export_state": "available",
-            "message": "Run exports are available.",
+        payloads = {
             "raw_event_log_jsonl": raw_event_log_jsonl,
             "trial_summary_csv": trial_summary_csv,
             "block_questionnaire_csv": _to_csv(run_data.questionnaire_rows),
             "session_summary_csv": _to_csv(session_summary_rows),
-            "session_summary_json": session_summary_rows,
+            "session_summary_json": json.dumps(session_summary_rows, indent=2, sort_keys=True),
             "trial_level_csv": _to_csv(trial_level_rows),
             "participant_summary_csv": _to_csv(participant_rows),
             "mixed_effects_ready_csv": _to_csv(mixed_rows),
             "pilot_summary_md": report_md,
+        }
+        artifacts = self._persist_run_artifacts(
+            run_id=run_id,
+            generated_at=generated_at,
+            warnings=warnings,
+            source_data={
+                "session_rows": len(run_data.session_rows),
+                "trial_rows": len(run_data.trial_rows),
+                "trial_summary_rows": len(run_data.trial_summary_rows),
+                "event_rows": len(run_data.event_rows),
+                "questionnaire_rows": len(run_data.questionnaire_rows),
+            },
+            payloads=payloads,
+        )
+
+        return self._export_response({
+            "run_id": run_id,
+            "export_state": "available",
+            "generated_at": generated_at,
+            "message": "Run exports are available.",
+            "session_summary_json": session_summary_rows,
             "available_outputs": {
                 "raw_event_log_jsonl": bool(raw_event_log_jsonl),
                 "trial_summary_csv": bool(trial_summary_csv),
@@ -125,8 +178,92 @@ class AdminExportService:
                 "mixed_effects_ready_csv": bool(mixed_rows),
                 "pilot_summary_md": bool(report_md),
             },
+            "artifacts": artifacts,
+            "artifact_root": str(export_dir),
             "warnings": warnings,
+        })
+
+    def get_artifact_path(self, run_id: str, artifact_type: str) -> tuple[Path, str]:
+        manifest_path = self._run_export_dir(run_id) / "manifest.json"
+        if not manifest_path.exists():
+            raise KeyError("export artifacts unavailable; generate run export first")
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        artifacts = {item["artifact_type"]: item for item in manifest.get("artifacts", [])}
+        artifact = artifacts.get(artifact_type)
+        if artifact is None:
+            raise KeyError(f"artifact not found: {artifact_type}")
+        path = self.export_root / artifact["relative_path"]
+        if not path.exists():
+            raise KeyError(f"artifact file missing: {artifact_type}")
+        return path, artifact.get("media_type", "application/octet-stream")
+
+    def _export_response(self, payload: dict[str, Any]) -> dict[str, Any]:
+        payload["artifact_policy"] = {"mode": "replace_current", "notes": "Re-generating exports overwrites run/current artifacts."}
+        payload["source_of_truth"] = {
+            "persisted_tables": [
+                "participant_sessions",
+                "session_trials",
+                "trial_summary_logs",
+                "trial_event_logs",
+                "block_questionnaires",
+                "pilot_runs",
+            ],
+            "derived_artifacts_root": str(self.export_root),
         }
+        return payload
+
+    def _run_export_dir(self, run_id: str) -> Path:
+        return self.export_root / run_id / "current"
+
+    def _persist_run_artifacts(
+        self,
+        run_id: str,
+        generated_at: str,
+        warnings: list[str],
+        source_data: dict[str, int],
+        payloads: dict[str, str],
+    ) -> list[dict[str, Any]]:
+        export_dir = self._run_export_dir(run_id)
+        export_dir.mkdir(parents=True, exist_ok=True)
+        artifacts: list[ExportArtifact] = []
+        catalog = {
+            "raw_event_log_jsonl": ("raw", "raw_event_log.jsonl", "application/x-ndjson"),
+            "trial_summary_csv": ("raw", "trial_summary.csv", "text/csv"),
+            "block_questionnaire_csv": ("raw", "block_questionnaire.csv", "text/csv"),
+            "session_summary_csv": ("raw", "session_summary.csv", "text/csv"),
+            "session_summary_json": ("raw", "session_summary.json", "application/json"),
+            "trial_level_csv": ("derived", "trial_level.csv", "text/csv"),
+            "participant_summary_csv": ("derived", "participant_summary.csv", "text/csv"),
+            "mixed_effects_ready_csv": ("derived", "mixed_effects_ready.csv", "text/csv"),
+            "pilot_summary_md": ("report", "pilot_summary.md", "text/markdown"),
+        }
+        for artifact_type, (category, filename, media_type) in catalog.items():
+            path = export_dir / filename
+            content = payloads.get(artifact_type, "")
+            path.write_text(content, encoding="utf-8")
+            artifacts.append(
+                ExportArtifact(
+                    artifact_type=artifact_type,
+                    category=category,
+                    filename=filename,
+                    media_type=media_type,
+                    relative_path=str(path.relative_to(self.export_root)),
+                    size_bytes=path.stat().st_size,
+                    available=bool(content),
+                )
+            )
+
+        manifest = {
+            "run_id": run_id,
+            "generated_at": generated_at,
+            "export_state": "available" if source_data["session_rows"] > 0 else "empty",
+            "artifact_policy": "replace_current",
+            "source_data_counts": source_data,
+            "warnings": warnings,
+            "artifacts": [asdict(item) for item in artifacts],
+        }
+        (export_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
+        return [asdict(item) for item in artifacts]
 
 
 def _to_csv(rows: list[dict[str, Any]]) -> str:

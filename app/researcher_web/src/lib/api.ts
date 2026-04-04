@@ -102,3 +102,11 @@ export function getRunDiagnostics(runId: string) {
 export function getRunExports(runId: string) {
   return apiGet<Record<string, unknown>>(`/admin/api/v1/runs/${runId}/exports`)
 }
+
+export async function downloadRunExportArtifact(runId: string, artifactType: string): Promise<Blob> {
+  const res = await fetch(`${BASE}/admin/api/v1/runs/${runId}/exports/artifacts/${artifactType}`, {
+    credentials: 'include',
+  })
+  if (!res.ok) throw new Error(await parseError(res))
+  return res.blob()
+}

@@ -53,6 +53,10 @@ def _resolve_cookie_security() -> bool:
     return _is_production_like_env()
 
 
+def _resolve_export_root() -> str:
+    return os.getenv("PILOT_EXPORT_ARTIFACT_ROOT", "artifacts/pilot_exports")
+
+
 def create_app(db_path: str | None = None) -> FastAPI:
     app = FastAPI(
         title="CABDI Pilot Researcher Admin API",
@@ -85,7 +89,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
     app.state.stimulus_service = StimulusService(store)
     app.state.run_service = RunService(store)
     app.state.diagnostics_service = DiagnosticsService(store)
-    app.state.admin_export_service = AdminExportService(store)
+    app.state.admin_export_service = AdminExportService(store, export_root=_resolve_export_root())
     app.state.auth_service = AuthService(store)
     app.state.researcher_session_secret = session_secret
     app.state.researcher_cookie_secure = _resolve_cookie_security()
