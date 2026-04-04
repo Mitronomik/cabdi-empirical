@@ -365,6 +365,54 @@ def test_public_run_metadata_endpoint_returns_minimal_launch_info(tmp_path):
     assert "public_title" in body
 
 
+def test_public_run_metadata_reports_unavailable_statuses_truthfully(tmp_path):
+    client = _make_client(tmp_path)
+    db_path = str(tmp_path / "pilot_api.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    _login_researcher(researcher)
+    payload = (
+        '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"title":"Case","body":"a"},'
+        '"true_label":"scam","difficulty_prior":"low","model_prediction":"scam","model_confidence":"high",'
+        '"model_correct":true,"eligible_sets":["demo"]}\n'
+    )
+    upload = researcher.post(
+        "/admin/api/v1/stimuli/upload",
+        files={"file": ("stimuli.jsonl", payload, "application/json")},
+        data={"name": "set1", "source_format": "jsonl"},
+    )
+    run = researcher.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "status visible run",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"mode": "test"},
+            "stimulus_set_ids": [upload.json()["stimulus_set_id"]],
+        },
+    )
+    run_slug = run.json()["public_slug"]
+
+    draft = client.get(f"/api/v1/public/runs/{run_slug}")
+    assert draft.status_code == 200
+    assert draft.json()["launchable"] is False
+    assert draft.json()["run_status"] == "draft"
+
+    run_id = run.json()["run_id"]
+    assert researcher.post(f"/admin/api/v1/runs/{run_id}/activate").status_code == 200
+    assert researcher.post(f"/admin/api/v1/runs/{run_id}/pause").status_code == 200
+    paused = client.get(f"/api/v1/public/runs/{run_slug}")
+    assert paused.status_code == 200
+    assert paused.json()["launchable"] is False
+    assert paused.json()["run_status"] == "paused"
+
+    assert researcher.post(f"/admin/api/v1/runs/{run_id}/activate").status_code == 200
+    assert researcher.post(f"/admin/api/v1/runs/{run_id}/close", json={"confirm_run_id": run_id}).status_code == 200
+    closed = client.get(f"/api/v1/public/runs/{run_slug}")
+    assert closed.status_code == 200
+    assert closed.json()["launchable"] is False
+    assert closed.json()["run_status"] == "closed"
+
+
 def test_progress_is_persisted_incrementally_and_not_finalized_on_trial_exhaustion(tmp_path):
     client = _make_client(tmp_path)
     run_slug = _bootstrap_run(tmp_path)

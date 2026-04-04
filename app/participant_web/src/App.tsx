@@ -27,6 +27,7 @@ function AppBody() {
     runSlug,
     publicRun,
     onboardingReady,
+    resumeBannerKey,
     setStage,
     beginSession,
     submitCurrentTrial,
@@ -69,8 +70,9 @@ function AppBody() {
             <InstructionsPage
               runTitle={publicRun?.public_title ?? t('instructions.defaultRunTitle')}
               runDescription={publicRun?.public_description}
+              resumeNotice={resumeBannerKey ? t(resumeBannerKey) : null}
               loading={loading}
-              runReady={Boolean(runSlug)}
+              runReady={Boolean(runSlug) && Boolean(publicRun?.launchable)}
               onStart={beginSession}
             />
           )}

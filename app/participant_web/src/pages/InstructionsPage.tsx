@@ -3,12 +3,13 @@ import { useLocale } from '../i18n/useLocale';
 interface Props {
   runTitle: string;
   runDescription?: string | null;
+  resumeNotice?: string | null;
   loading: boolean;
   runReady: boolean;
   onStart: () => void;
 }
 
-export function InstructionsPage({ runTitle, runDescription, loading, runReady, onStart }: Props) {
+export function InstructionsPage({ runTitle, runDescription, resumeNotice, loading, runReady, onStart }: Props) {
   const { t } = useLocale();
 
   return (
@@ -16,6 +17,7 @@ export function InstructionsPage({ runTitle, runDescription, loading, runReady, 
       <h1>{t('instructions.title')}</h1>
       <p className="muted">{runTitle}</p>
       {runDescription ? <p>{runDescription}</p> : null}
+      {resumeNotice ? <p className="muted">{resumeNotice}</p> : null}
       <ul>
         <li>{t('instructions.item.classify')}</li>
         <li>{t('instructions.item.assistance')}</li>
