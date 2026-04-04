@@ -4,6 +4,48 @@ from app.participant_api.services.randomization_service import assign_order_id, 
 from packages.shared_types.pilot_types import ExperimentConfig, StimulusItem
 
 
+def _experiment(*, n_blocks: int = 3, trials_per_block: int = 3, practice_trials: int = 2) -> ExperimentConfig:
+    return ExperimentConfig(
+        experiment_id="toy_v1",
+        task_family="scam_detection",
+        n_blocks=n_blocks,
+        trials_per_block=trials_per_block,
+        practice_trials=practice_trials,
+        conditions=["static_help", "monotone_help", "cabdi_lite"],
+        block_order_strategy="latin_square",
+        budget_matching_mode="fixed",
+        risk_proxy_mode="pre_render_features_v1",
+        self_confidence_scale="0_100",
+        block_questionnaires=[],
+    )
+
+
+def _stimulus(stimulus_id: str, *, difficulty: str, model_correct: bool) -> StimulusItem:
+    return StimulusItem(
+        stimulus_id=stimulus_id,
+        task_family="scam_detection",
+        content_type="text",
+        payload={"title": f"Case {stimulus_id}"},
+        true_label="scam" if not model_correct else "not_scam",
+        difficulty_prior=difficulty,
+        model_prediction="not_scam" if model_correct else "scam",
+        model_confidence="high",
+        model_correct=model_correct,
+        eligible_sets=["demo"],
+    )
+
+
+def _balanced_bank() -> list[StimulusItem]:
+    items: list[StimulusItem] = []
+    idx = 0
+    for difficulty in ["low", "medium", "high"]:
+        for model_correct in [True, False]:
+            for _ in range(2):
+                idx += 1
+                items.append(_stimulus(f"s{idx}", difficulty=difficulty, model_correct=model_correct))
+    return items
+
+
 def test_assigned_order_is_reproducible_for_same_participant():
     first = assign_order_id("p_001", "pilot_scam_not_scam_v1")
     second = assign_order_id("p_001", "pilot_scam_not_scam_v1")
@@ -17,32 +59,89 @@ def test_assigned_order_is_valid_latin_square_row():
 
 
 def test_trial_plan_pre_render_features_contain_only_pre_known_stimulus_priors():
-    experiment = ExperimentConfig(
-        experiment_id="toy_v1",
-        task_family="scam_detection",
-        n_blocks=1,
-        trials_per_block=1,
-        practice_trials=0,
-        conditions=["cabdi_lite"],
-        block_order_strategy="latin_square",
-        budget_matching_mode="fixed",
-        risk_proxy_mode="pre_render_features_v1",
-        self_confidence_scale="0_100",
-        block_questionnaires=[],
-    )
-    stimulus = StimulusItem(
-        stimulus_id="s1",
-        task_family="scam_detection",
-        content_type="text",
-        payload={"title": "Case"},
-        true_label="scam",
-        difficulty_prior="low",
-        model_prediction="scam",
-        model_confidence="high",
-        model_correct=True,
-        eligible_sets=["demo"],
-    )
+    experiment = _experiment(n_blocks=1, trials_per_block=1, practice_trials=0)
+    stimulus = _stimulus("s1", difficulty="low", model_correct=True)
 
     plan = build_trial_plan("p_001", experiment, ["cabdi_lite"], [stimulus])
     features = plan[0]["pre_render_features"]
-    assert features == {"model_confidence": "high", "difficulty_prior": "low"}
+    assert features["model_confidence"] == "high"
+    assert features["difficulty_prior"] == "low"
+
+
+def test_trial_plan_is_deterministic_for_same_seed_inputs():
+    experiment = _experiment()
+    stimuli = _balanced_bank()
+
+    first = build_trial_plan("p_deterministic", experiment, ["static_help", "monotone_help", "cabdi_lite"], stimuli)
+    second = build_trial_plan("p_deterministic", experiment, ["static_help", "monotone_help", "cabdi_lite"], stimuli)
+
+    assert first == second
+
+
+def test_main_trials_do_not_repeat_stimuli_when_supply_is_sufficient():
+    experiment = _experiment(n_blocks=2, trials_per_block=3, practice_trials=2)
+    stimuli = _balanced_bank()
+
+    plan = build_trial_plan("p_unique", experiment, ["static_help", "cabdi_lite"], stimuli)
+    main_trials = [row for row in plan if row["block_index"] >= 0]
+    stimulus_ids = [row["stimulus"]["stimulus_id"] for row in main_trials]
+
+    assert len(stimulus_ids) == len(set(stimulus_ids))
+    assert all(not row["pre_render_features"]["allocation_reused_stimulus"] for row in main_trials)
+
+
+def test_model_wrong_is_evenly_distributed_across_blocks_when_available():
+    experiment = _experiment(n_blocks=3, trials_per_block=3, practice_trials=0)
+    stimuli = _balanced_bank()
+
+    plan = build_trial_plan("p_model_wrong", experiment, ["static_help", "monotone_help", "cabdi_lite"], stimuli)
+    main_trials = [row for row in plan if row["block_index"] >= 0]
+
+    wrong_by_block: dict[int, int] = {0: 0, 1: 0, 2: 0}
+    for row in main_trials:
+        if not row["stimulus"]["model_correct"]:
+            wrong_by_block[row["block_index"]] += 1
+    assert max(wrong_by_block.values()) - min(wrong_by_block.values()) <= 1
+
+
+def test_difficulty_mix_is_controlled_per_block_under_normal_supply():
+    experiment = _experiment(n_blocks=3, trials_per_block=3, practice_trials=0)
+    stimuli = _balanced_bank()
+
+    plan = build_trial_plan("p_difficulty", experiment, ["static_help", "monotone_help", "cabdi_lite"], stimuli)
+    main_trials = [row for row in plan if row["block_index"] >= 0]
+
+    for block_index in range(3):
+        block_rows = [row for row in main_trials if row["block_index"] == block_index]
+        difficulties = {row["stimulus"]["difficulty_prior"] for row in block_rows}
+        assert difficulties == {"low", "medium", "high"}
+
+
+def test_insufficient_main_bank_uses_explicit_deterministic_reuse():
+    experiment = _experiment(n_blocks=2, trials_per_block=3, practice_trials=0)
+    stimuli = [_stimulus("s1", difficulty="low", model_correct=True), _stimulus("s2", difficulty="high", model_correct=False)]
+
+    plan = build_trial_plan("p_small_bank", experiment, ["static_help", "cabdi_lite"], stimuli)
+    main_trials = [row for row in plan if row["block_index"] >= 0]
+    ids = [row["stimulus"]["stimulus_id"] for row in main_trials]
+
+    assert len(set(ids)) < len(ids)
+    assert all(row["pre_render_features"]["allocation_reused_stimulus"] for row in main_trials)
+
+
+def test_practice_allocation_is_separate_and_stable():
+    experiment = _experiment(n_blocks=1, trials_per_block=1, practice_trials=2)
+    stimuli = [
+        _stimulus("s1", difficulty="high", model_correct=False),
+        _stimulus("s2", difficulty="medium", model_correct=True),
+        _stimulus("s3", difficulty="low", model_correct=True),
+    ]
+
+    plan = build_trial_plan("p_practice", experiment, ["cabdi_lite"], stimuli)
+    practice = [row for row in plan if row["block_index"] == -1]
+    main = [row for row in plan if row["block_index"] >= 0]
+
+    assert len(practice) == 2
+    assert all(row["pre_render_features"]["allocation_phase"] == "practice" for row in practice)
+    assert all(row["pre_render_features"]["allocation_phase"] == "main" for row in main)
+    assert practice[0]["condition"] == "static_help"
