@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.participant_api.persistence.sqlite_store import SQLiteStore
-from app.participant_api.routes import blocks, exports, health, sessions, trials
+from app.participant_api.routes import blocks, exports, health, public_runs, sessions, trials
 from app.participant_api.services.export_service import ExportService
 from app.participant_api.services.session_service import SessionService
 from app.participant_api.services.trial_service import TrialService
@@ -42,6 +42,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
     app.state.export_service = export_service
 
     app.include_router(health.router)
+    app.include_router(public_runs.router)
     app.include_router(sessions.router)
     app.include_router(trials.router)
     app.include_router(blocks.router)

@@ -21,15 +21,24 @@ export interface NextTrialResponseCompleted {
 }
 
 export async function createSession(
-  experimentId: string,
   participantId: string,
   runSlug: string,
   language: "en" | "ru",
 ): Promise<{ session_id: string }> {
   return request('/api/v1/sessions', {
     method: 'POST',
-    body: JSON.stringify({ experiment_id: experimentId, participant_id: participantId, run_slug: runSlug, language }),
+    body: JSON.stringify({ participant_id: participantId, run_slug: runSlug, language }),
   });
+}
+
+export async function fetchPublicRun(runSlug: string): Promise<{
+  run_slug: string;
+  public_title: string;
+  public_description?: string;
+  launchable: boolean;
+  run_status: string;
+}> {
+  return request(`/api/v1/public/runs/${encodeURIComponent(runSlug)}`);
 }
 
 export async function startSession(sessionId: string): Promise<{ session_id: string; status: string }> {

@@ -3,16 +3,15 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Request
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
 
 
 class CreateSessionRequest(BaseModel):
-    experiment_id: str
+    model_config = ConfigDict(extra="forbid")
     participant_id: str
-    run_id: str | None = None
-    run_slug: str | None = None
+    run_slug: str
     language: Literal["en", "ru"] | None = None
 
 
@@ -20,9 +19,7 @@ class CreateSessionRequest(BaseModel):
 def create_session(req: CreateSessionRequest, request: Request) -> dict:
     try:
         return request.app.state.session_service.create_session(
-            req.experiment_id,
             req.participant_id,
-            run_id=req.run_id,
             run_slug=req.run_slug,
             language=req.language,
         )

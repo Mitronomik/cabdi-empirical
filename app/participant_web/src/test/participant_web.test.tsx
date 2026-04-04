@@ -136,6 +136,15 @@ test('selected language persists across remount', async () => {
 
 test('session creation sends selected participant language', async () => {
   const fetchMock = mockFetchSequence([
+    {
+      status: 200,
+      body: {
+        run_slug: 'public-run-ru',
+        public_title: 'Run RU',
+        launchable: true,
+        run_status: 'active',
+      },
+    },
     { status: 200, body: { session_id: 'sess_1' } },
     { status: 200, body: { session_id: 'sess_1', status: 'in_progress' } },
     { status: 200, body: makeTrial() },
@@ -150,13 +159,18 @@ test('session creation sends selected participant language', async () => {
   await user.click(screen.getByRole('button', { name: /начать тренировку/i }));
 
   expect(fetchMock).toHaveBeenCalled();
-  const firstCall = fetchMock.mock.calls[0];
-  expect(firstCall[0]).toContain('/api/v1/sessions');
-  expect(String((firstCall[1] as RequestInit).body)).toContain('"language":"ru"');
-  expect(String((firstCall[1] as RequestInit).body)).toContain('"run_slug":"public-run-ru"');
+  const createCall = fetchMock.mock.calls[1];
+  expect(createCall[0]).toContain('/api/v1/sessions');
+  expect(String((createCall[1] as RequestInit).body)).toContain('"language":"ru"');
+  expect(String((createCall[1] as RequestInit).body)).toContain('"run_slug":"public-run-ru"');
+  expect(String((createCall[1] as RequestInit).body)).not.toContain('experiment_id');
 });
 test('trial screen renders consistent layout and assistance panel', async () => {
   mockFetchSequence([
+    {
+      status: 200,
+      body: { run_slug: 'public-run-a', public_title: 'Run A', launchable: true, run_status: 'active' },
+    },
     { status: 200, body: { session_id: 'sess_1' } },
     { status: 200, body: { session_id: 'sess_1', status: 'in_progress' } },
     { status: 200, body: makeTrial() },
@@ -174,6 +188,10 @@ test('trial screen renders consistent layout and assistance panel', async () => 
 
 test('forced verification blocks submission until completed', async () => {
   const fetchMock = mockFetchSequence([
+    {
+      status: 200,
+      body: { run_slug: 'public-run-a', public_title: 'Run A', launchable: true, run_status: 'active' },
+    },
     { status: 200, body: { session_id: 'sess_1' } },
     { status: 200, body: { session_id: 'sess_1', status: 'in_progress' } },
     { status: 200, body: makeTrial() },
@@ -200,6 +218,10 @@ test('forced verification blocks submission until completed', async () => {
 
 test('rationale on-click mode works and evidence toggle works', async () => {
   mockFetchSequence([
+    {
+      status: 200,
+      body: { run_slug: 'public-run-a', public_title: 'Run A', launchable: true, run_status: 'active' },
+    },
     { status: 200, body: { session_id: 'sess_1' } },
     { status: 200, body: { session_id: 'sess_1', status: 'in_progress' } },
     {
@@ -224,6 +246,10 @@ test('rationale on-click mode works and evidence toggle works', async () => {
 
 test('block-end questionnaire submits and completion flow appears', async () => {
   const fetchMock = mockFetchSequence([
+    {
+      status: 200,
+      body: { run_slug: 'public-run-a', public_title: 'Run A', launchable: true, run_status: 'active' },
+    },
     { status: 200, body: { session_id: 'sess_1' } },
     { status: 200, body: { session_id: 'sess_1', status: 'in_progress' } },
     { status: 409, body: { detail: { message: 'block_questionnaire_required', block_id: 'block_1' } } },
@@ -238,6 +264,6 @@ test('block-end questionnaire submits and completion flow appears', async () => 
   await screen.findByRole('heading', { name: /block questionnaire/i });
   await user.click(screen.getByRole('button', { name: /submit questionnaire/i }));
 
-  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(5));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(6));
   await screen.findByRole('heading', { name: /complete/i });
 });

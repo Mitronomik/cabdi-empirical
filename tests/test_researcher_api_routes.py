@@ -73,7 +73,7 @@ def test_create_run_and_session_monitor_and_diagnostics(tmp_path):
 
     session_res = participant.post(
         "/api/v1/sessions",
-        json={"experiment_id": "toy_v1", "participant_id": "p_admin_1", "run_id": run_id, "language": "ru"},
+        json={"participant_id": "p_admin_1", "run_slug": create_run.json()["public_slug"], "language": "ru"},
     )
     assert session_res.status_code == 200
 
@@ -154,7 +154,7 @@ def test_closed_runs_remain_readable_for_diagnostics_and_exports(tmp_path):
     assert researcher.post(f"/admin/api/v1/runs/{run_id}/activate").status_code == 200
     assert participant.post(
         "/api/v1/sessions",
-        json={"experiment_id": "toy_v1", "participant_id": "p_hist", "run_id": run_id},
+        json={"participant_id": "p_hist", "run_slug": run_res.json()["public_slug"]},
     ).status_code == 200
     closed = researcher.post(f"/admin/api/v1/runs/{run_id}/close")
     assert closed.status_code == 200

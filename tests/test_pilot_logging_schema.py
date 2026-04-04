@@ -37,7 +37,7 @@ def _bootstrap_run(tmp_path) -> str:
     )
     activate = researcher.post(f"/admin/api/v1/runs/{run.json()['run_id']}/activate")
     assert activate.status_code == 200
-    return run.json()["run_id"]
+    return run.json()["public_slug"]
 
 
 def test_trial_event_log_accepts_supported_event_types():
@@ -90,9 +90,9 @@ def test_trial_summary_log_completeness_and_roundtrip():
 
 def test_completed_trials_have_summary_rows_and_required_fields(tmp_path):
     db_path = str(tmp_path / "pilot.sqlite3")
-    run_id = _bootstrap_run(tmp_path)
+    run_slug = _bootstrap_run(tmp_path)
     client = TestClient(create_app(db_path))
-    created = client.post("/api/v1/sessions", json={"experiment_id": "toy_v1", "participant_id": "p_log", "run_id": run_id}).json()
+    created = client.post("/api/v1/sessions", json={"participant_id": "p_log", "run_slug": run_slug}).json()
     session_id = created["session_id"]
     client.post(f"/api/v1/sessions/{session_id}/start")
 
