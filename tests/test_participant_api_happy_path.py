@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from app.participant_api.persistence.sqlite_store import dumps, loads
+from app.participant_api.persistence.json_codec import dumps, loads
 
 from app.participant_api.main import create_app
 from app.researcher_api.main import create_app as create_researcher_app

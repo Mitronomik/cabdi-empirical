@@ -12,7 +12,7 @@ from analysis.pilot.exclusions import compute_exclusion_flags
 from analysis.pilot.mixed_effects_ready import build_mixed_effects_ready
 from analysis.pilot.report_builder import build_report
 from analysis.pilot.summaries import build_participant_summary
-from app.participant_api.persistence.sqlite_store import loads
+from app.participant_api.persistence.json_codec import loads
 from app.participant_api.persistence.store_protocol import PilotStore
 from app.researcher_api.services.diagnostics_service import DiagnosticsService
 from app.researcher_api.services.run_data_service import RunDataService

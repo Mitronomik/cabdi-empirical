@@ -70,6 +70,16 @@ class PostgresStore:
                     current_version = migration.version
             self._validate_current_schema(conn)
 
+    @property
+    def schema_version(self) -> int:
+        return self.CURRENT_SCHEMA_VERSION
+
+    def placeholders(self, n: int) -> str:
+        return ", ".join("%s" for _ in range(n))
+
+    def transaction(self) -> Iterator[Any]:
+        return self.connect()
+
     def _migrations(self) -> list[Migration]:
         return [
             Migration(1, "create_initial_pilot_tables", self._migration_001_create_initial_tables),

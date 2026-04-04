@@ -8,7 +8,7 @@ import secrets
 from typing import Any
 from uuid import uuid4
 
-from app.participant_api.persistence.sqlite_store import dumps, loads
+from app.participant_api.persistence.json_codec import dumps, loads
 from app.participant_api.persistence.store_protocol import PilotStore
 from app.participant_api.services.randomization_service import assign_order_id, build_trial_plan
 from app.participant_api.services.run_config_service import resolve_execution_config_from_run

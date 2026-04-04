@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -182,6 +181,16 @@ class SQLiteStore:
                 f"Database schema version {version} does not match required {self.CURRENT_SCHEMA_VERSION} after migration."
             )
         self._assert_not_null_column(conn, "participant_sessions", "run_id")
+
+    @property
+    def schema_version(self) -> int:
+        return self.CURRENT_SCHEMA_VERSION
+
+    def placeholders(self, n: int) -> str:
+        return ", ".join("?" for _ in range(n))
+
+    def transaction(self) -> Iterator[sqlite3.Connection]:
+        return self.connect()
 
     def _table_columns(self, conn: sqlite3.Connection, table_name: str) -> dict[str, sqlite3.Row]:
         return {row["name"]: row for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()}
@@ -384,14 +393,6 @@ class SQLiteStore:
     def executemany(self, query: str, params: list[tuple[Any, ...]]) -> None:
         with self.connect() as conn:
             conn.executemany(query, params)
-
-
-def dumps(payload: Any) -> str:
-    return json.dumps(payload, sort_keys=True)
-
-
-def loads(payload: str) -> Any:
-    return json.loads(payload)
 
 
 def _now_iso() -> str:
