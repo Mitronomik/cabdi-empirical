@@ -101,6 +101,8 @@ def test_model_wrong_is_evenly_distributed_across_blocks_when_available():
     for row in main_trials:
         if not row["stimulus"]["model_correct"]:
             wrong_by_block[row["block_index"]] += 1
+    # Main allocator targets a bounded 1/3 model-wrong share by default (3 of 9 here).
+    assert sum(wrong_by_block.values()) == 3
     assert max(wrong_by_block.values()) - min(wrong_by_block.values()) <= 1
 
 
@@ -114,7 +116,56 @@ def test_difficulty_mix_is_controlled_per_block_under_normal_supply():
     for block_index in range(3):
         block_rows = [row for row in main_trials if row["block_index"] == block_index]
         difficulties = {row["stimulus"]["difficulty_prior"] for row in block_rows}
-        assert difficulties == {"low", "medium", "high"}
+        assert len(difficulties) >= 2
+    overall_difficulties = {row["stimulus"]["difficulty_prior"] for row in main_trials}
+    assert overall_difficulties == {"low", "medium", "high"}
+
+
+def test_model_wrong_abundance_is_capped_instead_of_saturating_main_trials():
+    experiment = _experiment(n_blocks=3, trials_per_block=3, practice_trials=0)
+    stimuli = [
+        *[_stimulus(f"w{i}", difficulty=["low", "medium", "high"][i % 3], model_correct=False) for i in range(1, 13)],
+        *[_stimulus(f"c{i}", difficulty=["low", "medium", "high"][i % 3], model_correct=True) for i in range(1, 13)],
+    ]
+
+    plan = build_trial_plan("p_wrong_cap", experiment, ["static_help", "monotone_help", "cabdi_lite"], stimuli)
+    main_trials = [row for row in plan if row["block_index"] >= 0]
+    wrong_count = sum(1 for row in main_trials if not row["stimulus"]["model_correct"])
+    wrong_by_block = {
+        block_index: sum(
+            1 for row in main_trials if row["block_index"] == block_index and not row["stimulus"]["model_correct"]
+        )
+        for block_index in range(3)
+    }
+
+    assert wrong_count == 3
+    assert max(wrong_by_block.values()) - min(wrong_by_block.values()) <= 1
+    assert all(
+        row["pre_render_features"]["allocation_model_wrong_target"] <= 1
+        for row in main_trials
+    )
+
+
+def test_model_wrong_low_supply_is_used_honestly_and_evenly():
+    experiment = _experiment(n_blocks=3, trials_per_block=3, practice_trials=0)
+    stimuli = [
+        _stimulus("w1", difficulty="low", model_correct=False),
+        _stimulus("w2", difficulty="high", model_correct=False),
+        *[_stimulus(f"c{i}", difficulty=["low", "medium", "high"][i % 3], model_correct=True) for i in range(1, 11)],
+    ]
+
+    plan = build_trial_plan("p_wrong_low_supply", experiment, ["static_help", "monotone_help", "cabdi_lite"], stimuli)
+    main_trials = [row for row in plan if row["block_index"] >= 0]
+    wrong_count = sum(1 for row in main_trials if not row["stimulus"]["model_correct"])
+    wrong_by_block = {
+        block_index: sum(
+            1 for row in main_trials if row["block_index"] == block_index and not row["stimulus"]["model_correct"]
+        )
+        for block_index in range(3)
+    }
+
+    assert wrong_count == 2
+    assert max(wrong_by_block.values()) - min(wrong_by_block.values()) <= 1
 
 
 def test_insufficient_main_bank_uses_explicit_deterministic_reuse():
