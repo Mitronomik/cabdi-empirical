@@ -20,7 +20,7 @@ class Migration:
 class SQLiteStore:
     """SQLite-backed persistence with explicit schema migration ownership."""
 
-    CURRENT_SCHEMA_VERSION = 6
+    CURRENT_SCHEMA_VERSION = 7
 
     def __init__(self, db_path: str) -> None:
         self.db_path = db_path
@@ -77,6 +77,7 @@ class SQLiteStore:
             Migration(4, "add_stimulus_validation_columns", self._migration_004_add_stimulus_validation_columns),
             Migration(5, "enforce_participant_session_run_not_null", self._migration_005_enforce_run_not_null),
             Migration(6, "add_researcher_users_table", self._migration_006_add_researcher_users_table),
+            Migration(7, "add_session_created_at_and_preserve_started_at_semantics", self._migration_007_add_session_created_at),
         ]
 
     def _ensure_migration_table(self, conn: sqlite3.Connection) -> None:
@@ -164,6 +165,14 @@ class SQLiteStore:
             )
         if version >= 2 and self._column_is_not_null(conn, "participant_sessions", "run_id"):
             version = 5
+        if "created_at" in participant_columns:
+            if self._column_is_not_null(conn, "participant_sessions", "created_at"):
+                version = max(version, 7)
+            else:
+                raise RuntimeError(
+                    "Detected participant_sessions.created_at without NOT NULL constraint in unversioned DB. "
+                    "Run explicit migration tooling or recreate DB."
+                )
         return version
 
     def _record_inferred_legacy_versions(self, conn: sqlite3.Connection, version: int) -> None:
@@ -181,6 +190,7 @@ class SQLiteStore:
                 f"Database schema version {version} does not match required {self.CURRENT_SCHEMA_VERSION} after migration."
             )
         self._assert_not_null_column(conn, "participant_sessions", "run_id")
+        self._assert_not_null_column(conn, "participant_sessions", "created_at")
 
     @property
     def schema_version(self) -> int:
@@ -373,6 +383,45 @@ class SQLiteStore:
                 is_active INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL
             )
+            """
+        )
+
+    def _migration_007_add_session_created_at(self, conn: sqlite3.Connection) -> None:
+        conn.executescript(
+            """
+            CREATE TABLE participant_sessions_new (
+                session_id TEXT PRIMARY KEY,
+                participant_id TEXT NOT NULL,
+                experiment_id TEXT NOT NULL,
+                run_id TEXT NOT NULL,
+                public_session_code TEXT,
+                resume_token_hash TEXT,
+                assigned_order TEXT NOT NULL,
+                stimulus_set_map TEXT NOT NULL,
+                current_block_index INTEGER NOT NULL,
+                current_trial_index INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                started_at TEXT,
+                completed_at TEXT,
+                last_activity_at TEXT,
+                device_info TEXT NOT NULL,
+                language TEXT NOT NULL DEFAULT "en"
+            );
+
+            INSERT INTO participant_sessions_new(
+                session_id, participant_id, experiment_id, run_id, public_session_code, resume_token_hash,
+                assigned_order, stimulus_set_map, current_block_index, current_trial_index, status,
+                created_at, started_at, completed_at, last_activity_at, device_info, language
+            )
+            SELECT
+                session_id, participant_id, experiment_id, run_id, public_session_code, resume_token_hash,
+                assigned_order, stimulus_set_map, current_block_index, current_trial_index, status,
+                started_at, started_at, completed_at, last_activity_at, device_info, language
+            FROM participant_sessions;
+
+            DROP TABLE participant_sessions;
+            ALTER TABLE participant_sessions_new RENAME TO participant_sessions;
             """
         )
 

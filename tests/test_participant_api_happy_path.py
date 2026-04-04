@@ -832,8 +832,31 @@ def test_start_session_is_idempotent_for_in_progress_and_preserves_awaiting_fina
 
     created = client.post("/api/v1/sessions", json={"run_slug": run_slug}).json()
     session_id = created["session_id"]
+    created_row = client.app.state.store.fetchone(
+        "SELECT created_at, started_at FROM participant_sessions WHERE session_id = ?",
+        (session_id,),
+    )
+    assert created_row is not None
+    assert created_row["created_at"] is not None
+    assert created_row["started_at"] is None
+
     first_start = client.post(f"/api/v1/sessions/{session_id}/start")
+    started_row = client.app.state.store.fetchone(
+        "SELECT created_at, started_at FROM participant_sessions WHERE session_id = ?",
+        (session_id,),
+    )
+    assert started_row is not None
+    assert started_row["created_at"] == created_row["created_at"]
+    assert started_row["started_at"] is not None
+
     second_start = client.post(f"/api/v1/sessions/{session_id}/start")
+    second_started_row = client.app.state.store.fetchone(
+        "SELECT started_at FROM participant_sessions WHERE session_id = ?",
+        (session_id,),
+    )
+    assert second_started_row is not None
+    assert second_started_row["started_at"] == started_row["started_at"]
+
     assert first_start.status_code == 200
     assert second_start.status_code == 200
     assert first_start.json()["status"] == "in_progress"

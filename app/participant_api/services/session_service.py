@@ -101,7 +101,8 @@ class SessionService:
             current_block_index=-1,
             current_trial_index=0,
             status=SESSION_STATUS_CREATED,
-            started_at=_now_iso(),
+            created_at=_now_iso(),
+            started_at=None,
             completed_at=None,
             device_info={},
             language=normalized_language,
@@ -111,8 +112,8 @@ class SessionService:
             """
             INSERT INTO participant_sessions(
                 session_id, participant_id, experiment_id, run_id, public_session_code, resume_token_hash, assigned_order, stimulus_set_map,
-                current_block_index, current_trial_index, status, started_at, completed_at, last_activity_at, device_info, language
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                current_block_index, current_trial_index, status, created_at, started_at, completed_at, last_activity_at, device_info, language
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 session.session_id,
@@ -126,9 +127,10 @@ class SessionService:
                 session.current_block_index,
                 session.current_trial_index,
                 session.status,
+                session.created_at,
                 session.started_at,
                 session.completed_at,
-                session.started_at,
+                session.created_at,
                 dumps(session.device_info),
                 session.language,
             ),
@@ -332,9 +334,10 @@ class SessionService:
             return {"session_id": session_id, "status": runtime_status}
         if runtime_status not in {SESSION_STATUS_CREATED, SESSION_STATUS_IN_PROGRESS, SESSION_STATUS_PAUSED}:
             return {"session_id": session_id, "status": session["status"]}
+        now_iso = _now_iso()
         self.store.execute(
-            "UPDATE participant_sessions SET status = ?, started_at = ?, last_activity_at = ? WHERE session_id = ?",
-            (SESSION_STATUS_IN_PROGRESS, _now_iso(), _now_iso(), session_id),
+            "UPDATE participant_sessions SET status = ?, started_at = COALESCE(started_at, ?), last_activity_at = ? WHERE session_id = ?",
+            (SESSION_STATUS_IN_PROGRESS, now_iso, now_iso, session_id),
         )
         return {"session_id": session_id, "status": SESSION_STATUS_IN_PROGRESS}
 
