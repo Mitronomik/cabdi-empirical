@@ -207,3 +207,25 @@ Notes:
 
 - Pre-launch gate defaults to requiring Postgres target; use `--allow-sqlite` only for local rehearsals.
 - `--run-restore-drill` is destructive by design and should be executed only on staging datasets or approved maintenance windows.
+
+### Black-box HTTP launch realism mode (PR-5 audit remediation)
+
+When packaged services are already running (for example through `docker compose -f deploy/compose.staging.yml up`), run the gate through real HTTP boundaries:
+
+```bash
+python scripts/pilot_prelaunch_gate.py \
+  --db-target "$PILOT_DB_URL" \
+  --run-slug "<active-run-slug>" \
+  --participant-base-url "http://127.0.0.1" \
+  --researcher-base-url "http://127.0.0.1:8081" \
+  --researcher-username "${PILOT_RESEARCHER_USERNAME:-admin}" \
+  --researcher-password "$PILOT_RESEARCHER_PASSWORD" \
+  --run-restore-drill \
+  --output-dir artifacts/pilot_ops/prelaunch_gate
+```
+
+This mode validates launch realism over the external HTTP/process boundary, including:
+
+- participant public routes and run-bound flow (`run_slug` lookup, session create/start, resume, questionnaire gate, final submit),
+- researcher auth cookie issuance/persistence and protected-route rejection when unauthenticated,
+- diagnostics/export reachability through researcher API boundary.
