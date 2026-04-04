@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
+import { KbdMono, StatusBadge, SummaryCard } from '../components/OperatorPrimitives';
 import { localizeOperatorError, localizeStatus } from '../i18n/uiText';
 import { useLocale } from '../i18n/useLocale';
 import { downloadRunExportArtifact, getRunExports, listRuns } from '../lib/api';
@@ -60,6 +61,7 @@ export function ExportsPage() {
   }
 
   const artifacts = Array.isArray(data?.artifacts) ? (data?.artifacts as Array<Record<string, unknown>>) : [];
+  const availableCount = artifacts.filter((item) => Boolean(item.available)).length;
   const selectedRun = useMemo(() => runs.find((run) => run.run_id === runId), [runId, runs]);
 
   async function downloadArtifact(artifactType: string, filename: string) {
@@ -78,45 +80,87 @@ export function ExportsPage() {
   return (
     <section>
       <h2>{t('exports.title')}</h2>
-      <p>{t('exports.workflowHint')}</p>
-      {loadingRuns ? <p>{t('common.loadingRuns')}</p> : null}
-      {runs.length === 0 && !loadingRuns ? <p>{t('common.noRuns')}</p> : null}
-      <select value={runId} onChange={(e) => setRunId(e.target.value)}>
-        <option value="">{t('exports.runId')}</option>
-        {runs.map((run) => (
-          <option key={run.run_id} value={run.run_id}>
-            {runOptionLabelLocalized(run, (value) => localizeStatus(t, value))}
-          </option>
-        ))}
-      </select>
-      <button onClick={load} disabled={loadingExports || !runId}>
-        {loadingExports ? t('common.loading') : t('exports.load')}
-      </button>
-      {selectedRun ? <p>{t('common.selectedRun')}: {runOptionLabelLocalized(selectedRun, (value) => localizeStatus(t, value))} · {selectedRun.run_id}</p> : null}
-      {error ? <p role="alert">{error}</p> : null}
+      <p className="muted">{t('exports.workflowHint')}</p>
+      <section className="panel">
+        <div className="toolbar">
+          {loadingRuns ? <p>{t('common.loadingRuns')}</p> : null}
+          {runs.length === 0 && !loadingRuns ? <p>{t('common.noRuns')}</p> : null}
+          <select value={runId} onChange={(e) => setRunId(e.target.value)}>
+            <option value="">{t('exports.runId')}</option>
+            {runs.map((run) => (
+              <option key={run.run_id} value={run.run_id}>
+                {runOptionLabelLocalized(run, (value) => localizeStatus(t, value))}
+              </option>
+            ))}
+          </select>
+          <button className="primary-btn" onClick={load} disabled={loadingExports || !runId}>
+            {loadingExports ? t('common.loading') : t('exports.load')}
+          </button>
+        </div>
+        {selectedRun ? <p>{t('common.selectedRun')}: {runOptionLabelLocalized(selectedRun, (value) => localizeStatus(t, value))} · <KbdMono>{selectedRun.run_id}</KbdMono></p> : null}
+      </section>
+      {error ? (
+        <p role="alert" className="alert-error">
+          {error}
+        </p>
+      ) : null}
       {data ? (
         <>
-          <p>{t('exports.state')}: {localizeStatus(t, data.export_state ?? 'unknown')}</p>
-          <p>{t('exports.generatedAt')}: {String(data.generated_at ?? t('common.na'))}</p>
-          <p>{String(data.message ?? '')}</p>
-          {String(data.export_state) === 'empty' ? <p>{t('exports.empty')}</p> : null}
+          <section className="panel">
+            <h3>{t('exports.summaryTitle')}</h3>
+            <div className="summary-grid">
+              <SummaryCard label={t('exports.state')} value={localizeStatus(t, data.export_state ?? 'unknown')} tone="info" />
+              <SummaryCard label={t('exports.summaryArtifacts')} value={String(artifacts.length)} tone="info" />
+              <SummaryCard label={t('exports.summaryAvailable')} value={String(availableCount)} tone={availableCount > 0 ? 'good' : 'warn'} />
+              <SummaryCard label={t('exports.generatedAt')} value={String(data.generated_at ?? t('common.na'))} />
+            </div>
+            <p>{String(data.message ?? '')}</p>
+            {String(data.export_state) === 'empty' ? <p>{t('exports.empty')}</p> : null}
+            {String(data.export_state) === 'available' && artifacts.length === 0 ? <p>{t('exports.noArtifacts')}</p> : null}
+          </section>
+
           {artifacts.length > 0 ? (
-            <ul>
-              {artifacts.map((artifact) => (
-                <li key={String(artifact.artifact_type)}>
-                  {String(artifact.artifact_type)} · {String(artifact.category)} · {t('exports.artifactSize')}: {String(artifact.size_bytes)} {t('exports.bytes')} ·{' '}
-                  {t('exports.artifactAvailable')}: {localizeStatus(t, String(artifact.available) === 'true' ? 'available' : 'empty')}{' '}
-                  <button
-                    onClick={() => downloadArtifact(String(artifact.artifact_type), String(artifact.filename))}
-                    disabled={downloading === String(artifact.artifact_type)}
-                  >
-                    {downloading === String(artifact.artifact_type) ? t('exports.downloading') : t('exports.download')}
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <section className="panel">
+              <h3>{t('exports.artifactsTitle')}</h3>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>{t('exports.tableType')}</th>
+                      <th>{t('exports.tableCategory')}</th>
+                      <th>{t('exports.artifactSize')}</th>
+                      <th>{t('exports.artifactAvailable')}</th>
+                      <th>{t('run.tableActions')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {artifacts.map((artifact) => {
+                      const artifactType = String(artifact.artifact_type);
+                      return (
+                        <tr key={artifactType}>
+                          <td>{artifactType}</td>
+                          <td>{String(artifact.category)}</td>
+                          <td>{String(artifact.size_bytes)} {t('exports.bytes')}</td>
+                          <td>
+                            <StatusBadge label={localizeStatus(t, String(artifact.available) === 'true' ? 'available' : 'empty')} tone={artifact.available ? 'good' : 'warn'} />
+                          </td>
+                          <td>
+                            <button
+                              className="primary-btn"
+                              onClick={() => downloadArtifact(artifactType, String(artifact.filename))}
+                              disabled={downloading === artifactType || !artifact.available}
+                            >
+                              {downloading === artifactType ? t('exports.downloading') : t('exports.download')}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
           ) : null}
-          {String(data.export_state) === 'available' && artifacts.length === 0 ? <p>{t('exports.noArtifacts')}</p> : null}
         </>
       ) : (
         <p>{t('exports.notLoaded')}</p>

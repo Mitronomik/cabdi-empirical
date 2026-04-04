@@ -38,7 +38,9 @@ function AppBody() {
   if (authState === 'loading') {
     return (
       <main>
-        <LanguageSwitcher />
+        <div className="toolbar">
+          <LanguageSwitcher />
+        </div>
         <h1>{t('app.title')}</h1>
         <p>{t('auth.checking')}</p>
       </main>
@@ -48,56 +50,72 @@ function AppBody() {
   if (authState === 'unauthenticated') {
     return (
       <main>
-        <LanguageSwitcher />
+        <div className="toolbar">
+          <LanguageSwitcher />
+        </div>
         <h1>{t('app.title')}</h1>
-        <h2>{t('auth.loginTitle')}</h2>
-        <p>{t('auth.loginHint')}</p>
-        <form
-          onSubmit={async (event) => {
-            event.preventDefault();
-            setAuthError(null);
-            try {
-              const response = await login(username, password);
-              setAuthedUsername(response.user.username);
-              setPassword('');
-              setAuthState('authenticated');
-            } catch (error) {
-              setAuthError(localizeOperatorError(t, error));
-            }
-          }}
-        >
-          <label>
-            {t('auth.username')}
-            <input value={username} onChange={(event) => setUsername(event.target.value)} />
-          </label>
-          <label>
-            {t('auth.password')}
-            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
-          </label>
-          <button type="submit">{t('auth.login')}</button>
-        </form>
-        {authError && <p role="alert">{authError}</p>}
+        <section className="panel">
+          <h2>{t('auth.loginTitle')}</h2>
+          <p className="muted">{t('auth.loginHint')}</p>
+          <form
+            className="form-row"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              setAuthError(null);
+              try {
+                const response = await login(username, password);
+                setAuthedUsername(response.user.username);
+                setPassword('');
+                setAuthState('authenticated');
+              } catch (error) {
+                setAuthError(localizeOperatorError(t, error));
+              }
+            }}
+          >
+            <label>
+              {t('auth.username')}
+              <input value={username} onChange={(event) => setUsername(event.target.value)} />
+            </label>
+            <label>
+              {t('auth.password')}
+              <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+            </label>
+            <button className="primary-btn" type="submit">
+              {t('auth.login')}
+            </button>
+          </form>
+          {authError && (
+            <p role="alert" className="alert-error">
+              {authError}
+            </p>
+          )}
+        </section>
       </main>
     );
   }
 
   return (
     <main>
-      <LanguageSwitcher />
+      <div className="toolbar">
+        <LanguageSwitcher />
+      </div>
       <h1>{t('app.title')}</h1>
       <p>{t('app.subtitle')}</p>
-      <p>
-        {t('auth.loggedInAs')}: {authedUsername}
-      </p>
-      <button
-        onClick={async () => {
-          await logout();
-          setAuthedUsername('');
-          setAuthState('unauthenticated');
-        }}
-      >
-        {t('auth.logout')}
-      </button>
+      <section className="panel toolbar" aria-label={t('app.operatorSession')}>
+        <p>
+          {t('auth.loggedInAs')}: {authedUsername}
+        </p>
+        <button
+          className="secondary-btn"
+          onClick={async () => {
+            await logout();
+            setAuthedUsername('');
+            setAuthState('unauthenticated');
+          }}
+        >
+          {t('auth.logout')}
+        </button>
+      </section>
       <Nav page={page} setPage={setPage} />
       {page === 'upload' && <StimulusUploadPage />}
       {page === 'run' && <RunBuilderPage />}
