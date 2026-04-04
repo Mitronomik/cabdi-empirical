@@ -89,6 +89,40 @@ def _wait_for_http_ready(
     return False, f"timed out waiting for HTTP boundary readiness: {last_error}"
 
 
+def _check_surface_boundary(
+    *,
+    participant_client: TestClient | httpx.Client,
+    unauth_researcher_client: TestClient | httpx.Client,
+) -> tuple[bool, str, dict[str, int]]:
+    participant_health = participant_client.get("/health").status_code
+    participant_admin_probe = participant_client.get("/admin/api/v1/runs").status_code
+    researcher_docs = unauth_researcher_client.get("/docs").status_code
+    researcher_openapi = unauth_researcher_client.get("/openapi.json").status_code
+    researcher_protected = unauth_researcher_client.get("/admin/api/v1/runs").status_code
+
+    statuses = {
+        "participant_health": participant_health,
+        "participant_admin_probe": participant_admin_probe,
+        "researcher_docs": researcher_docs,
+        "researcher_openapi": researcher_openapi,
+        "researcher_protected": researcher_protected,
+    }
+    passed = (
+        participant_health == 200
+        and participant_admin_probe == 404
+        and researcher_docs == 404
+        and researcher_openapi == 404
+        and researcher_protected == 401
+    )
+    detail = (
+        "public/private contour probe "
+        f"(participant health={participant_health}, participant admin probe={participant_admin_probe}, "
+        f"researcher docs={researcher_docs}, researcher openapi={researcher_openapi}, "
+        f"researcher unauth protected={researcher_protected})"
+    )
+    return passed, detail, statuses
+
+
 def _login_researcher_http(researcher_client: httpx.Client, username: str, password: str) -> tuple[bool, str, bool]:
     res = researcher_client.post("/admin/api/v1/auth/login", json={"username": username, "password": password})
     if res.status_code != 200:
@@ -512,6 +546,27 @@ def run_prelaunch_gate(
             metadata={"response": health.json() if health.status_code == 200 else {}},
         )
 
+        boundary_ok, boundary_detail, boundary_statuses = _check_surface_boundary(
+            participant_client=participant_client,
+            unauth_researcher_client=unauth_researcher_client,
+        )
+        _record(
+            checks,
+            check_id="public_private_surface_boundary",
+            severity="blocker",
+            passed=boundary_ok,
+            detail=boundary_detail,
+            metadata=boundary_statuses,
+        )
+        _record(
+            checks,
+            check_id="researcher_protected_boundary",
+            severity="blocker",
+            passed=boundary_statuses["researcher_protected"] == 401,
+            detail=f"unauthenticated protected researcher endpoint status={boundary_statuses['researcher_protected']}",
+            metadata={},
+        )
+
         if use_blackbox_http:
             auth_ok, auth_detail, cookie_present = _login_researcher_http(
                 researcher_client,
@@ -537,15 +592,6 @@ def run_prelaunch_gate(
                 passed=cookie_present and researcher_client.get("/admin/api/v1/auth/me").status_code == 200,
                 detail="researcher auth cookie issued and reused across external HTTP requests",
                 metadata={"cookie_present": cookie_present},
-            )
-            unauth_status = unauth_researcher_client.get("/admin/api/v1/runs").status_code
-            _record(
-                checks,
-                check_id="researcher_protected_boundary",
-                severity="blocker",
-                passed=unauth_status == 401,
-                detail=f"unauthenticated protected researcher endpoint status={unauth_status}",
-                metadata={},
             )
 
         if use_blackbox_http:
