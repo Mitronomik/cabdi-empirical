@@ -76,7 +76,8 @@ python experiments/run_pilot_analysis.py \
 
 ## 8) Service behavior notes
 
-- Both APIs share one SQLite DB by default (`pilot/sessions/pilot_sessions.sqlite3`) via `PILOT_DB_PATH`.
+- Both APIs share one DB target. Default remains SQLite (`pilot/sessions/pilot_sessions.sqlite3`) via `PILOT_DB_PATH`.
+- For staging-parity runs, set `PILOT_DB_URL` to Postgres (for example: `postgresql://user:pass@localhost:5432/cabdi_pilot`).
 - Participant session creation is run-bound: `POST /api/v1/sessions` requires `run_slug` (public entry), and only `active` runs accept new participant sessions.
 - Participant web entry now uses public slug (via `?run_slug=<public-slug>` or manual input in instructions); optional local default can be set with `VITE_PARTICIPANT_RUN_SLUG`.
 - Researcher run creation defaults to `draft`; run must be explicitly activated (`POST /admin/api/v1/runs/{run_id}/activate`) before participant session creation is allowed.

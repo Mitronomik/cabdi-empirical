@@ -7,11 +7,12 @@ import io
 import json
 from typing import Any
 
-from app.participant_api.persistence.sqlite_store import SQLiteStore, loads
+from app.participant_api.persistence.sqlite_store import loads
+from app.participant_api.persistence.store_protocol import PilotStore
 
 
 class ExportService:
-    def __init__(self, store: SQLiteStore) -> None:
+    def __init__(self, store: PilotStore) -> None:
         self.store = store
 
     def export_session(self, session_id: str) -> dict[str, Any]:

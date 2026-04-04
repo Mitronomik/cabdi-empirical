@@ -6,7 +6,8 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
-from app.participant_api.persistence.sqlite_store import SQLiteStore, dumps, loads
+from app.participant_api.persistence.sqlite_store import dumps, loads
+from app.participant_api.persistence.store_protocol import PilotStore
 from app.participant_api.services.policy_service import render_policy_decision
 from app.participant_api.services.session_service import (
     SESSION_STATUS_AWAITING_FINAL_SUBMIT,
@@ -28,7 +29,7 @@ def _now_iso() -> str:
 
 
 class TrialService:
-    def __init__(self, store: SQLiteStore, session_service: SessionService) -> None:
+    def __init__(self, store: PilotStore, session_service: SessionService) -> None:
         self.store = store
         self.session_service = session_service
 
@@ -165,7 +166,11 @@ class TrialService:
             self_confidence=int(payload["self_confidence"]),
         )
         self.store.execute(
-            "INSERT OR REPLACE INTO trial_summary_logs(session_id, trial_id, summary_json) VALUES (?, ?, ?)",
+            """
+            INSERT INTO trial_summary_logs(session_id, trial_id, summary_json)
+            VALUES (?, ?, ?)
+            ON CONFLICT(session_id, trial_id) DO UPDATE SET summary_json = excluded.summary_json
+            """,
             (session_id, trial_id, dumps(summary.to_dict())),
         )
 
@@ -189,8 +194,13 @@ class TrialService:
             raise ValueError("session_finalized")
         self.store.execute(
             """
-            INSERT OR REPLACE INTO block_questionnaires(session_id, block_id, burden, trust, usefulness, submitted_at)
+            INSERT INTO block_questionnaires(session_id, block_id, burden, trust, usefulness, submitted_at)
             VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(session_id, block_id) DO UPDATE SET
+                burden = excluded.burden,
+                trust = excluded.trust,
+                usefulness = excluded.usefulness,
+                submitted_at = excluded.submitted_at
             """,
             (
                 session_id,

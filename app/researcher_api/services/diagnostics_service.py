@@ -5,7 +5,8 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from typing import Any
 
-from app.participant_api.persistence.sqlite_store import SQLiteStore, loads
+from app.participant_api.persistence.sqlite_store import loads
+from app.participant_api.persistence.store_protocol import PilotStore
 from app.researcher_api.services.run_data_service import RunDataService
 from packages.shared_types.pilot_types import RiskBucket
 from policies.budget_checks import compare_budget_to_reference, summarize_budgets_by_condition
@@ -27,7 +28,7 @@ _CORE_SUMMARY_FIELDS = [
 
 
 class DiagnosticsService:
-    def __init__(self, store: SQLiteStore) -> None:
+    def __init__(self, store: PilotStore) -> None:
         self.store = store
         self.run_data_service = RunDataService(store)
 

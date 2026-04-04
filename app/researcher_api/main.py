@@ -6,7 +6,7 @@ import os
 
 from fastapi import FastAPI
 
-from app.participant_api.persistence.sqlite_store import SQLiteStore
+from app.participant_api.persistence.store_factory import create_store
 from app.researcher_api.routes import admin_runs, diagnostics, exports, stimuli
 from app.researcher_api.services.diagnostics_service import DiagnosticsService
 from app.researcher_api.services.export_service import AdminExportService
@@ -17,7 +17,8 @@ from app.researcher_api.services.stimulus_service import StimulusService
 def create_app(db_path: str | None = None) -> FastAPI:
     app = FastAPI(title="CABDI Pilot Researcher Admin API", version="0.1.0")
 
-    store = SQLiteStore(db_path or os.getenv("PILOT_DB_PATH", "pilot/sessions/pilot_sessions.sqlite3"))
+    db_target = db_path or os.getenv("PILOT_DB_URL") or os.getenv("PILOT_DB_PATH")
+    store = create_store(db_target)
     store.init_db()
 
     app.state.store = store

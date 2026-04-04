@@ -59,14 +59,19 @@ cd ../..
 
 ## 5) Environment variables
 
-Current required variable for local persistence:
+Current persistence variables:
 
-- `PILOT_DB_PATH` (optional): path to shared SQLite DB used by both APIs.
+- `PILOT_DB_URL` (optional): DB URL for both APIs. Supports:
+  - Postgres: `postgresql://user:pass@host:5432/dbname`
+  - SQLite URL: `sqlite:///pilot/sessions/pilot_sessions.sqlite3`
+- `PILOT_DB_PATH` (optional fallback): path to shared SQLite DB used by both APIs.
 
 Example:
 
 ```bash
 export PILOT_DB_PATH=pilot/sessions/pilot_sessions.sqlite3
+# or for Postgres staging parity:
+# export PILOT_DB_URL=postgresql://user:pass@localhost:5432/cabdi_pilot
 ```
 
 Frontend API base variables (optional overrides):
@@ -135,7 +140,7 @@ npm run dev -- --host 127.0.0.1 --port 5174
 
 - No production auth/authorization model (MVP only).
 - No production deployment packaging/orchestration.
-- Persistence is SQLite-oriented for local MVP; no Postgres migration layer is provided here.
+- Persistence supports SQLite (local default) and Postgres (staging-parity backend).
 - This repo does not provide real-world/clinical validation claims.
 
 ## 10) Troubleshooting
