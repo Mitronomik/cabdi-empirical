@@ -80,3 +80,11 @@ export async function submitBlockQuestionnaire(
     body: JSON.stringify(payload),
   });
 }
+
+export async function finalSubmitSession(
+  sessionId: string,
+): Promise<{ session_id: string; status: string; final_submit: string; already_finalized: boolean }> {
+  return request(`/api/v1/sessions/${sessionId}/final-submit`, {
+    method: 'POST',
+  });
+}

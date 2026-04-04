@@ -10,6 +10,7 @@ from app.participant_api.persistence.sqlite_store import SQLiteStore, dumps, loa
 from app.participant_api.services.policy_service import render_policy_decision
 from app.participant_api.services.session_service import (
     SESSION_STATUS_AWAITING_FINAL_SUBMIT,
+    SESSION_STATUS_FINALIZED,
     SESSION_STATUS_CREATED,
     SESSION_STATUS_IN_PROGRESS,
     SESSION_STATUS_PAUSED,
@@ -33,7 +34,7 @@ class TrialService:
 
     def next_trial(self, session_id: str) -> dict[str, Any] | None:
         session = self.session_service.get_session(session_id)
-        if session["status"] in {SESSION_STATUS_AWAITING_FINAL_SUBMIT, "finalized", "completed"}:
+        if session["status"] in {SESSION_STATUS_AWAITING_FINAL_SUBMIT, SESSION_STATUS_FINALIZED, "completed"}:
             return {"status": session["status"], "session_id": session_id, "no_more_trials": True}
         if session["status"] in {SESSION_STATUS_PAUSED, "abandoned"}:
             return {"status": session["status"], "session_id": session_id}
@@ -102,6 +103,9 @@ class TrialService:
         }
 
     def submit_trial(self, session_id: str, trial_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        session = self.session_service.get_session(session_id)
+        if session["status"] in {SESSION_STATUS_FINALIZED, "completed"}:
+            raise ValueError("session_finalized")
         trial = self.store.fetchone(
             "SELECT * FROM session_trials WHERE session_id = ? AND trial_id = ?",
             (session_id, trial_id),
@@ -180,6 +184,9 @@ class TrialService:
         }
 
     def submit_block_questionnaire(self, session_id: str, block_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        session = self.session_service.get_session(session_id)
+        if session["status"] in {SESSION_STATUS_FINALIZED, "completed"}:
+            raise ValueError("session_finalized")
         self.store.execute(
             """
             INSERT OR REPLACE INTO block_questionnaires(session_id, block_id, burden, trust, usefulness, submitted_at)

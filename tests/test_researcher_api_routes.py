@@ -167,3 +167,48 @@ def test_closed_runs_remain_readable_for_diagnostics_and_exports(tmp_path):
     assert diagnostics.status_code == 200
     exports = researcher.get(f"/admin/api/v1/runs/{run_id}/exports")
     assert exports.status_code == 200
+
+
+def test_session_monitor_distinguishes_awaiting_final_submit_and_finalized(tmp_path):
+    db_path = str(tmp_path / "pilot.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    participant = TestClient(create_participant_app(db_path))
+
+    stimulus_set_id = _upload_stimulus(researcher)
+    run_res = researcher.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "status split run",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"n_blocks": 3},
+            "stimulus_set_ids": [stimulus_set_id],
+        },
+    )
+    run_id = run_res.json()["run_id"]
+    run_slug = run_res.json()["public_slug"]
+    assert researcher.post(f"/admin/api/v1/runs/{run_id}/activate").status_code == 200
+
+    awaiting_session = participant.post(
+        "/api/v1/sessions",
+        json={"participant_id": "p_waiting", "run_slug": run_slug},
+    ).json()["session_id"]
+    finalized_session = participant.post(
+        "/api/v1/sessions",
+        json={"participant_id": "p_finalized", "run_slug": run_slug},
+    ).json()["session_id"]
+
+    participant.app.state.store.execute(
+        "UPDATE participant_sessions SET status = 'awaiting_final_submit' WHERE session_id = ?",
+        (awaiting_session,),
+    )
+    participant.app.state.store.execute(
+        "UPDATE participant_sessions SET status = 'finalized', completed_at = '2026-01-01T00:00:00+00:00' WHERE session_id = ?",
+        (finalized_session,),
+    )
+
+    sessions = researcher.get(f"/admin/api/v1/runs/{run_id}/sessions")
+    assert sessions.status_code == 200
+    counts = sessions.json()["counts"]
+    assert counts["awaiting_final_submit"] == 1
+    assert counts["finalized"] == 1

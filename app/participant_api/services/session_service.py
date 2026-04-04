@@ -242,27 +242,66 @@ class SessionService:
         )
 
     def mark_awaiting_final_submit_if_done(self, session_id: str) -> bool:
-        pending = self.store.fetchone(
-            "SELECT trial_id FROM session_trials WHERE session_id = ? AND status != 'completed' LIMIT 1",
-            (session_id,),
-        )
-        if pending:
+        status = self.required_work_status(session_id)
+        if not status["eligible"]:
             return False
-
-        main_blocks = self.store.fetchall(
-            "SELECT DISTINCT block_id FROM session_trials WHERE session_id = ? AND block_id != 'practice'",
-            (session_id,),
-        )
-        for block in main_blocks:
-            q = self.store.fetchone(
-                "SELECT questionnaire_id FROM block_questionnaires WHERE session_id = ? AND block_id = ?",
-                (session_id, block["block_id"]),
-            )
-            if q is None:
-                return False
 
         self.store.execute(
             "UPDATE participant_sessions SET status = ?, completed_at = NULL, last_activity_at = ? WHERE session_id = ?",
             (SESSION_STATUS_AWAITING_FINAL_SUBMIT, _now_iso(), session_id),
         )
         return True
+
+    def required_work_status(self, session_id: str) -> dict[str, Any]:
+        pending = self.store.fetchone(
+            "SELECT trial_id FROM session_trials WHERE session_id = ? AND status != 'completed' LIMIT 1",
+            (session_id,),
+        )
+        has_incomplete_trials = pending is not None
+
+        main_blocks = self.store.fetchall(
+            "SELECT DISTINCT block_id FROM session_trials WHERE session_id = ? AND block_id != 'practice'",
+            (session_id,),
+        )
+        missing_questionnaire_blocks: list[str] = []
+        for block in main_blocks:
+            q = self.store.fetchone(
+                "SELECT questionnaire_id FROM block_questionnaires WHERE session_id = ? AND block_id = ?",
+                (session_id, block["block_id"]),
+            )
+            if q is None:
+                missing_questionnaire_blocks.append(str(block["block_id"]))
+
+        return {
+            "eligible": not has_incomplete_trials and not missing_questionnaire_blocks,
+            "has_incomplete_trials": has_incomplete_trials,
+            "missing_questionnaire_blocks": sorted(missing_questionnaire_blocks),
+        }
+
+    def final_submit(self, session_id: str) -> dict[str, Any]:
+        session = self.get_session(session_id)
+        if session["status"] in {SESSION_STATUS_FINALIZED, "completed"}:
+            return {
+                "session_id": session_id,
+                "status": SESSION_STATUS_FINALIZED,
+                "final_submit": "already_finalized",
+                "already_finalized": True,
+            }
+
+        work_status = self.required_work_status(session_id)
+        if work_status["has_incomplete_trials"]:
+            raise ValueError("final_submit_ineligible:incomplete_trials")
+        if work_status["missing_questionnaire_blocks"]:
+            missing_blocks = ",".join(work_status["missing_questionnaire_blocks"])
+            raise ValueError(f"final_submit_ineligible:missing_block_questionnaires:{missing_blocks}")
+
+        self.store.execute(
+            "UPDATE participant_sessions SET status = ?, completed_at = ?, last_activity_at = ? WHERE session_id = ?",
+            (SESSION_STATUS_FINALIZED, _now_iso(), _now_iso(), session_id),
+        )
+        return {
+            "session_id": session_id,
+            "status": SESSION_STATUS_FINALIZED,
+            "final_submit": "accepted",
+            "already_finalized": False,
+        }

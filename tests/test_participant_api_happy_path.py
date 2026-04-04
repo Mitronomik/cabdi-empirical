@@ -14,6 +14,35 @@ def _make_client(tmp_path):
     return TestClient(app)
 
 
+def _progress_session_to_awaiting_final_submit(client: TestClient, session_id: str) -> None:
+    while True:
+        next_res = client.get(f"/api/v1/sessions/{session_id}/next-trial")
+        assert next_res.status_code in {200, 409}
+        if next_res.status_code == 409:
+            block_id = next_res.json()["detail"]["block_id"]
+            q_res = client.post(
+                f"/api/v1/sessions/{session_id}/blocks/{block_id}/questionnaire",
+                json={"burden": 30, "trust": 40, "usefulness": 50},
+            )
+            assert q_res.status_code == 200
+            continue
+        body = next_res.json()
+        if body.get("status") == "awaiting_final_submit":
+            return
+        submit_res = client.post(
+            f"/api/v1/sessions/{session_id}/trials/{body['trial_id']}/submit",
+            json={
+                "human_response": body["stimulus"]["true_label"],
+                "reaction_time_ms": 1000,
+                "self_confidence": 70,
+                "reason_clicked": False,
+                "evidence_opened": False,
+                "verification_completed": False,
+            },
+        )
+        assert submit_res.status_code == 200
+
+
 def _bootstrap_run(tmp_path) -> str:
     db_path = str(tmp_path / "pilot_api.sqlite3")
     researcher = TestClient(create_researcher_app(db_path))
@@ -405,3 +434,83 @@ def test_session_trials_are_frozen_snapshots_even_if_stimulus_set_changes(tmp_pa
     )
     frozen_after = loads(rows_after[0]["stimulus_json"])
     assert frozen_after["payload"]["body"] == "original"
+
+
+def test_final_submit_requires_eligible_session_and_finalizes_explicitly(tmp_path):
+    client = _make_client(tmp_path)
+    run_slug = _bootstrap_run(tmp_path)
+    create_res = client.post("/api/v1/sessions", json={"participant_id": "p_finalize", "run_slug": run_slug})
+    session_id = create_res.json()["session_id"]
+    assert client.post(f"/api/v1/sessions/{session_id}/start").status_code == 200
+
+    early_submit = client.post(f"/api/v1/sessions/{session_id}/final-submit")
+    assert early_submit.status_code == 400
+    assert "final_submit_ineligible:incomplete_trials" in early_submit.json()["detail"]
+
+    _progress_session_to_awaiting_final_submit(client, session_id)
+
+    finalized = client.post(f"/api/v1/sessions/{session_id}/final-submit")
+    assert finalized.status_code == 200
+    assert finalized.json()["status"] == "finalized"
+    assert finalized.json()["final_submit"] == "accepted"
+    assert finalized.json()["already_finalized"] is False
+
+    row = client.app.state.store.fetchone(
+        "SELECT status, completed_at FROM participant_sessions WHERE session_id = ?",
+        (session_id,),
+    )
+    assert row is not None
+    assert row["status"] == "finalized"
+    assert row["completed_at"] is not None
+
+
+def test_final_submit_is_idempotent_and_finalized_session_is_locked(tmp_path):
+    client = _make_client(tmp_path)
+    run_slug = _bootstrap_run(tmp_path)
+    create_res = client.post("/api/v1/sessions", json={"participant_id": "p_lock", "run_slug": run_slug})
+    session_id = create_res.json()["session_id"]
+    assert client.post(f"/api/v1/sessions/{session_id}/start").status_code == 200
+
+    _progress_session_to_awaiting_final_submit(client, session_id)
+    first_submit = client.post(f"/api/v1/sessions/{session_id}/final-submit")
+    assert first_submit.status_code == 200
+    second_submit = client.post(f"/api/v1/sessions/{session_id}/final-submit")
+    assert second_submit.status_code == 200
+    assert second_submit.json()["final_submit"] == "already_finalized"
+    assert second_submit.json()["already_finalized"] is True
+
+    next_trial = client.get(f"/api/v1/sessions/{session_id}/next-trial")
+    assert next_trial.status_code == 200
+    assert next_trial.json()["status"] == "finalized"
+
+    any_trial = client.app.state.store.fetchone(
+        "SELECT trial_id FROM session_trials WHERE session_id = ? ORDER BY trial_id LIMIT 1",
+        (session_id,),
+    )
+    assert any_trial is not None
+    blocked_submit = client.post(
+        f"/api/v1/sessions/{session_id}/trials/{any_trial['trial_id']}/submit",
+        json={
+            "human_response": "scam",
+            "reaction_time_ms": 1000,
+            "self_confidence": 70,
+            "reason_clicked": False,
+            "evidence_opened": False,
+            "verification_completed": False,
+        },
+    )
+    assert blocked_submit.status_code == 400
+    assert "session_finalized" in blocked_submit.json()["detail"]
+
+    blocked_questionnaire = client.post(
+        f"/api/v1/sessions/{session_id}/blocks/block_1/questionnaire",
+        json={"burden": 10, "trust": 10, "usefulness": 10},
+    )
+    assert blocked_questionnaire.status_code == 400
+    assert "session_finalized" in blocked_questionnaire.json()["detail"]
+
+
+def test_final_submit_unknown_session_returns_404(tmp_path):
+    client = _make_client(tmp_path)
+    res = client.post("/api/v1/sessions/sess_missing/final-submit")
+    assert res.status_code == 404

@@ -4,6 +4,7 @@ import {
   createSession,
   fetchPublicRun,
   fetchNextTrial,
+  finalSubmitSession,
   startSession,
   submitBlockQuestionnaire,
   submitTrial,
@@ -12,7 +13,7 @@ import { detectLocale } from '../i18n/locale';
 import { messages, type Locale } from '../i18n/messages';
 import type { QuestionnairePayload, TrialPayload } from '../lib/types';
 
-type Stage = 'consent' | 'instructions' | 'trial' | 'questionnaire' | 'completion';
+type Stage = 'consent' | 'instructions' | 'trial' | 'questionnaire' | 'awaiting_final_submit' | 'completion';
 
 const TOTAL_TRIALS = 54;
 
@@ -28,7 +29,8 @@ function localizedError(
     | 'error.submitTrial'
     | 'error.missingQuestionnaireState'
     | 'error.submitQuestionnaire'
-    | 'error.missingSessionStateShort',
+    | 'error.missingSessionStateShort'
+    | 'error.finalSubmit',
 ) {
   const locale = getCurrentLocale();
   return messages[locale][key];
@@ -68,7 +70,12 @@ export function useParticipantFlow() {
     setError(null);
     try {
       const next = await fetchNextTrial(activeSessionId);
-      if ('status' in next && ['completed', 'awaiting_final_submit', 'finalized'].includes(next.status)) {
+      if ('status' in next && next.status === 'awaiting_final_submit') {
+        setStage('awaiting_final_submit');
+        setCurrentTrial(null);
+        return;
+      }
+      if ('status' in next && ['completed', 'finalized'].includes(next.status)) {
         setStage('completion');
         setCurrentTrial(null);
         setCompletionCode(activeSessionId.slice(0, 8).toUpperCase());
@@ -162,6 +169,25 @@ export function useParticipantFlow() {
     }
   }
 
+  async function submitFinalSession() {
+    if (!sessionId) {
+      setError(localizedError('error.missingSessionStateShort'));
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await finalSubmitSession(sessionId);
+      if (res.status === 'finalized') {
+        setStage('completion');
+        setCompletionCode(sessionId.slice(0, 8).toUpperCase());
+      }
+    } catch {
+      setError(localizedError('error.finalSubmit'));
+      setLoading(false);
+    }
+  }
+
   return {
     stage,
     currentTrial,
@@ -176,6 +202,7 @@ export function useParticipantFlow() {
     beginSession,
     submitCurrentTrial,
     submitQuestionnaire,
+    submitFinalSession,
     retryCurrent: () =>
       sessionId ? loadNextTrial(sessionId) : setError(localizedError('error.missingSessionStateShort')),
   };

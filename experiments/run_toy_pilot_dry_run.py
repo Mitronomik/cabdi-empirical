@@ -129,6 +129,8 @@ def _simulate_session(participant_client: TestClient, session_id: str, rng: Rand
         next_res.raise_for_status()
         payload = next_res.json()
         if payload.get("status") in {"awaiting_final_submit", "finalized", "completed"}:
+            if payload.get("status") == "awaiting_final_submit":
+                participant_client.post(f"/api/v1/sessions/{session_id}/final-submit").raise_for_status()
             break
 
         condition_counts[payload["policy_decision"]["condition"]] += 1

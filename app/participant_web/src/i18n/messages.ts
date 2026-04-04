@@ -13,6 +13,7 @@ export type MessageKey =
   | 'error.missingQuestionnaireState'
   | 'error.submitQuestionnaire'
   | 'error.missingSessionStateShort'
+  | 'error.finalSubmit'
   | 'consent.title'
   | 'consent.description'
   | 'consent.checkbox'
@@ -55,6 +56,11 @@ export type MessageKey =
   | 'questionnaire.trust'
   | 'questionnaire.usefulness'
   | 'questionnaire.submit'
+  | 'finalSubmit.title'
+  | 'finalSubmit.ready'
+  | 'finalSubmit.note'
+  | 'finalSubmit.button'
+  | 'finalSubmit.submitting'
   | 'completion.title'
   | 'completion.thanks'
   | 'completion.done'
@@ -73,6 +79,7 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
       'Missing session state for questionnaire. Please restart this participant run.',
     'error.submitQuestionnaire': 'Could not submit questionnaire. Please retry.',
     'error.missingSessionStateShort': 'Missing session state.',
+    'error.finalSubmit': 'Could not finalize session. Please retry final submit.',
     'consent.title': 'Consent',
     'consent.description':
       'This is a research task. Your responses will be recorded for pilot research purposes.',
@@ -116,6 +123,11 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
     'questionnaire.trust': 'Trust / reliance',
     'questionnaire.usefulness': 'Usefulness',
     'questionnaire.submit': 'Submit questionnaire',
+    'finalSubmit.title': 'Final submit required',
+    'finalSubmit.ready': 'All required trials and questionnaires are complete.',
+    'finalSubmit.note': 'Use final submit to finalize your session and unlock completion.',
+    'finalSubmit.button': 'Final submit',
+    'finalSubmit.submitting': 'Submitting...',
     'completion.title': 'Complete',
     'completion.thanks': 'Thank you for participating in this pilot research task.',
     'completion.done': 'Your session is complete.',
@@ -133,6 +145,7 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
       'Состояние сессии для анкеты отсутствует. Пожалуйста, перезапустите участие.',
     'error.submitQuestionnaire': 'Не удалось отправить анкету. Пожалуйста, попробуйте снова.',
     'error.missingSessionStateShort': 'Состояние сессии отсутствует.',
+    'error.finalSubmit': 'Не удалось завершить сессию. Пожалуйста, повторите финальную отправку.',
     'consent.title': 'Согласие',
     'consent.description':
       'Это исследовательское задание. Ваши ответы будут записаны для пилотного исследования.',
@@ -178,6 +191,11 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
     'questionnaire.trust': 'Доверие / опора на ИИ',
     'questionnaire.usefulness': 'Полезность',
     'questionnaire.submit': 'Отправить анкету',
+    'finalSubmit.title': 'Требуется финальная отправка',
+    'finalSubmit.ready': 'Все обязательные раунды и анкеты завершены.',
+    'finalSubmit.note': 'Выполните финальную отправку, чтобы завершить сессию и открыть экран завершения.',
+    'finalSubmit.button': 'Финальная отправка',
+    'finalSubmit.submitting': 'Отправка...',
     'completion.title': 'Завершено',
     'completion.thanks': 'Спасибо за участие в этом пилотном исследовательском задании.',
     'completion.done': 'Ваша сессия завершена.',
