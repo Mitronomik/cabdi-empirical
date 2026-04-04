@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 
 import {
   createSession,
+  fetchPublicRun,
   fetchNextTrial,
   startSession,
   submitBlockQuestionnaire,
@@ -13,7 +14,6 @@ import type { QuestionnairePayload, TrialPayload } from '../lib/types';
 
 type Stage = 'consent' | 'instructions' | 'trial' | 'questionnaire' | 'completion';
 
-const DEFAULT_EXPERIMENT_ID = 'pilot_scam_not_scam_v1';
 const TOTAL_TRIALS = 54;
 
 function getCurrentLocale(): Locale {
@@ -32,6 +32,10 @@ function localizedError(
 ) {
   const locale = getCurrentLocale();
   return messages[locale][key];
+}
+
+function detailError(detail: unknown): string | null {
+  return typeof detail === 'string' ? detail : null;
 }
 
 export function useParticipantFlow() {
@@ -88,15 +92,22 @@ export function useParticipantFlow() {
   }
 
   async function beginSession(participantId: string, activeRunSlug: string) {
+    const normalizedRunSlug = activeRunSlug.trim();
+    if (!normalizedRunSlug) {
+      setError('run_slug is required');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const created = await createSession(DEFAULT_EXPERIMENT_ID, participantId, activeRunSlug, detectLocale());
+      await fetchPublicRun(normalizedRunSlug);
+      const created = await createSession(participantId, normalizedRunSlug, detectLocale());
       setSessionId(created.session_id);
       await startSession(created.session_id);
       await loadNextTrial(created.session_id);
-    } catch {
-      setError(localizedError('error.startSession'));
+    } catch (err: unknown) {
+      const e = err as { detail?: unknown };
+      setError(detailError(e.detail) ?? localizedError('error.startSession'));
       setLoading(false);
     }
   }

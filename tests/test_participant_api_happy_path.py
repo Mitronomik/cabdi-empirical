@@ -89,7 +89,7 @@ def test_session_flow_happy_path_with_exports(tmp_path):
 
     create_res = client.post(
         "/api/v1/sessions",
-        json={"experiment_id": "toy_v1", "participant_id": "p_001", "run_slug": run_slug},
+        json={"participant_id": "p_001", "run_slug": run_slug},
     )
     assert create_res.status_code == 200
     session_id = create_res.json()["session_id"]
@@ -150,7 +150,7 @@ def test_session_creation_stores_language_metadata(tmp_path):
 
     create_res = client.post(
         "/api/v1/sessions",
-        json={"experiment_id": "toy_v1", "participant_id": "p_ru", "run_slug": run_slug, "language": "ru"},
+        json={"participant_id": "p_ru", "run_slug": run_slug, "language": "ru"},
     )
     assert create_res.status_code == 200
     session_id = create_res.json()["session_id"]
@@ -160,58 +160,32 @@ def test_session_creation_stores_language_metadata(tmp_path):
     assert export_res.json()["participant_session_summary"]["language"] == "ru"
 
 
+def test_session_creation_by_unknown_run_slug_fails_clearly(tmp_path):
+    client = _make_client(tmp_path)
+    create_res = client.post(
+        "/api/v1/sessions",
+        json={"participant_id": "p_unknown", "run_slug": "missing-public-slug"},
+    )
+    assert create_res.status_code == 400
+    assert "Unknown run_slug" in create_res.json()["detail"]
+
+
 def test_session_creation_requires_run_reference(tmp_path):
     client = _make_client(tmp_path)
     create_res = client.post(
         "/api/v1/sessions",
-        json={"experiment_id": "toy_v1", "participant_id": "p_missing_run"},
+        json={"participant_id": "p_missing_run"},
     )
-    assert create_res.status_code == 400
+    assert create_res.status_code == 422
 
 
-def test_session_creation_fails_when_run_experiment_mismatch(tmp_path):
+def test_session_creation_does_not_accept_experiment_only_fallback(tmp_path):
     client = _make_client(tmp_path)
-    run_info = _bootstrap_run_with_details(tmp_path)
     create_res = client.post(
         "/api/v1/sessions",
-        json={"experiment_id": "pilot_scam_not_scam_v1", "participant_id": "p_bad_experiment", "run_id": run_info["run_id"]},
+        json={"participant_id": "p_legacy", "experiment_id": "toy_v1"},
     )
-    assert create_res.status_code == 400
-    assert "run and experiment_id mismatch" in create_res.json()["detail"]
-
-
-def test_session_creation_accepts_run_id_for_backward_compatibility(tmp_path):
-    client = _make_client(tmp_path)
-    db_path = str(tmp_path / "pilot_api.sqlite3")
-    researcher = TestClient(create_researcher_app(db_path))
-    payload = (
-        '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"title":"Case","body":"a"},'
-        '"true_label":"scam","difficulty_prior":"low","model_prediction":"scam","model_confidence":"high",'
-        '"model_correct":true,"eligible_sets":["demo"]}\n'
-    )
-    upload = researcher.post(
-        "/admin/api/v1/stimuli/upload",
-        files={"file": ("stimuli.jsonl", payload, "application/json")},
-        data={"name": "set1", "source_format": "jsonl"},
-    )
-    run = researcher.post(
-        "/admin/api/v1/runs",
-        json={
-            "run_name": "participant test run",
-            "experiment_id": "toy_v1",
-            "task_family": "scam_detection",
-            "config": {"mode": "test"},
-            "stimulus_set_ids": [upload.json()["stimulus_set_id"]],
-        },
-    )
-    activate = researcher.post(f"/admin/api/v1/runs/{run.json()['run_id']}/activate")
-    assert activate.status_code == 200
-    run_id = run.json()["run_id"]
-    create_res = client.post(
-        "/api/v1/sessions",
-        json={"experiment_id": "toy_v1", "participant_id": "p_with_run_id", "run_id": run_id},
-    )
-    assert create_res.status_code == 200
+    assert create_res.status_code == 422
 
 
 def test_session_creation_rejects_non_active_run(tmp_path):
@@ -240,10 +214,10 @@ def test_session_creation_rejects_non_active_run(tmp_path):
     )
     create_res = client.post(
         "/api/v1/sessions",
-        json={"experiment_id": "toy_v1", "participant_id": "p_non_active", "run_id": run.json()["run_id"]},
+        json={"participant_id": "p_non_active", "run_slug": run.json()["public_slug"]},
     )
     assert create_res.status_code == 400
-    assert "not launchable" in create_res.json()["detail"]
+    assert "status is draft" in create_res.json()["detail"]
 
 
 def test_session_creation_rejects_paused_and_closed_runs(tmp_path):
@@ -276,19 +250,49 @@ def test_session_creation_rejects_paused_and_closed_runs(tmp_path):
 
     paused_create = client.post(
         "/api/v1/sessions",
-        json={"experiment_id": "toy_v1", "participant_id": "p_paused", "run_id": run_id},
+        json={"participant_id": "p_paused", "run_slug": run.json()["public_slug"]},
     )
     assert paused_create.status_code == 400
-    assert "status=paused" in paused_create.json()["detail"]
+    assert "status is paused" in paused_create.json()["detail"]
 
     assert researcher.post(f"/admin/api/v1/runs/{run_id}/activate").status_code == 200
     assert researcher.post(f"/admin/api/v1/runs/{run_id}/close").status_code == 200
     closed_create = client.post(
         "/api/v1/sessions",
-        json={"experiment_id": "toy_v1", "participant_id": "p_closed", "run_id": run_id},
+        json={"participant_id": "p_closed", "run_slug": run.json()["public_slug"]},
     )
     assert closed_create.status_code == 400
-    assert "status=closed" in closed_create.json()["detail"]
+    assert "status is closed" in closed_create.json()["detail"]
+
+
+def test_session_creation_binds_session_to_resolved_run(tmp_path):
+    client = _make_client(tmp_path)
+    run_info = _bootstrap_run_with_details(tmp_path)
+    create_res = client.post(
+        "/api/v1/sessions",
+        json={"participant_id": "p_bind", "run_slug": run_info["run_slug"]},
+    )
+    assert create_res.status_code == 200
+
+    session_id = create_res.json()["session_id"]
+    stored = client.app.state.store.fetchone(
+        "SELECT run_id FROM participant_sessions WHERE session_id = ?",
+        (session_id,),
+    )
+    assert stored is not None
+    assert stored["run_id"] == run_info["run_id"]
+
+
+def test_public_run_metadata_endpoint_returns_minimal_launch_info(tmp_path):
+    client = _make_client(tmp_path)
+    run_slug = _bootstrap_run(tmp_path)
+    res = client.get(f"/api/v1/public/runs/{run_slug}")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["run_slug"] == run_slug
+    assert body["launchable"] is True
+    assert body["run_status"] == "active"
+    assert "public_title" in body
 
 
 def test_session_trials_are_frozen_snapshots_even_if_stimulus_set_changes(tmp_path):
@@ -297,7 +301,7 @@ def test_session_trials_are_frozen_snapshots_even_if_stimulus_set_changes(tmp_pa
 
     create_res = client.post(
         "/api/v1/sessions",
-        json={"experiment_id": "toy_v1", "participant_id": "p_snapshot", "run_slug": run_info["run_slug"]},
+        json={"participant_id": "p_snapshot", "run_slug": run_info["run_slug"]},
     )
     assert create_res.status_code == 200
     session_id = create_res.json()["session_id"]

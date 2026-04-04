@@ -6,7 +6,7 @@ from app.participant_api.main import create_app as create_participant_app
 from app.researcher_api.main import create_app as create_researcher_app
 
 
-def _bootstrap_run(researcher: TestClient) -> str:
+def _bootstrap_run(researcher: TestClient) -> dict[str, str]:
     payload = (
         '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"title":"Case 1","body":"a"},'
         '"true_label":"scam","difficulty_prior":"low","model_prediction":"scam","model_confidence":"high",'
@@ -30,7 +30,7 @@ def _bootstrap_run(researcher: TestClient) -> str:
     )
     activate = researcher.post(f"/admin/api/v1/runs/{run_res.json()['run_id']}/activate")
     assert activate.status_code == 200
-    return run_res.json()["run_id"]
+    return {"run_id": run_res.json()["run_id"], "run_slug": run_res.json()["public_slug"]}
 
 
 def test_run_exports_include_expected_sections(tmp_path):
@@ -38,14 +38,14 @@ def test_run_exports_include_expected_sections(tmp_path):
     researcher = TestClient(create_researcher_app(db_path))
     participant = TestClient(create_participant_app(db_path))
 
-    run_id = _bootstrap_run(researcher)
+    run_info = _bootstrap_run(researcher)
     create_session = participant.post(
         "/api/v1/sessions",
-        json={"experiment_id": "toy_v1", "participant_id": "p_export_1", "run_id": run_id, "language": "ru"},
+        json={"participant_id": "p_export_1", "run_slug": run_info["run_slug"], "language": "ru"},
     )
     assert create_session.status_code == 200
 
-    exports_res = researcher.get(f"/admin/api/v1/runs/{run_id}/exports")
+    exports_res = researcher.get(f"/admin/api/v1/runs/{run_info['run_id']}/exports")
     assert exports_res.status_code == 200
     body = exports_res.json()
     assert "raw_event_log_jsonl" in body

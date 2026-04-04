@@ -8,8 +8,13 @@ from uuid import uuid4
 
 from app.participant_api.persistence.sqlite_store import SQLiteStore, dumps, loads
 from app.participant_api.services.randomization_service import assign_order_id, build_trial_plan
-from app.researcher_api.services.run_service import RUN_STATUS_ACTIVE
-from packages.shared_types.pilot_types import ExperimentConfig, ParticipantSession, StimulusItem
+from app.researcher_api.services.run_service import (
+    RUN_STATUS_ACTIVE,
+    RUN_STATUS_CLOSED,
+    RUN_STATUS_DRAFT,
+    RUN_STATUS_PAUSED,
+)
+from packages.shared_types.pilot_types import ParticipantSession, StimulusItem
 from pilot.config_loader import load_experiment_config
 
 DEFAULT_EXPERIMENT_PATH = "pilot/configs/default_experiment.yaml"
@@ -31,21 +36,12 @@ class SessionService:
 
     def create_session(
         self,
-        experiment_id: str,
         participant_id: str,
-        run_id: str | None = None,
-        run_slug: str | None = None,
+        run_slug: str,
         language: str | None = None,
     ) -> dict[str, Any]:
+        run = self._resolve_public_run(run_slug=run_slug)
         experiment = load_experiment_config(DEFAULT_EXPERIMENT_PATH)
-        if experiment_id not in {"toy_v1", experiment.experiment_id}:
-            raise ValueError(f"Unsupported experiment_id: {experiment_id}")
-        run = self._resolve_run(
-            run_id=run_id,
-            run_slug=run_slug,
-            experiment=experiment,
-            requested_experiment_id=experiment_id,
-        )
         stimuli = self._load_run_stimuli(run)
         order_id, assigned_order = assign_order_id(participant_id, experiment.experiment_id)
         session_id = f"sess_{uuid4().hex[:12]}"
@@ -54,7 +50,7 @@ class SessionService:
         session = ParticipantSession(
             session_id=session_id,
             participant_id=participant_id,
-            experiment_id=experiment_id,
+            experiment_id=run["experiment_id"],
             run_id=run["run_id"],
             assigned_order=order_id,
             stimulus_set_map={f"set_{idx + 1}": set_id for idx, set_id in enumerate(run["stimulus_set_ids"])},
@@ -127,39 +123,28 @@ class SessionService:
             "session_id": session_id,
             "status": "created",
             "assigned_order": order_id,
-            "run_id": session.run_id,
+            "run_slug": run["public_slug"],
             "language": session.language,
         }
 
-    def _resolve_run(
-        self,
-        *,
-        run_id: str | None,
-        run_slug: str | None,
-        experiment: ExperimentConfig,
-        requested_experiment_id: str,
-    ) -> dict[str, Any]:
-        normalized_run_id = (run_id or "").strip()
+    def _resolve_public_run(self, *, run_slug: str) -> dict[str, Any]:
         normalized_run_slug = (run_slug or "").strip()
-        if not normalized_run_id and not normalized_run_slug:
-            raise ValueError("run_id or run_slug is required")
-        if normalized_run_id and normalized_run_slug:
-            raise ValueError("Provide only one of run_id or run_slug")
+        if not normalized_run_slug:
+            raise ValueError("run_slug is required")
+        run = self.store.fetchone("SELECT * FROM researcher_runs WHERE public_slug = ?", (normalized_run_slug,))
+        if run is None:
+            raise ValueError(f"Unknown run_slug: {normalized_run_slug}")
 
-        if normalized_run_id:
-            run = self.store.fetchone("SELECT * FROM researcher_runs WHERE run_id = ?", (normalized_run_id,))
-            if run is None:
-                raise ValueError(f"Unknown run_id: {normalized_run_id}")
-        else:
-            run = self.store.fetchone("SELECT * FROM researcher_runs WHERE public_slug = ?", (normalized_run_slug,))
-            if run is None:
-                raise ValueError(f"Unknown run_slug: {normalized_run_slug}")
-        if run["experiment_id"] != requested_experiment_id:
-            raise ValueError("run and experiment_id mismatch")
-        if requested_experiment_id == experiment.experiment_id and run["task_family"] != experiment.task_family:
-            raise ValueError("run task_family is incompatible with experiment task_family")
-        if run.get("status") != RUN_STATUS_ACTIVE:
-            raise ValueError(f"run is not launchable for new participant sessions (status={run.get('status')})")
+        status = run.get("status")
+        if status == RUN_STATUS_DRAFT:
+            raise ValueError(f"run_slug '{normalized_run_slug}' is not launchable: status is draft")
+        if status == RUN_STATUS_PAUSED:
+            raise ValueError(f"run_slug '{normalized_run_slug}' is not launchable: status is paused")
+        if status == RUN_STATUS_CLOSED:
+            raise ValueError(f"run_slug '{normalized_run_slug}' is not launchable: status is closed")
+        if status != RUN_STATUS_ACTIVE:
+            raise ValueError(f"run_slug '{normalized_run_slug}' is not launchable: status is {status}")
+
         config = loads(run["config_json"])
         if not isinstance(config, dict) or not config:
             raise ValueError("run is missing required config for participant execution")
@@ -168,6 +153,25 @@ class SessionService:
         if not isinstance(run["stimulus_set_ids"], list) or not run["stimulus_set_ids"]:
             raise ValueError("run does not reference any stimulus sets")
         return run
+
+    def get_public_run_info(self, run_slug: str) -> dict[str, Any]:
+        run = self.store.fetchone(
+            "SELECT run_name, public_slug, status, config_json FROM researcher_runs WHERE public_slug = ?",
+            (run_slug.strip(),),
+        )
+        if run is None:
+            raise KeyError("run not found")
+
+        config = loads(run["config_json"])
+        if not isinstance(config, dict):
+            config = {}
+        return {
+            "run_slug": run["public_slug"],
+            "public_title": run["run_name"],
+            "public_description": config.get("public_description") or config.get("instructions_summary"),
+            "launchable": run["status"] == RUN_STATUS_ACTIVE,
+            "run_status": run["status"],
+        }
 
     def _load_run_stimuli(self, run: dict[str, Any]) -> list[StimulusItem]:
         items: list[StimulusItem] = []
