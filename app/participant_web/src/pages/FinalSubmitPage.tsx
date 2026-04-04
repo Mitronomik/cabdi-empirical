@@ -18,6 +18,7 @@ export function FinalSubmitPage({ loading, onSubmit, completedTrials, totalTrial
         {t('finalSubmit.progress')}: {completedTrials} / {totalTrials}
       </p>
       <p>{t('finalSubmit.note')}</p>
+      <p className="muted">{t('finalSubmit.resumeUntilSubmit')}</p>
       <button type="button" onClick={onSubmit} disabled={loading}>
         {loading ? t('finalSubmit.submitting') : t('finalSubmit.button')}
       </button>

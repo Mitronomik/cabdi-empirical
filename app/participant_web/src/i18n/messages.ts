@@ -46,8 +46,13 @@ export type MessageKey =
   | 'trial.caseTitle'
   | 'trial.noPrompt'
   | 'trial.decisionTitle'
+  | 'trial.decisionHelp'
+  | 'trial.answerLabel'
+  | 'trial.confidenceLow'
+  | 'trial.confidenceHigh'
   | 'trial.selfConfidence'
   | 'trial.submit'
+  | 'trial.submitHelp'
   | 'trial.response.scam'
   | 'trial.response.notScam'
   | 'trial.response.yes'
@@ -68,6 +73,8 @@ export type MessageKey =
   | 'assistance.forcedCheckbox'
   | 'assistance.secondLook'
   | 'questionnaire.title'
+  | 'questionnaire.blockLabel'
+  | 'questionnaire.intro'
   | 'questionnaire.rateItems'
   | 'questionnaire.burdenMental'
   | 'questionnaire.burdenEffort'
@@ -79,11 +86,13 @@ export type MessageKey =
   | 'finalSubmit.ready'
   | 'finalSubmit.progress'
   | 'finalSubmit.note'
+  | 'finalSubmit.resumeUntilSubmit'
   | 'finalSubmit.button'
   | 'finalSubmit.submitting'
   | 'completion.title'
   | 'completion.thanks'
   | 'completion.done'
+  | 'completion.finalizedNote'
   | 'completion.code';
 
 export const messages: Record<Locale, Record<MessageKey, string>> = {
@@ -131,8 +140,13 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
     'trial.caseTitle': 'Case',
     'trial.noPrompt': 'No prompt provided.',
     'trial.decisionTitle': 'Your response',
+    'trial.decisionHelp': 'Use the information above to make your own decision.',
+    'trial.answerLabel': 'Choose your answer',
+    'trial.confidenceLow': 'Low confidence',
+    'trial.confidenceHigh': 'High confidence',
     'trial.selfConfidence': 'How confident are you?',
     'trial.submit': 'Submit response',
+    'trial.submitHelp': 'Your response is saved immediately after you submit.',
     'trial.response.scam': 'Scam',
     'trial.response.notScam': 'Not a scam',
     'trial.response.yes': 'Yes',
@@ -153,6 +167,8 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
     'assistance.forcedCheckbox': 'I reviewed the AI output and made my own decision.',
     'assistance.secondLook': 'I completed a second look',
     'questionnaire.title': 'Block questionnaire',
+    'questionnaire.blockLabel': 'Completed section',
+    'questionnaire.intro': 'Before continuing, please complete this short check-in about the section you just finished.',
     'questionnaire.rateItems': 'Rate each item from 0 to 100.',
     'questionnaire.burdenMental': 'Burden: mental demand',
     'questionnaire.burdenEffort': 'Burden: effort',
@@ -164,11 +180,13 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
     'finalSubmit.ready': 'You have finished all required steps.',
     'finalSubmit.progress': 'Completed trials',
     'finalSubmit.note': 'Select Final submit to lock your responses and complete the study.',
+    'finalSubmit.resumeUntilSubmit': 'Until final submit, your session is saved but not fully completed.',
     'finalSubmit.button': 'Final submit',
     'finalSubmit.submitting': 'Submitting...',
     'completion.title': 'Study complete',
     'completion.thanks': 'Thank you for your participation.',
     'completion.done': 'Your responses were saved successfully.',
+    'completion.finalizedNote': 'Your session is finalized and cannot be resumed.',
     'completion.code': 'Completion code',
   },
   ru: {
@@ -215,8 +233,13 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
     'trial.caseTitle': 'Кейс',
     'trial.noPrompt': 'Текст задания не предоставлен.',
     'trial.decisionTitle': 'Ваш ответ',
+    'trial.decisionHelp': 'Используйте информацию выше и примите собственное решение.',
+    'trial.answerLabel': 'Выберите ваш ответ',
+    'trial.confidenceLow': 'Низкая уверенность',
+    'trial.confidenceHigh': 'Высокая уверенность',
     'trial.selfConfidence': 'Насколько вы уверены?',
     'trial.submit': 'Отправить ответ',
+    'trial.submitHelp': 'Ответ сохраняется сразу после отправки.',
     'trial.response.scam': 'Мошенничество',
     'trial.response.notScam': 'Не мошенничество',
     'trial.response.yes': 'Да',
@@ -237,6 +260,8 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
     'assistance.forcedCheckbox': 'Я проверил(а) вывод ИИ и принял(а) собственное решение.',
     'assistance.secondLook': 'Я выполнил(а) повторную проверку',
     'questionnaire.title': 'Анкета по блоку',
+    'questionnaire.blockLabel': 'Завершенный раздел',
+    'questionnaire.intro': 'Перед продолжением заполните короткую анкету по только что завершенному разделу.',
     'questionnaire.rateItems': 'Оцените каждый пункт от 0 до 100.',
     'questionnaire.burdenMental': 'Нагрузка: умственное напряжение',
     'questionnaire.burdenEffort': 'Нагрузка: усилие',
@@ -248,11 +273,13 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
     'finalSubmit.ready': 'Вы завершили все обязательные шаги.',
     'finalSubmit.progress': 'Завершено раундов',
     'finalSubmit.note': 'Нажмите «Финальная отправка», чтобы зафиксировать ответы и завершить исследование.',
+    'finalSubmit.resumeUntilSubmit': 'До финальной отправки сессия сохранена, но еще не считается полностью завершенной.',
     'finalSubmit.button': 'Финальная отправка',
     'finalSubmit.submitting': 'Отправка...',
     'completion.title': 'Исследование завершено',
     'completion.thanks': 'Спасибо за участие.',
     'completion.done': 'Ваши ответы успешно сохранены.',
+    'completion.finalizedNote': 'Сессия финализирована и больше не может быть продолжена.',
     'completion.code': 'Код завершения',
   },
 };

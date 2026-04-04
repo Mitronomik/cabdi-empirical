@@ -268,9 +268,12 @@ test('questionnaire and completion flow remains operational', async () => {
   await proceedToInstructionsAndStart(user);
 
   await screen.findByRole('heading', { name: /block questionnaire/i });
+  expect(screen.getByText(/before continuing, please complete this short check-in/i)).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: /continue/i }));
   await screen.findByRole('heading', { name: /final confirmation required/i });
+  expect(screen.getByText(/saved but not fully completed/i)).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: /final submit/i }));
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(7));
   await screen.findByRole('heading', { name: /study complete/i });
+  expect(screen.getByText(/cannot be resumed/i)).toBeInTheDocument();
 });

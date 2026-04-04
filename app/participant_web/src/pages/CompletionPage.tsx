@@ -12,6 +12,7 @@ export function CompletionPage({ completionCode }: Props) {
       <h1>{t('completion.title')}</h1>
       <p>{t('completion.thanks')}</p>
       <p>{t('completion.done')}</p>
+      <p className="muted">{t('completion.finalizedNote')}</p>
       {completionCode ? (
         <p>
           {t('completion.code')}: {completionCode}

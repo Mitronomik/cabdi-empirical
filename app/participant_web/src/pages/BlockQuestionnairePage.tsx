@@ -21,6 +21,10 @@ export function BlockQuestionnairePage({ blockId, onSubmit, loading }: Props) {
       <h2>
         {t('questionnaire.title')} ({blockId})
       </h2>
+      <p className="muted">
+        {t('questionnaire.blockLabel')}: {blockId}
+      </p>
+      <p>{t('questionnaire.intro')}</p>
       <p>{t('questionnaire.rateItems')}</p>
 
       <label>
