@@ -111,6 +111,7 @@ class SQLiteStore:
                     run_id TEXT PRIMARY KEY,
                     run_name TEXT NOT NULL,
                     public_slug TEXT UNIQUE NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'draft',
                     experiment_id TEXT NOT NULL,
                     task_family TEXT NOT NULL,
                     config_json TEXT NOT NULL,
@@ -123,6 +124,7 @@ class SQLiteStore:
             self._ensure_column(conn, "participant_sessions", "run_id", "TEXT")
             self._ensure_column(conn, "participant_sessions", "language", "TEXT NOT NULL DEFAULT 'en'")
             self._ensure_column(conn, "researcher_runs", "public_slug", "TEXT")
+            self._ensure_column(conn, "researcher_runs", "status", "TEXT NOT NULL DEFAULT 'draft'")
             self._ensure_column(
                 conn,
                 "researcher_stimulus_sets",

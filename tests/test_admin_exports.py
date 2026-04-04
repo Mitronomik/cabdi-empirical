@@ -28,6 +28,8 @@ def _bootstrap_run(researcher: TestClient) -> str:
             "stimulus_set_ids": [stimulus_set_id],
         },
     )
+    activate = researcher.post(f"/admin/api/v1/runs/{run_res.json()['run_id']}/activate")
+    assert activate.status_code == 200
     return run_res.json()["run_id"]
 
 

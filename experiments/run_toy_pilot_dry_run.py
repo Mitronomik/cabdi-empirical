@@ -97,6 +97,9 @@ def _create_run(
         stimulus_set_ids=[str(upload["stimulus_set_id"])],
         notes="PR-7 dry-run QA harness",
     )
+    activated = run_service.activate_run(str(run["run_id"]))
+    if activated["status"] != "active":
+        raise ValueError(f"Dry-run failed to activate run: {run['run_id']}")
     return str(run["run_id"])
 
 
