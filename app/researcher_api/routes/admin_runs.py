@@ -17,6 +17,8 @@ class CreateRunRequest(BaseModel):
     task_family: str
     config: dict[str, Any]
     stimulus_set_ids: list[str]
+    aggregation_mode: str = "single"
+    practice_stimulus_set_id: str | None = None
     notes: str | None = None
 
 
@@ -34,6 +36,8 @@ def create_run(req: CreateRunRequest, request: Request) -> dict:
             task_family=req.task_family,
             config=req.config,
             stimulus_set_ids=req.stimulus_set_ids,
+            aggregation_mode=req.aggregation_mode,
+            practice_stimulus_set_id=req.practice_stimulus_set_id,
             notes=req.notes,
         )
     except ValueError as exc:

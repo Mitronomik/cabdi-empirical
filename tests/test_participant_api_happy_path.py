@@ -495,6 +495,7 @@ def test_session_trials_are_frozen_snapshots_even_if_stimulus_set_changes(tmp_pa
     )
     assert create_res.status_code == 200
     session_id = create_res.json()["session_id"]
+    assert client.post(f"/api/v1/sessions/{session_id}/start").status_code == 200
 
     rows = client.app.state.store.fetchall(
         "SELECT trial_id, stimulus_json FROM session_trials WHERE session_id = ? ORDER BY trial_id LIMIT 1",

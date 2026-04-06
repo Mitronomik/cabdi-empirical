@@ -83,7 +83,7 @@ class SessionService:
             run_experiment_id=run["experiment_id"],
             run_task_family=run["task_family"],
         )
-        stimuli = self._load_run_stimuli(run)
+        run_summary = self._compute_run_summary(run)
         participant_id = self._generate_participant_id()
         order_id, assigned_order = assign_order_id(participant_id, experiment.experiment_id)
         session_id = f"sess_{uuid4().hex[:12]}"
@@ -97,7 +97,7 @@ class SessionService:
             experiment_id=run["experiment_id"],
             run_id=run["run_id"],
             assigned_order=order_id,
-            stimulus_set_map={f"set_{idx + 1}": set_id for idx, set_id in enumerate(run["stimulus_set_ids"])},
+            stimulus_set_map={f"set_{idx + 1}": set_id for idx, set_id in enumerate(run_summary["main_stimulus_set_ids"])},
             current_block_index=-1,
             current_trial_index=0,
             status=SESSION_STATUS_CREATED,
@@ -112,8 +112,9 @@ class SessionService:
             """
             INSERT INTO participant_sessions(
                 session_id, participant_id, experiment_id, run_id, public_session_code, resume_token_hash, assigned_order, stimulus_set_map,
-                current_block_index, current_trial_index, status, created_at, started_at, completed_at, last_activity_at, device_info, language
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                current_block_index, current_trial_index, status, created_at, started_at, completed_at, last_activity_at, device_info, language,
+                expected_trial_count, source_stimulus_set_ids_json, snapshot_frozen_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 session.session_id,
@@ -133,39 +134,10 @@ class SessionService:
                 session.created_at,
                 dumps(session.device_info),
                 session.language,
+                int(run_summary["expected_trial_count"]),
+                dumps(run_summary["all_stimulus_set_ids"]),
+                None,
             ),
-        )
-
-        trial_plan = build_trial_plan(participant_id, experiment, assigned_order, [StimulusItem.from_dict(s.to_dict()) for s in stimuli])
-        trial_rows = []
-        for idx, trial in enumerate(trial_plan):
-            trial_id = f"{session_id}_t{idx+1:03d}"
-            trial_rows.append(
-                (
-                    trial_id,
-                    session_id,
-                    trial["block_id"],
-                    int(trial["block_index"]),
-                    int(trial["trial_index"]),
-                    trial["condition"],
-                    dumps(trial["stimulus"]),
-                    dumps(trial["pre_render_features"]),
-                    None,
-                    None,
-                    None,
-                    None,
-                    "pending",
-                )
-            )
-        self.store.executemany(
-            """
-            INSERT INTO session_trials(
-                trial_id, session_id, block_id, block_index, trial_index, condition,
-                stimulus_json, pre_render_features_json, risk_bucket, policy_decision_json,
-                served_at, completed_at, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            trial_rows,
         )
 
         return {
@@ -285,6 +257,8 @@ class SessionService:
         run["stimulus_set_ids"] = loads(run["stimulus_set_ids_json"])
         if not isinstance(run["stimulus_set_ids"], list) or not run["stimulus_set_ids"]:
             raise ValueError("run does not reference any stimulus sets")
+        run["aggregation_mode"] = "multi" if int(run.get("aggregation_mode") or 0) == 1 else "single"
+        run["practice_stimulus_set_id"] = run.get("practice_stimulus_set_id")
         return run
 
     def get_public_run_info(self, run_slug: str) -> dict[str, Any]:
@@ -306,11 +280,11 @@ class SessionService:
             "run_status": run["status"],
         }
 
-    def _load_run_stimuli(self, run: dict[str, Any]) -> list[StimulusItem]:
+    def _load_run_stimuli(self, run: dict[str, Any]) -> list[dict[str, Any]]:
         items: list[StimulusItem] = []
         for stimulus_set_id in run["stimulus_set_ids"]:
             row = self.store.fetchone(
-                "SELECT stimulus_set_id, task_family, items_json FROM researcher_stimulus_sets WHERE stimulus_set_id = ?",
+                "SELECT stimulus_set_id, task_family, items_json, payload_schema_version FROM researcher_stimulus_sets WHERE stimulus_set_id = ?",
                 (stimulus_set_id,),
             )
             if row is None:
@@ -321,14 +295,127 @@ class SessionService:
                 parsed = StimulusItem.from_dict(raw_item)
                 if parsed.task_family != run["task_family"]:
                     raise ValueError(f"stimulus {parsed.stimulus_id} task_family mismatches run task_family")
-                items.append(parsed)
+                items.append(
+                    {
+                        "stimulus": parsed,
+                        "source_stimulus_set_ids": [stimulus_set_id],
+                        "payload_schema_version": row.get("payload_schema_version") or "stimulus_payload.v1",
+                    }
+                )
 
         if not items:
             raise ValueError("run has no usable stimuli")
         return items
 
+    def _compute_run_summary(self, run: dict[str, Any]) -> dict[str, Any]:
+        run_config = loads(run["config_json"])
+        experiment = resolve_execution_config_from_run(
+            run_config=run_config,
+            run_experiment_id=run["experiment_id"],
+            run_task_family=run["task_family"],
+        )
+        main_stimulus_set_ids = list(run["stimulus_set_ids"])
+        practice_stimulus_set_id = run.get("practice_stimulus_set_id")
+        all_set_ids = list(main_stimulus_set_ids)
+        if practice_stimulus_set_id:
+            all_set_ids.append(practice_stimulus_set_id)
+        return {
+            "main_stimulus_set_ids": main_stimulus_set_ids,
+            "practice_stimulus_set_id": practice_stimulus_set_id,
+            "all_stimulus_set_ids": all_set_ids,
+            "expected_trial_count": int(experiment.practice_trials + (experiment.n_blocks * experiment.trials_per_block)),
+        }
+
+    def _build_session_trial_snapshot(self, *, session: dict[str, Any], run: dict[str, Any]) -> None:
+        run_config = loads(run["config_json"])
+        experiment = resolve_execution_config_from_run(
+            run_config=run_config,
+            run_experiment_id=run["experiment_id"],
+            run_task_family=run["task_family"],
+        )
+        stimuli = self._load_run_stimuli(run)
+        trial_plan = build_trial_plan(
+            session["participant_id"],
+            experiment,
+            assign_order_id(session["participant_id"], experiment.experiment_id)[1],
+            [StimulusItem.from_dict(item["stimulus"].to_dict()) for item in stimuli],
+        )
+        expected_trial_count = int(experiment.practice_trials + (experiment.n_blocks * experiment.trials_per_block))
+        if len(trial_plan) != expected_trial_count:
+            raise ValueError("session trial snapshot mismatch: trial plan length does not match run summary")
+        if self.store.fetchone("SELECT trial_id FROM session_trials WHERE session_id = ? LIMIT 1", (session["session_id"],)) is not None:
+            return
+
+        all_source_ids = list(run["stimulus_set_ids"])
+        if run.get("practice_stimulus_set_id"):
+            all_source_ids.append(run["practice_stimulus_set_id"])
+        payload_versions = {
+            str(item.get("payload_schema_version") or "stimulus_payload.v1")
+            for item in stimuli
+        }
+        payload_schema_version = sorted(payload_versions)[0] if payload_versions else "stimulus_payload.v1"
+
+        trial_rows = []
+        for idx, trial in enumerate(trial_plan):
+            trial_id = f"{session['session_id']}_t{idx+1:03d}"
+            trial_rows.append(
+                (
+                    trial_id,
+                    session["session_id"],
+                    trial["block_id"],
+                    int(trial["block_index"]),
+                    int(trial["trial_index"]),
+                    trial["condition"],
+                    dumps(trial["stimulus"]),
+                    dumps(trial["pre_render_features"]),
+                    None,
+                    None,
+                    None,
+                    None,
+                    "pending",
+                    expected_trial_count,
+                    dumps(all_source_ids),
+                    1 if str(trial["block_id"]) == "practice" else 0,
+                    payload_schema_version,
+                )
+            )
+        self.store.executemany(
+            """
+            INSERT INTO session_trials(
+                trial_id, session_id, block_id, block_index, trial_index, condition,
+                stimulus_json, pre_render_features_json, risk_bucket, policy_decision_json,
+                served_at, completed_at, status, expected_trial_count, source_stimulus_set_ids_json,
+                is_practice, payload_schema_version
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            trial_rows,
+        )
+        self.store.execute(
+            "UPDATE participant_sessions SET expected_trial_count = ?, source_stimulus_set_ids_json = ?, snapshot_frozen_at = ? WHERE session_id = ?",
+            (expected_trial_count, dumps(all_source_ids), _now_iso(), session["session_id"]),
+        )
+
     def start_session(self, session_id: str) -> dict[str, Any]:
         session = self.get_session(session_id)
+        if not str(session.get("run_id") or "").strip():
+            raise ValueError("session cannot start without run_id")
+        run = self.store.fetchone("SELECT * FROM researcher_runs WHERE run_id = ?", (session["run_id"],))
+        if run is None:
+            raise ValueError("session run reference is invalid")
+        run["stimulus_set_ids"] = loads(run["stimulus_set_ids_json"])
+        run["aggregation_mode"] = "multi" if int(run.get("aggregation_mode") or 0) == 1 else "single"
+        if run["aggregation_mode"] == "single" and len(run["stimulus_set_ids"]) != 1:
+            raise ValueError("single-set run cannot include more than one main stimulus set")
+        if run["aggregation_mode"] == "multi" and len(run["stimulus_set_ids"]) < 2:
+            raise ValueError("multi-set run requires at least two main stimulus sets")
+
+        self._build_session_trial_snapshot(session=session, run=run)
+        actual_trial_count = self.store.fetchone(
+            "SELECT COUNT(*) AS n FROM session_trials WHERE session_id = ?",
+            (session_id,),
+        )
+        if int(actual_trial_count["n"]) != int(session["expected_trial_count"]):
+            raise ValueError("session trial snapshot count does not match expected trial count")
         runtime_status = self._normalize_runtime_status(session["status"])
         if runtime_status in TERMINAL_SESSION_STATUSES | {SESSION_STATUS_AWAITING_FINAL_SUBMIT}:
             return {"session_id": session_id, "status": runtime_status}
@@ -347,6 +434,7 @@ class SessionService:
             raise KeyError("session not found")
         row["stimulus_set_map"] = loads(row["stimulus_set_map"])
         row["device_info"] = loads(row["device_info"])
+        row["source_stimulus_set_ids"] = loads(row.get("source_stimulus_set_ids_json") or "[]")
         row["language"] = row.get("language") or "en"
         row["status"] = self._normalize_runtime_status(str(row["status"]))
         return row

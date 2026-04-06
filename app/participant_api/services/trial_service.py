@@ -43,6 +43,7 @@ class TrialService:
             return {"status": session["status"], "session_id": session_id, "progress": progress}
         if session["status"] not in {SESSION_STATUS_IN_PROGRESS, SESSION_STATUS_CREATED}:
             return {"status": session["status"], "session_id": session_id, "progress": progress}
+        self._validate_snapshot_integrity(session)
 
         blocked = self._questionnaire_block_gate(session_id)
         if blocked:
@@ -115,6 +116,30 @@ class TrialService:
             "self_confidence_scale": CONFIDENCE_SCALE,
             "progress": progress,
         }
+
+    def _validate_snapshot_integrity(self, session: dict[str, Any]) -> None:
+        session_id = str(session["session_id"])
+        run = self.store.fetchone("SELECT stimulus_set_ids_json, practice_stimulus_set_id FROM researcher_runs WHERE run_id = ?", (session["run_id"],))
+        if run is None:
+            raise ValueError("session run reference is invalid")
+        allowed_set_ids = set(loads(run["stimulus_set_ids_json"]))
+        practice_set_id = run.get("practice_stimulus_set_id")
+        if practice_set_id:
+            allowed_set_ids.add(str(practice_set_id))
+
+        total_row = self.store.fetchone("SELECT COUNT(*) AS n FROM session_trials WHERE session_id = ?", (session_id,))
+        total_trials = int(total_row["n"]) if total_row else 0
+        if total_trials != int(session.get("expected_trial_count", 0)):
+            raise ValueError("session trial count mismatch: frozen snapshot is inconsistent")
+
+        trial_rows = self.store.fetchall(
+            "SELECT trial_id, source_stimulus_set_ids_json FROM session_trials WHERE session_id = ?",
+            (session_id,),
+        )
+        for row in trial_rows:
+            source_set_ids = set(loads(row.get("source_stimulus_set_ids_json") or "[]"))
+            if source_set_ids and not source_set_ids.issubset(allowed_set_ids):
+                raise ValueError("session contains trials outside run stimulus-set definition")
 
     def _progress(self, session_id: str) -> dict[str, int]:
         total_row = self.store.fetchone("SELECT COUNT(*) AS n FROM session_trials WHERE session_id = ?", (session_id,))

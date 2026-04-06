@@ -24,6 +24,9 @@ export function RunBuilderPage() {
   const [recentRuns, setRecentRuns] = useState<Array<ReturnType<typeof parseRunSummary>>>([]);
   const [defaults, setDefaults] = useState<Record<string, unknown> | null>(null);
   const [selectedStimulusSetId, setSelectedStimulusSetId] = useState('');
+  const [selectedMainStimulusSetIds, setSelectedMainStimulusSetIds] = useState<string[]>([]);
+  const [selectedPracticeStimulusSetId, setSelectedPracticeStimulusSetId] = useState('');
+  const [aggregationEnabled, setAggregationEnabled] = useState(false);
   const [runName, setRunName] = useState(`run-${new Date().toISOString().slice(0, 16).replace('T', '-')}`);
   const [publicSlug, setPublicSlug] = useState('');
   const [notes, setNotes] = useState('');
@@ -64,8 +67,10 @@ export function RunBuilderPage() {
       if (firstValid) {
         const defaultSetId = String(firstValid.stimulus_set_id);
         setSelectedStimulusSetId((prev) => prev || defaultSetId);
+        setSelectedMainStimulusSetIds((prev) => (prev.length > 0 ? prev : [defaultSetId]));
       } else {
         setSelectedStimulusSetId('');
+        setSelectedMainStimulusSetIds([]);
       }
 
       if (!publicSlug) {
@@ -87,7 +92,8 @@ export function RunBuilderPage() {
     setError('');
     setSuccess('');
     setResponse(null);
-    if (!selectedStimulusSetId) {
+    const mainSetIds = aggregationEnabled ? selectedMainStimulusSetIds : [selectedStimulusSetId].filter(Boolean);
+    if (mainSetIds.length === 0) {
       setError(t('run.errorMissingStimulus'));
       return;
     }
@@ -104,7 +110,9 @@ export function RunBuilderPage() {
         public_slug: publicSlug.trim() || null,
         experiment_id: experimentId,
         task_family: taskFamily,
-        stimulus_set_ids: [selectedStimulusSetId],
+        stimulus_set_ids: mainSetIds,
+        aggregation_mode: aggregationEnabled ? 'multi' : 'single',
+        practice_stimulus_set_id: selectedPracticeStimulusSetId || null,
         config: (selectedPreset?.config as Record<string, unknown>) ?? {},
         notes: notes.trim() || null,
       };
@@ -150,6 +158,17 @@ export function RunBuilderPage() {
     }
   }
 
+  const selectedMainStimuli = useMemo(
+    () => validStimulusSets.filter((item) => selectedMainStimulusSetIds.includes(String(item.stimulus_set_id))),
+    [selectedMainStimulusSetIds, validStimulusSets],
+  );
+  const selectedConfig = ((selectedPreset?.config as Record<string, unknown> | undefined) ?? {}) as Record<string, unknown>;
+  const executionConfig = ((selectedConfig.execution as Record<string, unknown> | undefined) ?? {}) as Record<string, unknown>;
+  const expectedTrialCount =
+    Number(selectedConfig.trials_per_block ?? executionConfig.trials_per_block ?? 0) *
+      Number(selectedConfig.n_blocks ?? executionConfig.n_blocks ?? 0) +
+    Number(executionConfig.practice_trials ?? 0);
+
   return (
     <section>
       <h2>{t('run.title')}</h2>
@@ -179,7 +198,10 @@ export function RunBuilderPage() {
             <input value={String(selectedStimulus?.task_family ?? defaults?.task_family ?? '')} readOnly aria-label={t('run.taskFamily')} />
           </div>
           <div className="form-row" style={{ marginTop: 8 }}>
-            <select value={selectedStimulusSetId} onChange={(e) => setSelectedStimulusSetId(e.target.value)} required>
+            <select value={selectedStimulusSetId} onChange={(e) => {
+              setSelectedStimulusSetId(e.target.value);
+              if (!aggregationEnabled) setSelectedMainStimulusSetIds(e.target.value ? [e.target.value] : []);
+            }} required>
               <option value="">{t('run.selectStimulus')}</option>
               {validStimulusSets.map((item) => (
                 <option key={item.stimulus_set_id} value={item.stimulus_set_id}>
@@ -188,6 +210,16 @@ export function RunBuilderPage() {
               ))}
             </select>
             <input name="notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t('run.notes')} />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input type="checkbox" checked={aggregationEnabled} onChange={(e) => {
+                const next = e.target.checked;
+                setAggregationEnabled(next);
+                if (!next) {
+                  setSelectedMainStimulusSetIds(selectedStimulusSetId ? [selectedStimulusSetId] : []);
+                }
+              }} />
+              Aggregation mode
+            </label>
             <button className="primary-btn" type="submit" disabled={isCreating || validStimulusSets.length === 0}>
               {isCreating ? t('run.creating') : t('run.submit')}
             </button>
@@ -195,6 +227,29 @@ export function RunBuilderPage() {
               {t('run.loadRecent')}
             </button>
           </div>
+          {aggregationEnabled ? (
+            <div className="form-row" style={{ marginTop: 8 }}>
+              <select
+                multiple
+                value={selectedMainStimulusSetIds}
+                onChange={(e) => setSelectedMainStimulusSetIds(Array.from(e.target.selectedOptions).map((o) => o.value))}
+              >
+                {validStimulusSets.map((item) => (
+                  <option key={`main-${item.stimulus_set_id}`} value={item.stimulus_set_id}>
+                    {item.name} • {item.n_items}
+                  </option>
+                ))}
+              </select>
+              <select value={selectedPracticeStimulusSetId} onChange={(e) => setSelectedPracticeStimulusSetId(e.target.value)}>
+                <option value="">Practice bank (optional)</option>
+                {validStimulusSets.map((item) => (
+                  <option key={`practice-${item.stimulus_set_id}`} value={item.stimulus_set_id}>
+                    {item.name} • {item.n_items}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
         </form>
       </section>
 
@@ -204,6 +259,14 @@ export function RunBuilderPage() {
           <KbdMono>{selectedStimulus.stimulus_set_id}</KbdMono>
         </p>
       ) : null}
+      <section className="panel">
+        <h3>Run summary before activation</h3>
+        <p>Practice bank: {selectedPracticeStimulusSetId || 'none'}</p>
+        <p>Main bank(s): {(aggregationEnabled ? selectedMainStimulusSetIds : [selectedStimulusSetId]).filter(Boolean).join(', ') || 'none'}</p>
+        <p>Aggregation: {aggregationEnabled ? 'enabled (explicit)' : 'disabled (single-select)'}</p>
+        <p>Total main items: {selectedMainStimuli.reduce((acc, item) => acc + Number(item.n_items || 0), 0)}</p>
+        <p>Expected trial count: {expectedTrialCount}</p>
+      </section>
       {error ? (
         <p role="alert" className="alert-error">
           {error}
@@ -257,7 +320,7 @@ export function RunBuilderPage() {
                         <StatusBadge label={localizeStatus(t, status)} tone={runTone(status)} />
                       </td>
                       <td>{run.public_slug ? `/${run.public_slug}` : t('common.na')}</td>
-                      <td>{run.linked_stimulus_set_ids.join(', ') || t('common.na')}</td>
+                      <td>{run.linked_stimulus_set_ids.join(', ') || t('common.na')} ({run.aggregation_mode ?? 'single'})</td>
                       <td>{run.launchability_reason}</td>
                       <td>
                         <div className="toolbar">
