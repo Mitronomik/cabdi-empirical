@@ -14,6 +14,7 @@ interface Props {
     reasonClicked: boolean;
     evidenceOpened: boolean;
     verificationCompleted: boolean;
+    eventTrace?: Array<{ event_type: string; payload: Record<string, unknown> }>;
   }) => void;
 }
 
@@ -29,10 +30,13 @@ function formatResponseOption(value: string, t: (key: string) => string): string
 export function TrialPage({ trial, loading, savedFeedback, onSubmit }: Props) {
   const { t } = useLocale();
   const [selectedResponse, setSelectedResponse] = useState<string>('');
-  const [selfConfidence, setSelfConfidence] = useState<number>(50);
+  const [selfConfidence, setSelfConfidence] = useState<number | null>(null);
   const [reasonClicked, setReasonClicked] = useState(false);
   const [evidenceOpened, setEvidenceOpened] = useState(false);
   const [verificationCompleted, setVerificationCompleted] = useState(false);
+  const [panelExposure, setPanelExposure] = useState<{ panelVisibleOnFirstPaint: boolean; shownHelpComponents: string[] } | null>(
+    null,
+  );
 
   const responseOptions = Array.isArray(trial.stimulus.payload.response_options)
     ? (trial.stimulus.payload.response_options as string[])
@@ -50,7 +54,7 @@ export function TrialPage({ trial, loading, savedFeedback, onSubmit }: Props) {
     trial.policy_decision.verification_mode === 'forced_checkbox' ||
     trial.policy_decision.verification_mode === 'forced_second_look';
 
-  const canSubmit = Boolean(selectedResponse) && (!verificationRequired || verificationCompleted);
+  const canSubmit = Boolean(selectedResponse) && selfConfidence !== null && (!verificationRequired || verificationCompleted);
 
   return (
     <section className="trial-shell" data-testid="trial-layout">
@@ -77,6 +81,7 @@ export function TrialPage({ trial, loading, savedFeedback, onSubmit }: Props) {
           onEvidenceOpen={() => setEvidenceOpened(true)}
           verificationChecked={verificationCompleted}
           setVerificationChecked={setVerificationCompleted}
+          onPanelFirstPaint={setPanelExposure}
         />
       </div>
 
@@ -101,18 +106,24 @@ export function TrialPage({ trial, loading, savedFeedback, onSubmit }: Props) {
 
         {selectedResponse && (
           <>
-            <label htmlFor="confidence">
-              {t('trial.selfConfidence')} ({selfConfidence})
-            </label>
-            <input
-              id="confidence"
-              type="range"
-              min={trial.self_confidence_scale.min}
-              max={trial.self_confidence_scale.max}
-              step={trial.self_confidence_scale.step}
-              value={selfConfidence}
-              onChange={(e) => setSelfConfidence(Number(e.target.value))}
-            />
+            <fieldset className="confidence-fieldset" aria-label={t('trial.selfConfidence')}>
+              <legend>{t('trial.selfConfidence')}</legend>
+              <div className="confidence-grid">
+                {[1, 2, 3, 4].map((value) => (
+                  <label key={value} className={`confidence-option ${selfConfidence === value ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="self_confidence"
+                      value={value}
+                      checked={selfConfidence === value}
+                      onChange={() => setSelfConfidence(value)}
+                    />
+                    <span className="confidence-value">{value}</span>
+                    <span className="confidence-text">{t(`trial.confidence.option${value}` as never)}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
             <div className="range-labels muted">
               <span>{t('trial.confidenceLow')}</span>
               <span>{t('trial.confidenceHigh')}</span>
@@ -126,10 +137,22 @@ export function TrialPage({ trial, loading, savedFeedback, onSubmit }: Props) {
           onClick={() =>
             onSubmit({
               humanResponse: selectedResponse,
-              selfConfidence,
+              selfConfidence: selfConfidence as number,
               reasonClicked,
               evidenceOpened,
               verificationCompleted,
+              eventTrace: panelExposure
+                ? [
+                    {
+                      event_type: 'assistance_rendered',
+                      payload: {
+                        assistance_rendered: true,
+                        panel_visible_on_first_paint: panelExposure.panelVisibleOnFirstPaint,
+                        shown_help_components: panelExposure.shownHelpComponents,
+                      },
+                    },
+                  ]
+                : undefined,
             })
           }
         >

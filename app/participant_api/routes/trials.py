@@ -16,7 +16,7 @@ class TrialEventInput(BaseModel):
 class SubmitTrialRequest(BaseModel):
     human_response: str
     reaction_time_ms: int
-    self_confidence: int
+    self_confidence: int = Field(ge=1, le=4)
     reason_clicked: bool = False
     evidence_opened: bool = False
     verification_completed: bool = False

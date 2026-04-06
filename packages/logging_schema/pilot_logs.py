@@ -103,7 +103,7 @@ class TrialSummaryLog:
         _require(all(bool(v) for v in required_text), "required text fields must be non-empty")
         _require(isinstance(self.shown_components, list), "shown_components must be list")
         _require(self.reaction_time_ms >= 0, "reaction_time_ms must be >= 0")
-        _require(0 <= self.self_confidence <= 100, "self_confidence must be in [0, 100]")
+        _require(1 <= self.self_confidence <= 4, "self_confidence must be in [1, 4]")
 
     def to_dict(self) -> dict[str, Any]:
         self.validate()

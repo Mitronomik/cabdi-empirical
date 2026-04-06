@@ -111,6 +111,13 @@ def derive_trial_level_rows(
         followed_wrong_model = model_wrong and followed_model
         correct_override = model_wrong and overrode_model and correct
 
+        confidence = _to_int(row.get("self_confidence"))
+        if confidence is None:
+            warnings.append(f"missing_confidence:row_{idx}")
+        elif confidence < 1 or confidence > 4:
+            warnings.append(f"invalid_confidence_ordinal:row_{idx}")
+            confidence = None
+
         derived = {
             "participant_id": row.get("participant_id", ""),
             "session_id": session_id,
@@ -129,7 +136,7 @@ def derive_trial_level_rows(
             "followed_wrong_model": int(followed_wrong_model),
             "correct_override": int(correct_override),
             "reaction_time_ms": reaction_time,
-            "confidence": _to_int(row.get("self_confidence")),
+            "confidence": confidence,
             "verification_completed": int(_to_bool(row.get("verification_completed"))),
             "verification_required": int(_to_bool(row.get("verification_required"))),
             "verification_burden": int(_to_bool(row.get("verification_completed"))),

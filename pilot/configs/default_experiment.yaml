@@ -8,6 +8,6 @@
   "block_order_strategy": "latin_square",
   "budget_matching_mode": "matched_extra_steps",
   "risk_proxy_mode": "pre_render_risk_bucket",
-  "self_confidence_scale": "0_100_integer",
+  "self_confidence_scale": "4_point",
   "block_questionnaires": ["nasa_tlx_short", "trust_short"]
 }

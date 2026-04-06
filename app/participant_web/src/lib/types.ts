@@ -37,6 +37,7 @@ export interface TrialPayload {
   stimulus: StimulusItem;
   policy_decision: PolicyDecision;
   self_confidence_scale: {
+    type?: '4_point' | string;
     min: number;
     max: number;
     step: number;

@@ -50,6 +50,10 @@ export type MessageKey =
   | 'trial.answerLabel'
   | 'trial.confidenceLow'
   | 'trial.confidenceHigh'
+  | 'trial.confidence.option1'
+  | 'trial.confidence.option2'
+  | 'trial.confidence.option3'
+  | 'trial.confidence.option4'
   | 'trial.selfConfidence'
   | 'trial.submit'
   | 'trial.submitHelp'
@@ -59,6 +63,7 @@ export type MessageKey =
   | 'trial.response.yes'
   | 'trial.response.no'
   | 'assistance.title'
+  | 'assistance.panelKicker'
   | 'assistance.prediction'
   | 'assistance.modelConfidence'
   | 'assistance.confidence.low'
@@ -146,6 +151,10 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
     'trial.answerLabel': 'Choose your answer',
     'trial.confidenceLow': 'Low confidence',
     'trial.confidenceHigh': 'High confidence',
+    'trial.confidence.option1': 'Not confident at all',
+    'trial.confidence.option2': 'Somewhat not confident',
+    'trial.confidence.option3': 'Somewhat confident',
+    'trial.confidence.option4': 'Very confident',
     'trial.selfConfidence': 'How confident are you?',
     'trial.submit': 'Submit response',
     'trial.submitHelp': 'Your response is saved immediately after you submit.',
@@ -154,6 +163,7 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
     'trial.response.yes': 'Yes',
     'trial.response.no': 'No',
     'assistance.title': 'AI assistance',
+    'assistance.panelKicker': 'Model recommendation',
     'assistance.prediction': 'AI suggestion',
     'assistance.modelConfidence': 'AI confidence',
     'assistance.confidence.low': 'Low',
@@ -240,6 +250,10 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
     'trial.answerLabel': 'Выберите ваш ответ',
     'trial.confidenceLow': 'Низкая уверенность',
     'trial.confidenceHigh': 'Высокая уверенность',
+    'trial.confidence.option1': 'Совсем не уверен(а)',
+    'trial.confidence.option2': 'Скорее не уверен(а)',
+    'trial.confidence.option3': 'Скорее уверен(а)',
+    'trial.confidence.option4': 'Очень уверен(а)',
     'trial.selfConfidence': 'Насколько вы уверены?',
     'trial.submit': 'Отправить ответ',
     'trial.submitHelp': 'Ответ сохраняется сразу после отправки.',
@@ -248,6 +262,7 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
     'trial.response.yes': 'Да',
     'trial.response.no': 'Нет',
     'assistance.title': 'Помощь ИИ',
+    'assistance.panelKicker': 'Подсказка ИИ',
     'assistance.prediction': 'Подсказка ИИ',
     'assistance.modelConfidence': 'Уверенность ИИ',
     'assistance.confidence.low': 'Низкая',

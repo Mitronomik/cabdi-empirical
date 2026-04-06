@@ -256,6 +256,7 @@ export function useParticipantFlow() {
     reasonClicked: boolean;
     evidenceOpened: boolean;
     verificationCompleted: boolean;
+    eventTrace?: Array<{ event_type: string; payload: Record<string, unknown> }>;
   }) {
     if (!sessionId || !currentTrial) {
       setError(localizedError('error.missingSessionState'));
@@ -273,6 +274,7 @@ export function useParticipantFlow() {
         reason_clicked: params.reasonClicked,
         evidence_opened: params.evidenceOpened,
         verification_completed: params.verificationCompleted,
+        event_trace: params.eventTrace,
       });
       if (res.saved_ack?.saved) {
         setSavedFeedback(true);
