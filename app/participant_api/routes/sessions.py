@@ -46,6 +46,16 @@ def resume_info(req: ResumeInfoRequest, request: Request) -> dict:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.post("/resume")
+def resume_session(req: ResumeInfoRequest, request: Request) -> dict:
+    try:
+        return request.app.state.session_service.resume_session(run_slug=req.run_slug, resume_token=req.resume_token)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.post("/{session_id}/start")
 def start_session(session_id: str, request: Request) -> dict:
     try:
@@ -54,6 +64,14 @@ def start_session(session_id: str, request: Request) -> dict:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/{session_id}/progress")
+def session_progress(session_id: str, request: Request) -> dict:
+    try:
+        return request.app.state.session_service.get_progress_info(session_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post("/{session_id}/final-submit")

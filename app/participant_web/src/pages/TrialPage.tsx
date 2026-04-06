@@ -7,6 +7,7 @@ import type { TrialPayload } from '../lib/types';
 interface Props {
   trial: TrialPayload;
   loading: boolean;
+  savedFeedback?: boolean;
   onSubmit: (params: {
     humanResponse: string;
     selfConfidence: number;
@@ -25,7 +26,7 @@ function formatResponseOption(value: string, t: (key: string) => string): string
   return value;
 }
 
-export function TrialPage({ trial, loading, onSubmit }: Props) {
+export function TrialPage({ trial, loading, savedFeedback, onSubmit }: Props) {
   const { t } = useLocale();
   const [selectedResponse, setSelectedResponse] = useState<string>('');
   const [selfConfidence, setSelfConfidence] = useState<number>(50);
@@ -135,6 +136,7 @@ export function TrialPage({ trial, loading, onSubmit }: Props) {
           {t('trial.submit')}
         </button>
         <p className="muted submit-hint">{t('trial.submitHelp')}</p>
+        {savedFeedback ? <p className="muted">{t('common.progressSaved')}</p> : null}
       </section>
     </section>
   );

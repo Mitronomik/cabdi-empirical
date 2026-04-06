@@ -191,23 +191,21 @@ test('resume token is checked and reused for resume', async () => {
   const fetchMock = mockFetchSequence([
     { status: 200, body: { run_slug: 'public-run-a', public_title: 'Run A', launchable: true, run_status: 'active' } },
     { status: 200, body: { resume_status: 'resumable', session_id: 'sess_1', session_status: 'in_progress' } },
-    { status: 200, body: { resume_status: 'resumable', session_id: 'sess_1', session_status: 'in_progress' } },
-    { status: 200, body: { session_id: 'sess_1', status: 'in_progress', entry_mode: 'resumed', resume_token: 'resume-token-1' } },
+    { status: 200, body: { resume_status: 'resumable', session_id: 'sess_1', session_status: 'in_progress', current_stage: 'trial' } },
+    { status: 200, body: { session_id: 'sess_1', status: 'in_progress', current_stage: 'trial', current_block_index: 0, current_trial_index: 1 } },
     { status: 200, body: { session_id: 'sess_1', status: 'in_progress' } },
     { status: 200, body: makeTrial() },
   ]);
 
   render(<App />);
   const user = userEvent.setup();
-  await user.click(screen.getByLabelText(/i consent to participate/i));
+  expect(await screen.findByText(/found your saved progress/i)).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: /continue/i }));
-  expect(screen.getByText(/found your saved progress/i)).toBeInTheDocument();
-  await user.click(screen.getByRole('button', { name: /start study/i }));
   await screen.findByTestId('trial-layout');
 
   expect(fetchMock.mock.calls[1][0]).toContain('/api/v1/sessions/resume-info');
-  expect(fetchMock.mock.calls[2][0]).toContain('/api/v1/sessions/resume-info');
-  expect(String((fetchMock.mock.calls[3][1] as RequestInit).body)).toContain('"resume_token":"resume-token-1"');
+  expect(fetchMock.mock.calls[2][0]).toContain('/api/v1/sessions/resume');
+  expect(String((fetchMock.mock.calls[2][1] as RequestInit).body)).toContain('"resume_token":"resume-token-1"');
 });
 
 test('invalid saved resume token is surfaced and session starts new', async () => {

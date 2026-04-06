@@ -3,9 +3,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   createSession,
   fetchResumeInfo,
+  fetchSessionProgress,
   fetchPublicRun,
   fetchNextTrial,
   finalSubmitSession,
+  resumeSession,
   startSession,
   submitBlockQuestionnaire,
   submitTrial,
@@ -14,7 +16,7 @@ import { detectLocale } from '../i18n/locale';
 import { messages, type Locale } from '../i18n/messages';
 import type { QuestionnairePayload, TrialPayload } from '../lib/types';
 
-type Stage = 'consent' | 'instructions' | 'trial' | 'questionnaire' | 'awaiting_final_submit' | 'completion';
+type Stage = 'consent' | 'instructions' | 'resume_prompt' | 'trial' | 'questionnaire' | 'awaiting_final_submit' | 'completion';
 type ResumeBannerKey =
   | 'entry.resumeResumed'
   | 'entry.resumeInvalid'
@@ -87,6 +89,10 @@ function resumeStorageKey(runSlug: string): string {
   return `participant_web.resume_token.${runSlug}`;
 }
 
+function sessionStorageKey(runSlug: string): string {
+  return `participant_web.session_id.${runSlug}`;
+}
+
 export function useParticipantFlow() {
   const [stage, setStage] = useState<Stage>('consent');
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -99,6 +105,8 @@ export function useParticipantFlow() {
   const [runSlug] = useState(resolveRunSlugFromUrl);
   const [publicRun, setPublicRun] = useState<PublicRunInfo | null>(null);
   const [resumeBannerKey, setResumeBannerKey] = useState<ResumeBannerKey | null>(null);
+  const [savedFeedback, setSavedFeedback] = useState(false);
+  const [resumeCandidate, setResumeCandidate] = useState<{ token: string; sessionId?: string } | null>(null);
 
   const trialStartMsRef = useRef<number>(0);
 
@@ -172,6 +180,8 @@ export function useParticipantFlow() {
       const resumeInfo = await fetchResumeInfo(runSlug, savedResumeToken);
       if (resumeInfo.resume_status === 'resumable') {
         setResumeBannerKey('entry.resumeResumed');
+        setResumeCandidate({ token: savedResumeToken, sessionId: resumeInfo.session_id });
+        setStage('resume_prompt');
       } else if (resumeInfo.resume_status === 'finalized') {
         setResumeBannerKey('entry.resumeFinalized');
         window.localStorage.removeItem(resumeStorageKey(runSlug));
@@ -223,6 +233,7 @@ export function useParticipantFlow() {
       const created = await createSession(runSlug, detectLocale(), resumeTokenForCreate);
       setSessionId(created.session_id);
       window.localStorage.setItem(resumeStorageKey(runSlug), created.resume_token);
+      window.localStorage.setItem(sessionStorageKey(runSlug), created.session_id);
       await startSession(created.session_id);
       await loadNextTrial(created.session_id);
     } catch (err: unknown) {
@@ -255,7 +266,7 @@ export function useParticipantFlow() {
     setError(null);
     try {
       const reactionTime = Math.max(1, Math.round(performance.now() - trialStartMsRef.current));
-      await submitTrial(sessionId, currentTrial.trial_id, {
+      const res = await submitTrial(sessionId, currentTrial.trial_id, {
         human_response: params.humanResponse,
         reaction_time_ms: reactionTime,
         self_confidence: params.selfConfidence,
@@ -263,6 +274,9 @@ export function useParticipantFlow() {
         evidence_opened: params.evidenceOpened,
         verification_completed: params.verificationCompleted,
       });
+      if (res.saved_ack?.saved) {
+        setSavedFeedback(true);
+      }
       await loadNextTrial(sessionId);
     } catch {
       setError(localizedError('error.submitTrial'));
@@ -279,7 +293,10 @@ export function useParticipantFlow() {
     setLoading(true);
     setError(null);
     try {
-      await submitBlockQuestionnaire(sessionId, questionnaireBlockId, payload);
+      const res = await submitBlockQuestionnaire(sessionId, questionnaireBlockId, payload);
+      if (res.saved_ack?.saved) {
+        setSavedFeedback(true);
+      }
       setQuestionnaireBlockId(null);
       await loadNextTrial(sessionId);
     } catch {
@@ -302,10 +319,53 @@ export function useParticipantFlow() {
         setCompletionCode(sessionId.slice(0, 8).toUpperCase());
         if (runSlug.trim()) {
           window.localStorage.removeItem(resumeStorageKey(runSlug.trim()));
+          window.localStorage.removeItem(sessionStorageKey(runSlug.trim()));
         }
       }
     } catch {
       setError(localizedError('error.finalSubmit'));
+      setLoading(false);
+    }
+  }
+
+  async function continueResumedSession() {
+    if (!runSlug.trim() || !resumeCandidate?.token) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const resumed = await resumeSession(runSlug, resumeCandidate.token);
+      if (resumed.resume_status !== 'resumable' || !resumed.session_id) {
+        setStage('consent');
+        setLoading(false);
+        return;
+      }
+      setSessionId(resumed.session_id);
+      window.localStorage.setItem(resumeStorageKey(runSlug), resumeCandidate.token);
+      window.localStorage.setItem(sessionStorageKey(runSlug), resumed.session_id);
+
+      const progress = await fetchSessionProgress(resumed.session_id);
+      if (progress.current_stage === 'completion' || progress.status === 'finalized') {
+        setCompletionCode(resumed.session_id.slice(0, 8).toUpperCase());
+        setStage('completion');
+        setLoading(false);
+        return;
+      }
+      if (progress.current_stage === 'awaiting_final_submit' || progress.status === 'awaiting_final_submit') {
+        setStage('awaiting_final_submit');
+        setLoading(false);
+        return;
+      }
+      if (progress.current_stage === 'questionnaire') {
+        const blockNumber = Number(progress.current_block_index) + 1;
+        setQuestionnaireBlockId(`block_${Math.max(1, blockNumber)}`);
+        setStage('questionnaire');
+        setLoading(false);
+        return;
+      }
+      await startSession(resumed.session_id);
+      await loadNextTrial(resumed.session_id);
+    } catch {
+      setError(localizedError('error.startSession'));
       setLoading(false);
     }
   }
@@ -322,9 +382,11 @@ export function useParticipantFlow() {
     publicRun,
     onboardingReady,
     resumeBannerKey,
+    savedFeedback,
     setStage,
     loadPublicRunInfo,
     beginSession,
+    continueResumedSession,
     submitCurrentTrial,
     submitQuestionnaire,
     submitFinalSession,

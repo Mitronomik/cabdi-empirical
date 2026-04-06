@@ -28,8 +28,10 @@ function AppBody() {
     publicRun,
     onboardingReady,
     resumeBannerKey,
+    savedFeedback,
     setStage,
     beginSession,
+    continueResumedSession,
     submitCurrentTrial,
     submitQuestionnaire,
     submitFinalSession,
@@ -79,10 +81,26 @@ function AppBody() {
         </>
       )}
 
+      {stage === 'resume_prompt' && (
+        <section className="card">
+          <h1>{t('instructions.title')}</h1>
+          <p>{t('entry.resumeResumed')}</p>
+          <div className="button-row">
+            <button type="button" disabled={loading} onClick={continueResumedSession}>
+              {t('common.continue')}
+            </button>
+            <button type="button" disabled={loading} onClick={() => setStage('consent')}>
+              {t('instructions.startPractice')}
+            </button>
+          </div>
+        </section>
+      )}
+
       {stage === 'trial' && currentTrial && (
         <TrialPage
           trial={currentTrial}
           loading={loading}
+          savedFeedback={savedFeedback}
           onSubmit={submitCurrentTrial}
         />
       )}
@@ -91,6 +109,7 @@ function AppBody() {
         <BlockQuestionnairePage
           blockId={questionnaireBlockId}
           loading={loading}
+          savedFeedback={savedFeedback}
           onSubmit={submitQuestionnaire}
         />
       )}

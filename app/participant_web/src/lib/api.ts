@@ -42,8 +42,25 @@ export async function fetchResumeInfo(runSlug: string, resumeToken: string): Pro
   resume_status: 'resumable' | 'finalized' | 'invalid' | 'not_resumable';
   session_id?: string;
   session_status?: string;
+  current_stage?: string;
+  current_block_index?: number;
+  current_trial_index?: number;
 }> {
   return request('/api/v1/sessions/resume-info', {
+    method: 'POST',
+    body: JSON.stringify({ run_slug: runSlug, resume_token: resumeToken }),
+  });
+}
+
+export async function resumeSession(runSlug: string, resumeToken: string): Promise<{
+  resume_status: 'resumable' | 'finalized' | 'invalid' | 'not_resumable';
+  session_id?: string;
+  session_status?: string;
+  current_stage?: string;
+  current_block_index?: number;
+  current_trial_index?: number;
+}> {
+  return request('/api/v1/sessions/resume', {
     method: 'POST',
     body: JSON.stringify({ run_slug: runSlug, resume_token: resumeToken }),
   });
@@ -63,6 +80,16 @@ export async function startSession(sessionId: string): Promise<{ session_id: str
   return request(`/api/v1/sessions/${sessionId}/start`, { method: 'POST' });
 }
 
+export async function fetchSessionProgress(sessionId: string): Promise<{
+  session_id: string;
+  status: string;
+  current_stage: string;
+  current_block_index: number;
+  current_trial_index: number;
+}> {
+  return request(`/api/v1/sessions/${sessionId}/progress`);
+}
+
 export async function fetchNextTrial(sessionId: string): Promise<TrialPayload | NextTrialResponseCompleted> {
   return request(`/api/v1/sessions/${sessionId}/next-trial`);
 }
@@ -79,7 +106,7 @@ export async function submitTrial(
     verification_completed: boolean;
     event_trace?: Array<{ event_type: string; payload: Record<string, unknown> }>;
   },
-): Promise<{ trial_id: string; status: string; session_completed?: boolean }> {
+): Promise<{ trial_id: string; status: string; session_completed?: boolean; saved_ack?: { saved: boolean; saved_at?: string } }> {
   return request(`/api/v1/sessions/${sessionId}/trials/${trialId}/submit`, {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -90,7 +117,7 @@ export async function submitBlockQuestionnaire(
   sessionId: string,
   blockId: string,
   payload: QuestionnairePayload,
-): Promise<{ block_id: string; status: string; session_completed?: boolean }> {
+): Promise<{ block_id: string; status: string; session_completed?: boolean; saved_ack?: { saved: boolean; saved_at?: string } }> {
   return request(`/api/v1/sessions/${sessionId}/blocks/${blockId}/questionnaire`, {
     method: 'POST',
     body: JSON.stringify(payload),

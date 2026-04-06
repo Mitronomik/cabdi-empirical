@@ -20,7 +20,7 @@ class Migration:
 class SQLiteStore:
     """SQLite-backed persistence with explicit schema migration ownership."""
 
-    CURRENT_SCHEMA_VERSION = 8
+    CURRENT_SCHEMA_VERSION = 9
 
     def __init__(self, db_path: str) -> None:
         self.db_path = db_path
@@ -80,6 +80,7 @@ class SQLiteStore:
             Migration(6, "add_researcher_users_table", self._migration_006_add_researcher_users_table),
             Migration(7, "add_session_created_at_and_preserve_started_at_semantics", self._migration_007_add_session_created_at),
             Migration(8, "add_run_snapshot_and_selection_semantics_columns", self._migration_008_add_run_snapshot_columns),
+            Migration(9, "add_session_stage_and_lifecycle_columns", self._migration_009_add_session_stage_columns),
         ]
 
     def _ensure_migration_table(self, conn: sqlite3.Connection) -> None:
@@ -175,6 +176,14 @@ class SQLiteStore:
                     "Detected participant_sessions.created_at without NOT NULL constraint in unversioned DB. "
                     "Run explicit migration tooling or recreate DB."
                 )
+        lifecycle_columns = {"current_stage", "consent_at", "finalized_at"}
+        if self._all_columns_present(participant_columns, lifecycle_columns):
+            version = max(version, 9)
+        elif self._any_columns_present(participant_columns, lifecycle_columns):
+            raise RuntimeError(
+                "Detected partial legacy participant_sessions lifecycle migration state in unversioned DB. "
+                "Run explicit migration tooling or recreate DB."
+            )
         return version
 
     def _record_inferred_legacy_versions(self, conn: sqlite3.Connection, version: int) -> None:
@@ -443,6 +452,29 @@ class SQLiteStore:
 
         conn.execute("ALTER TABLE researcher_runs ADD COLUMN aggregation_mode INTEGER NOT NULL DEFAULT 0")
         conn.execute("ALTER TABLE researcher_runs ADD COLUMN practice_stimulus_set_id TEXT")
+
+    def _migration_009_add_session_stage_columns(self, conn: sqlite3.Connection) -> None:
+        conn.execute("ALTER TABLE participant_sessions ADD COLUMN current_stage TEXT NOT NULL DEFAULT 'consent'")
+        conn.execute("ALTER TABLE participant_sessions ADD COLUMN consent_at TEXT")
+        conn.execute("ALTER TABLE participant_sessions ADD COLUMN finalized_at TEXT")
+        conn.execute(
+            """
+            UPDATE participant_sessions
+            SET current_stage = CASE
+                WHEN status = 'finalized' OR status = 'completed' THEN 'completion'
+                WHEN status = 'awaiting_final_submit' THEN 'awaiting_final_submit'
+                WHEN status = 'created' THEN 'consent'
+                ELSE 'trial'
+            END
+            """
+        )
+        conn.execute(
+            """
+            UPDATE participant_sessions
+            SET finalized_at = completed_at
+            WHERE finalized_at IS NULL AND (status = 'finalized' OR status = 'completed') AND completed_at IS NOT NULL
+            """
+        )
 
     def fetchone(self, query: str, params: tuple[Any, ...]) -> dict[str, Any] | None:
         with self.connect() as conn:
