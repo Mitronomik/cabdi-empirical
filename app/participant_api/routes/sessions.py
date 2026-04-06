@@ -52,6 +52,8 @@ def start_session(session_id: str, request: Request) -> dict:
         return request.app.state.session_service.start_session(session_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/{session_id}/final-submit")

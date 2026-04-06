@@ -7,6 +7,13 @@ export interface RunSummary {
   launchability_reason: string;
   launchable: boolean;
   linked_stimulus_set_ids: string[];
+  aggregation_mode?: string;
+  practice_stimulus_set_id?: string | null;
+  run_summary?: {
+    expected_trial_count?: number;
+    aggregation_enabled?: boolean;
+    total_main_items?: number;
+  };
   created_at?: string;
 }
 
@@ -32,6 +39,12 @@ export function parseRunSummary(raw: Record<string, unknown>): RunSummary {
     linked_stimulus_set_ids: Array.isArray(raw.linked_stimulus_set_ids)
       ? raw.linked_stimulus_set_ids.map((value) => String(value))
       : [],
+    aggregation_mode: raw.aggregation_mode ? String(raw.aggregation_mode) : undefined,
+    practice_stimulus_set_id: raw.practice_stimulus_set_id ? String(raw.practice_stimulus_set_id) : undefined,
+    run_summary:
+      raw.run_summary && typeof raw.run_summary === 'object'
+        ? (raw.run_summary as { expected_trial_count?: number; aggregation_enabled?: boolean; total_main_items?: number })
+        : undefined,
     created_at: raw.created_at ? String(raw.created_at) : undefined,
   };
 }

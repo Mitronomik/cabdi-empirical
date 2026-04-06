@@ -20,7 +20,7 @@ class Migration:
 class SQLiteStore:
     """SQLite-backed persistence with explicit schema migration ownership."""
 
-    CURRENT_SCHEMA_VERSION = 7
+    CURRENT_SCHEMA_VERSION = 8
 
     def __init__(self, db_path: str) -> None:
         self.db_path = db_path
@@ -79,6 +79,7 @@ class SQLiteStore:
             Migration(5, "enforce_participant_session_run_not_null", self._migration_005_enforce_run_not_null),
             Migration(6, "add_researcher_users_table", self._migration_006_add_researcher_users_table),
             Migration(7, "add_session_created_at_and_preserve_started_at_semantics", self._migration_007_add_session_created_at),
+            Migration(8, "add_run_snapshot_and_selection_semantics_columns", self._migration_008_add_run_snapshot_columns),
         ]
 
     def _ensure_migration_table(self, conn: sqlite3.Connection) -> None:
@@ -192,6 +193,8 @@ class SQLiteStore:
             )
         self._assert_not_null_column(conn, "participant_sessions", "run_id")
         self._assert_not_null_column(conn, "participant_sessions", "created_at")
+        self._assert_not_null_column(conn, "participant_sessions", "expected_trial_count")
+        self._assert_not_null_column(conn, "researcher_runs", "aggregation_mode")
 
     @property
     def schema_version(self) -> int:
@@ -425,6 +428,21 @@ class SQLiteStore:
             ALTER TABLE participant_sessions_new RENAME TO participant_sessions;
             """
         )
+
+    def _migration_008_add_run_snapshot_columns(self, conn: sqlite3.Connection) -> None:
+        conn.execute("ALTER TABLE participant_sessions ADD COLUMN expected_trial_count INTEGER NOT NULL DEFAULT 0")
+        conn.execute("ALTER TABLE participant_sessions ADD COLUMN source_stimulus_set_ids_json TEXT NOT NULL DEFAULT '[]'")
+        conn.execute("ALTER TABLE participant_sessions ADD COLUMN snapshot_frozen_at TEXT")
+
+        conn.execute("ALTER TABLE session_trials ADD COLUMN expected_trial_count INTEGER NOT NULL DEFAULT 0")
+        conn.execute("ALTER TABLE session_trials ADD COLUMN source_stimulus_set_ids_json TEXT NOT NULL DEFAULT '[]'")
+        conn.execute("ALTER TABLE session_trials ADD COLUMN is_practice INTEGER NOT NULL DEFAULT 0")
+        conn.execute(
+            "ALTER TABLE session_trials ADD COLUMN payload_schema_version TEXT NOT NULL DEFAULT 'stimulus_payload.v1'"
+        )
+
+        conn.execute("ALTER TABLE researcher_runs ADD COLUMN aggregation_mode INTEGER NOT NULL DEFAULT 0")
+        conn.execute("ALTER TABLE researcher_runs ADD COLUMN practice_stimulus_set_id TEXT")
 
     def fetchone(self, query: str, params: tuple[Any, ...]) -> dict[str, Any] | None:
         with self.connect() as conn:

@@ -17,6 +17,9 @@ RUN_STATUS_ACTIVE = "active"
 RUN_STATUS_PAUSED = "paused"
 RUN_STATUS_CLOSED = "closed"
 RUN_STATUSES = {RUN_STATUS_DRAFT, RUN_STATUS_ACTIVE, RUN_STATUS_PAUSED, RUN_STATUS_CLOSED}
+AGGREGATION_MODE_SINGLE = "single"
+AGGREGATION_MODE_MULTI = "multi"
+_ALLOWED_AGGREGATION_MODES = {AGGREGATION_MODE_SINGLE, AGGREGATION_MODE_MULTI}
 _ALLOWED_TRANSITIONS: dict[str, set[str]] = {
     RUN_STATUS_DRAFT: {RUN_STATUS_ACTIVE},
     RUN_STATUS_ACTIVE: {RUN_STATUS_PAUSED, RUN_STATUS_CLOSED},
@@ -58,6 +61,8 @@ class RunService:
         config: dict[str, Any],
         stimulus_set_ids: list[str],
         notes: str | None,
+        aggregation_mode: str = AGGREGATION_MODE_SINGLE,
+        practice_stimulus_set_id: str | None = None,
         public_slug: str | None = None,
     ) -> dict[str, Any]:
         if not run_name.strip():
@@ -66,8 +71,15 @@ class RunService:
             raise ValueError("experiment_id must be non-empty")
         if not task_family.strip():
             raise ValueError("task_family must be non-empty")
-        if not stimulus_set_ids:
-            raise ValueError("at least one stimulus_set_id is required")
+        if aggregation_mode not in _ALLOWED_AGGREGATION_MODES:
+            raise ValueError(f"aggregation_mode must be one of: {sorted(_ALLOWED_AGGREGATION_MODES)}")
+        main_stimulus_set_ids = [set_id for set_id in stimulus_set_ids if str(set_id).strip()]
+        if not main_stimulus_set_ids:
+            raise ValueError("at least one main stimulus_set_id is required")
+        if aggregation_mode == AGGREGATION_MODE_SINGLE and len(main_stimulus_set_ids) != 1:
+            raise ValueError("single aggregation_mode requires exactly one main stimulus_set_id")
+        if aggregation_mode == AGGREGATION_MODE_MULTI and len(main_stimulus_set_ids) < 2:
+            raise ValueError("multi aggregation_mode requires at least two main stimulus_set_ids")
 
         default_experiment = load_experiment_config("pilot/configs/default_experiment.yaml")
         resolved_config = materialize_run_config_for_storage(
@@ -77,7 +89,19 @@ class RunService:
             task_family=task_family,
         )
 
-        for stimulus_set_id in stimulus_set_ids:
+        self._validate_stimulus_sets_for_run(
+            task_family=task_family,
+            main_stimulus_set_ids=main_stimulus_set_ids,
+            practice_stimulus_set_id=practice_stimulus_set_id,
+        )
+
+        run_summary = self._compute_run_summary(
+            main_stimulus_set_ids=main_stimulus_set_ids,
+            practice_stimulus_set_id=practice_stimulus_set_id,
+            aggregation_mode=aggregation_mode,
+        )
+
+        for stimulus_set_id in main_stimulus_set_ids:
             row = self.store.fetchone(
                 "SELECT stimulus_set_id, task_family, validation_status FROM researcher_stimulus_sets WHERE stimulus_set_id = ?",
                 (stimulus_set_id,),
@@ -95,8 +119,8 @@ class RunService:
             """
             INSERT INTO researcher_runs(
                 run_id, run_name, public_slug, status, experiment_id, task_family, config_json,
-                stimulus_set_ids_json, notes, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                stimulus_set_ids_json, notes, created_at, aggregation_mode, practice_stimulus_set_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 run_id,
@@ -106,9 +130,11 @@ class RunService:
                 experiment_id,
                 task_family,
                 dumps(resolved_config),
-                dumps(stimulus_set_ids),
+                dumps(main_stimulus_set_ids),
                 notes,
                 _now_iso(),
+                1 if aggregation_mode == AGGREGATION_MODE_MULTI else 0,
+                practice_stimulus_set_id,
             ),
         )
         created = self.get_run(run_id)
@@ -123,6 +149,9 @@ class RunService:
             "task_family": created["task_family"],
             "config": created["config"],
             "linked_stimulus_set_ids": created["stimulus_set_ids"],
+            "run_summary": created["run_summary"],
+            "aggregation_mode": created["aggregation_mode"],
+            "practice_stimulus_set_id": created["practice_stimulus_set_id"],
             "notes": created["notes"],
             "created_at": created["created_at"],
             "validation_errors": [],
@@ -141,6 +170,13 @@ class RunService:
             row["public_slug"] = synthesized_slug
         row["config"] = loads(row.pop("config_json"))
         row["stimulus_set_ids"] = loads(row.pop("stimulus_set_ids_json"))
+        row["aggregation_mode"] = AGGREGATION_MODE_MULTI if int(row.get("aggregation_mode") or 0) == 1 else AGGREGATION_MODE_SINGLE
+        row["practice_stimulus_set_id"] = row.get("practice_stimulus_set_id")
+        row["run_summary"] = self._compute_run_summary(
+            main_stimulus_set_ids=row["stimulus_set_ids"],
+            practice_stimulus_set_id=row["practice_stimulus_set_id"],
+            aggregation_mode=row["aggregation_mode"],
+        )
         row["launchable"] = row["status"] == RUN_STATUS_ACTIVE
         row["launchability_reason"] = (
             "run is active and accepts participant sessions"
@@ -153,6 +189,7 @@ class RunService:
         rows = self.store.fetchall(
             """
             SELECT run_id, run_name, public_slug, status, experiment_id, task_family, notes, created_at, stimulus_set_ids_json
+                   , aggregation_mode, practice_stimulus_set_id
             FROM researcher_runs
             ORDER BY created_at DESC
             """,
@@ -160,6 +197,14 @@ class RunService:
         )
         for row in rows:
             row["linked_stimulus_set_ids"] = loads(row.pop("stimulus_set_ids_json"))
+            aggregation_mode = AGGREGATION_MODE_MULTI if int(row.get("aggregation_mode") or 0) == 1 else AGGREGATION_MODE_SINGLE
+            row["aggregation_mode"] = aggregation_mode
+            row["practice_stimulus_set_id"] = row.get("practice_stimulus_set_id")
+            row["run_summary"] = self._compute_run_summary(
+                main_stimulus_set_ids=row["linked_stimulus_set_ids"],
+                practice_stimulus_set_id=row["practice_stimulus_set_id"],
+                aggregation_mode=aggregation_mode,
+            )
             row["launchable"] = row["status"] == RUN_STATUS_ACTIVE
             row["launchability_reason"] = (
                 "run is active and accepts participant sessions"
@@ -234,6 +279,21 @@ class RunService:
         if not isinstance(stimulus_set_ids, list) or not stimulus_set_ids:
             errors.append("run must reference at least one stimulus_set_id")
             return errors
+        aggregation_mode = str(run.get("aggregation_mode") or AGGREGATION_MODE_SINGLE)
+        if aggregation_mode not in _ALLOWED_AGGREGATION_MODES:
+            errors.append("run has invalid aggregation_mode")
+        if aggregation_mode == AGGREGATION_MODE_SINGLE and len(stimulus_set_ids) != 1:
+            errors.append("single-set run cannot include more than one main stimulus set")
+        if aggregation_mode == AGGREGATION_MODE_MULTI and len(stimulus_set_ids) < 2:
+            errors.append("multi-set run requires at least two main stimulus sets")
+
+        run_summary = run.get("run_summary")
+        if not isinstance(run_summary, dict):
+            errors.append("run summary missing")
+        else:
+            expected_total = int(run_summary.get("expected_trial_count", 0))
+            if expected_total <= 0:
+                errors.append("run summary expected_trial_count must be positive")
 
         for stimulus_set_id in stimulus_set_ids:
             row = self.store.fetchone(
@@ -331,4 +391,89 @@ class RunService:
                     },
                 }
             ],
+            "aggregation_mode_default": AGGREGATION_MODE_SINGLE,
+            "aggregation_mode_options": [AGGREGATION_MODE_SINGLE, AGGREGATION_MODE_MULTI],
+        }
+
+    def _validate_stimulus_sets_for_run(
+        self,
+        *,
+        task_family: str,
+        main_stimulus_set_ids: list[str],
+        practice_stimulus_set_id: str | None,
+    ) -> None:
+        all_set_ids = list(main_stimulus_set_ids)
+        if practice_stimulus_set_id:
+            all_set_ids.append(practice_stimulus_set_id)
+
+        payload_versions: set[str] = set()
+        for stimulus_set_id in all_set_ids:
+            row = self.store.fetchone(
+                """
+                SELECT stimulus_set_id, task_family, validation_status, payload_schema_version
+                FROM researcher_stimulus_sets
+                WHERE stimulus_set_id = ?
+                """,
+                (stimulus_set_id,),
+            )
+            if row is None:
+                raise ValueError(f"Unknown stimulus_set_id: {stimulus_set_id}")
+            if row["task_family"] != task_family:
+                raise ValueError("All selected stimulus sets must match run task_family")
+            if row.get("validation_status") not in {"valid", "warning_only"}:
+                raise ValueError(f"Stimulus set is not run-compatible: {stimulus_set_id}")
+            payload_versions.add(str(row.get("payload_schema_version") or "stimulus_payload.v1"))
+        if len(payload_versions) > 1:
+            raise ValueError("Selected stimulus sets have incompatible payload_schema_version values")
+
+    def _compute_run_summary(
+        self,
+        *,
+        main_stimulus_set_ids: list[str],
+        practice_stimulus_set_id: str | None,
+        aggregation_mode: str,
+    ) -> dict[str, Any]:
+        default_experiment = load_experiment_config("pilot/configs/default_experiment.yaml")
+        expected_trial_count = int(default_experiment.practice_trials + (default_experiment.n_blocks * default_experiment.trials_per_block))
+        banks: list[dict[str, Any]] = []
+        total_main_items = 0
+        for stimulus_set_id in main_stimulus_set_ids:
+            row = self.store.fetchone(
+                "SELECT stimulus_set_id, name, n_items FROM researcher_stimulus_sets WHERE stimulus_set_id = ?",
+                (stimulus_set_id,),
+            )
+            if row is None:
+                continue
+            n_items = int(row.get("n_items") or 0)
+            total_main_items += n_items
+            banks.append(
+                {
+                    "stimulus_set_id": row["stimulus_set_id"],
+                    "name": row["name"],
+                    "n_items": n_items,
+                    "role": "main",
+                }
+            )
+        practice_bank: dict[str, Any] | None = None
+        if practice_stimulus_set_id:
+            row = self.store.fetchone(
+                "SELECT stimulus_set_id, name, n_items FROM researcher_stimulus_sets WHERE stimulus_set_id = ?",
+                (practice_stimulus_set_id,),
+            )
+            if row is not None:
+                practice_bank = {
+                    "stimulus_set_id": row["stimulus_set_id"],
+                    "name": row["name"],
+                    "n_items": int(row.get("n_items") or 0),
+                    "role": "practice",
+                }
+        return {
+            "aggregation_mode": aggregation_mode,
+            "aggregation_enabled": aggregation_mode == AGGREGATION_MODE_MULTI,
+            "practice_stimulus_set_id": practice_stimulus_set_id,
+            "selected_main_stimulus_set_ids": main_stimulus_set_ids,
+            "banks": banks,
+            "practice_bank": practice_bank,
+            "total_main_items": total_main_items,
+            "expected_trial_count": expected_trial_count,
         }
