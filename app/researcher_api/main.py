@@ -70,6 +70,10 @@ def _resolve_export_root() -> str:
     return os.getenv("PILOT_EXPORT_ARTIFACT_ROOT", "artifacts/pilot_exports")
 
 
+def _resolve_participant_base_url() -> str:
+    return os.getenv("PILOT_PARTICIPANT_BASE_URL", "http://localhost:5173").rstrip("/")
+
+
 def _is_insecure_session_secret(secret: str) -> bool:
     normalized = secret.strip().lower()
     if len(secret) < MIN_SESSION_SECRET_LENGTH:
@@ -114,7 +118,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
 
     app.state.store = store
     app.state.stimulus_service = StimulusService(store)
-    app.state.run_service = RunService(store)
+    app.state.run_service = RunService(store, participant_base_url=_resolve_participant_base_url())
     app.state.diagnostics_service = DiagnosticsService(store)
     app.state.admin_export_service = AdminExportService(store, export_root=_resolve_export_root())
     app.state.auth_service = AuthService(store)

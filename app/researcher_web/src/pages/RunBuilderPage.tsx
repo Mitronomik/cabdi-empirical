@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { KbdMono, StatusBadge, SummaryCard } from '../components/OperatorPrimitives';
 import { localizeOperatorError, localizeStatus } from '../i18n/uiText';
 import { useLocale } from '../i18n/useLocale';
-import { activateRun, closeRun, createRun, getRunBuilderDefaults, listRuns, listStimuli, pauseRun } from '../lib/api';
+import { activateRun, closeRun, createRun, getRun, getRunBuilderDefaults, listRuns, listStimuli, pauseRun } from '../lib/api';
 import { parseRunSummary, parseStimulusSetSummary } from '../lib/researcherUi';
 
 function runTone(status: string): 'good' | 'warn' | 'bad' | 'neutral' {
@@ -23,6 +23,9 @@ export function RunBuilderPage() {
   const [stimulusSets, setStimulusSets] = useState<Array<ReturnType<typeof parseStimulusSetSummary>>>([]);
   const [recentRuns, setRecentRuns] = useState<Array<ReturnType<typeof parseRunSummary>>>([]);
   const [defaults, setDefaults] = useState<Record<string, unknown> | null>(null);
+  const [selectedRunId, setSelectedRunId] = useState('');
+  const [runDetails, setRunDetails] = useState<ReturnType<typeof parseRunSummary> | null>(null);
+  const [copySuccess, setCopySuccess] = useState('');
   const [selectedStimulusSetId, setSelectedStimulusSetId] = useState('');
   const [selectedMainStimulusSetIds, setSelectedMainStimulusSetIds] = useState<string[]>([]);
   const [selectedPracticeStimulusSetId, setSelectedPracticeStimulusSetId] = useState('');
@@ -51,7 +54,24 @@ export function RunBuilderPage() {
 
   async function loadRecentRuns() {
     const items = await listRuns();
-    setRecentRuns(items.slice(0, 20).map(parseRunSummary));
+    const parsedRuns = items.slice(0, 20).map(parseRunSummary);
+    setRecentRuns(parsedRuns);
+    if (parsedRuns.length === 0) {
+      setSelectedRunId('');
+      setRunDetails(null);
+      return;
+    }
+    const nextSelected = selectedRunId && parsedRuns.some((run) => run.run_id === selectedRunId) ? selectedRunId : parsedRuns[0].run_id;
+    setSelectedRunId(nextSelected);
+  }
+
+  async function loadRunDetails(runId: string) {
+    if (!runId) {
+      setRunDetails(null);
+      return;
+    }
+    const details = await getRun(runId);
+    setRunDetails(parseRunSummary(details));
   }
 
   async function loadDependencies() {
@@ -87,6 +107,11 @@ export function RunBuilderPage() {
     void loadDependencies();
   }, []);
 
+  useEffect(() => {
+    if (!selectedRunId) return;
+    void loadRunDetails(selectedRunId);
+  }, [selectedRunId]);
+
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError('');
@@ -120,6 +145,11 @@ export function RunBuilderPage() {
       setResponse(out);
       setSuccess(t('run.createSuccess'));
       await loadRecentRuns();
+      if (out.run_id) {
+        const newRunId = String(out.run_id);
+        setSelectedRunId(newRunId);
+        await loadRunDetails(newRunId);
+      }
     } catch (err) {
       setError(localizeOperatorError(t, err));
     } finally {
@@ -151,6 +181,7 @@ export function RunBuilderPage() {
         setSuccess(t('run.closeSuccess'));
       }
       await loadRecentRuns();
+      await loadRunDetails(runId);
     } catch (err) {
       setError(localizeOperatorError(t, err));
     } finally {
@@ -286,6 +317,57 @@ export function RunBuilderPage() {
           </p>
         </section>
       ) : null}
+      {runDetails ? (
+        <section className="panel" aria-live="polite">
+          <h3>Run details</h3>
+          <p>
+            {t('run.tableRunName')}: {runDetails.run_name} · <KbdMono>{runDetails.run_id}</KbdMono>
+          </p>
+          <p>
+            {t('run.tableStatus')}: <StatusBadge label={localizeStatus(t, runDetails.run_status)} tone={runTone(runDetails.run_status)} /> ·{' '}
+            {runDetails.launchability_state}
+          </p>
+          <p>
+            Participant link: <KbdMono>{runDetails.invite_url || t('common.na')}</KbdMono>
+          </p>
+          <p>
+            {t('run.tableSlug')}: <KbdMono>{runDetails.public_slug || t('common.na')}</KbdMono>
+          </p>
+          <div className="toolbar">
+            <button
+              className="secondary-btn"
+              type="button"
+              onClick={async () => {
+                if (!runDetails.invite_url) return;
+                await navigator.clipboard.writeText(runDetails.invite_url);
+                setCopySuccess('Participant link copied.');
+              }}
+              disabled={!runDetails.invite_url}
+            >
+              Copy link
+            </button>
+            <button
+              className="secondary-btn"
+              type="button"
+              onClick={() => {
+                if (!runDetails.invite_url) return;
+                window.open(runDetails.invite_url, '_blank', 'noopener,noreferrer');
+              }}
+              disabled={!runDetails.invite_url}
+            >
+              Open link
+            </button>
+            {copySuccess ? <span className="muted">{copySuccess}</span> : null}
+          </div>
+          <p>Activation state: {runDetails.launchable ? 'accepting new sessions' : 'not accepting new sessions'}</p>
+          <p>
+            Selected banks:{' '}
+            {runDetails.run_summary?.banks?.map((bank) => `${bank.name} (${bank.role}, ${bank.n_items})`).join(', ') || t('common.na')}
+          </p>
+          <p>Total main items: {String(runDetails.run_summary?.total_main_items ?? t('common.na'))}</p>
+          <p>Expected trial count: {String(runDetails.run_summary?.expected_trial_count ?? t('common.na'))}</p>
+        </section>
+      ) : null}
 
       <section className="panel">
         <h3>{t('run.recentTitle')}</h3>
@@ -324,6 +406,9 @@ export function RunBuilderPage() {
                       <td>{run.launchability_reason}</td>
                       <td>
                         <div className="toolbar">
+                          <button className="secondary-btn" onClick={() => setSelectedRunId(runId)}>
+                            Details
+                          </button>
                           <button
                             className="primary-btn"
                             disabled={(status !== 'draft' && status !== 'paused') || lifecycleLoadingRunId === runId}
