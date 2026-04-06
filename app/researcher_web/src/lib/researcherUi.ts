@@ -2,10 +2,13 @@ export interface RunSummary {
   run_id: string;
   run_name: string;
   public_slug: string;
+  invite_url: string;
   status: string;
+  run_status: string;
   task_family: string;
   launchability_reason: string;
   launchable: boolean;
+  launchability_state: string;
   linked_stimulus_set_ids: string[];
   aggregation_mode?: string;
   practice_stimulus_set_id?: string | null;
@@ -13,6 +16,7 @@ export interface RunSummary {
     expected_trial_count?: number;
     aggregation_enabled?: boolean;
     total_main_items?: number;
+    banks?: Array<{ stimulus_set_id: string; name: string; n_items: number; role: string }>;
   };
   created_at?: string;
 }
@@ -32,10 +36,13 @@ export function parseRunSummary(raw: Record<string, unknown>): RunSummary {
     run_id: String(raw.run_id ?? ''),
     run_name: String(raw.run_name ?? ''),
     public_slug: String(raw.public_slug ?? ''),
+    invite_url: String(raw.invite_url ?? ''),
     status: String(raw.status ?? 'draft'),
+    run_status: String(raw.run_status ?? raw.status ?? 'draft'),
     task_family: String(raw.task_family ?? ''),
     launchability_reason: String(raw.launchability_reason ?? ''),
     launchable: Boolean(raw.launchable),
+    launchability_state: String(raw.launchability_state ?? (Boolean(raw.launchable) ? 'launchable' : 'not_launchable')),
     linked_stimulus_set_ids: Array.isArray(raw.linked_stimulus_set_ids)
       ? raw.linked_stimulus_set_ids.map((value) => String(value))
       : [],
@@ -43,7 +50,12 @@ export function parseRunSummary(raw: Record<string, unknown>): RunSummary {
     practice_stimulus_set_id: raw.practice_stimulus_set_id ? String(raw.practice_stimulus_set_id) : undefined,
     run_summary:
       raw.run_summary && typeof raw.run_summary === 'object'
-        ? (raw.run_summary as { expected_trial_count?: number; aggregation_enabled?: boolean; total_main_items?: number })
+        ? (raw.run_summary as {
+            expected_trial_count?: number;
+            aggregation_enabled?: boolean;
+            total_main_items?: number;
+            banks?: Array<{ stimulus_set_id: string; name: string; n_items: number; role: string }>;
+          })
         : undefined,
     created_at: raw.created_at ? String(raw.created_at) : undefined,
   };

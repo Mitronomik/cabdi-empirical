@@ -33,8 +33,16 @@ def _now_iso() -> str:
 
 
 class RunService:
-    def __init__(self, store: PilotStore) -> None:
+    def __init__(self, store: PilotStore, *, participant_base_url: str = "http://localhost:5173") -> None:
         self.store = store
+        self.participant_base_url = participant_base_url.rstrip("/")
+
+    def _invite_url(self, public_slug: str) -> str:
+        return f"{self.participant_base_url}/join/{public_slug}"
+
+    @staticmethod
+    def _launchability_state(launchable: bool) -> str:
+        return "launchable" if launchable else "not_launchable"
 
     @staticmethod
     def _slugify(value: str) -> str:
@@ -144,7 +152,9 @@ class RunService:
             "run_id": created["run_id"],
             "run_name": created["run_name"],
             "public_slug": created["public_slug"],
+            "invite_url": created["invite_url"],
             "status": created["status"],
+            "run_status": created["status"],
             "experiment_id": created["experiment_id"],
             "task_family": created["task_family"],
             "config": created["config"],
@@ -178,11 +188,14 @@ class RunService:
             aggregation_mode=row["aggregation_mode"],
         )
         row["launchable"] = row["status"] == RUN_STATUS_ACTIVE
+        row["launchability_state"] = self._launchability_state(row["launchable"])
         row["launchability_reason"] = (
             "run is active and accepts participant sessions"
             if row["status"] == RUN_STATUS_ACTIVE
             else f"run is {row['status']}; activate to accept new participant sessions"
         )
+        row["run_status"] = row["status"]
+        row["invite_url"] = self._invite_url(str(row["public_slug"]))
         return row
 
     def list_runs(self) -> list[dict[str, Any]]:
@@ -206,11 +219,14 @@ class RunService:
                 aggregation_mode=aggregation_mode,
             )
             row["launchable"] = row["status"] == RUN_STATUS_ACTIVE
+            row["launchability_state"] = self._launchability_state(row["launchable"])
             row["launchability_reason"] = (
                 "run is active and accepts participant sessions"
                 if row["status"] == RUN_STATUS_ACTIVE
                 else f"run is {row['status']}; activate to accept new participant sessions"
             )
+            row["run_status"] = row["status"]
+            row["invite_url"] = self._invite_url(str(row["public_slug"]))
         return rows
 
     def transition_run_status(self, run_id: str, target_status: str) -> dict[str, Any]:
@@ -249,7 +265,12 @@ class RunService:
             "success": True,
             "run_id": run["run_id"],
             "public_slug": run["public_slug"],
+            "invite_url": run["invite_url"],
             "status": run["status"],
+            "run_status": run["status"],
+            "launchable": run["launchable"],
+            "launchability_state": run["launchability_state"],
+            "launchability_reason": run["launchability_reason"],
             "task_family": run["task_family"],
             "linked_stimulus_set_ids": run["stimulus_set_ids"],
             "validation_errors": validation_errors,
