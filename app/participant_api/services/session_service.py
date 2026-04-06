@@ -31,6 +31,14 @@ from packages.shared_types.pilot_types import (
     StimulusItem,
 )
 
+SESSION_STAGE_CONSENT = "consent"
+SESSION_STAGE_INSTRUCTIONS = "instructions"
+SESSION_STAGE_PRACTICE = "practice"
+SESSION_STAGE_TRIAL = "trial"
+SESSION_STAGE_QUESTIONNAIRE = "questionnaire"
+SESSION_STAGE_AWAITING_FINAL_SUBMIT = "awaiting_final_submit"
+SESSION_STAGE_COMPLETION = "completion"
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -73,6 +81,7 @@ class SessionService:
                     "entry_mode": "resumed",
                     "public_session_code": session.get("public_session_code"),
                     "resume_token": resume_token,
+                    "current_stage": session.get("current_stage") or SESSION_STAGE_CONSENT,
                 }
             if resume_info["resume_status"] == "finalized":
                 raise ValueError("resume_not_allowed:session_finalized")
@@ -112,9 +121,10 @@ class SessionService:
             """
             INSERT INTO participant_sessions(
                 session_id, participant_id, experiment_id, run_id, public_session_code, resume_token_hash, assigned_order, stimulus_set_map,
-                current_block_index, current_trial_index, status, created_at, started_at, completed_at, last_activity_at, device_info, language,
+                current_block_index, current_trial_index, status, current_stage, created_at, started_at, completed_at, consent_at, finalized_at,
+                last_activity_at, device_info, language,
                 expected_trial_count, source_stimulus_set_ids_json, snapshot_frozen_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 session.session_id,
@@ -128,9 +138,12 @@ class SessionService:
                 session.current_block_index,
                 session.current_trial_index,
                 session.status,
+                SESSION_STAGE_CONSENT,
                 session.created_at,
                 session.started_at,
                 session.completed_at,
+                None,
+                None,
                 session.created_at,
                 dumps(session.device_info),
                 session.language,
@@ -149,6 +162,7 @@ class SessionService:
             "entry_mode": "created",
             "public_session_code": public_session_code,
             "resume_token": resolved_resume_token,
+            "current_stage": SESSION_STAGE_CONSENT,
         }
 
     @staticmethod
@@ -195,7 +209,7 @@ class SessionService:
 
         session = self.store.fetchone(
             """
-            SELECT session_id, run_id, status, current_block_index, current_trial_index, public_session_code
+            SELECT session_id, run_id, status, current_stage, current_block_index, current_trial_index, public_session_code
             FROM participant_sessions
             WHERE run_id = ? AND resume_token_hash = ?
             """,
@@ -211,6 +225,7 @@ class SessionService:
                 "session_id": session["session_id"],
                 "session_status": session["status"],
                 "public_session_code": session.get("public_session_code"),
+                "current_stage": session.get("current_stage") or SESSION_STAGE_CONSENT,
                 "current_block_index": session["current_block_index"],
                 "current_trial_index": session["current_trial_index"],
             }
@@ -222,6 +237,7 @@ class SessionService:
                 "session_id": session["session_id"],
                 "session_status": SESSION_STATUS_FINALIZED,
                 "public_session_code": session.get("public_session_code"),
+                "current_stage": SESSION_STAGE_COMPLETION,
             }
 
         return {
@@ -229,6 +245,22 @@ class SessionService:
             "resume_status": "not_resumable",
             "session_id": session["session_id"],
             "session_status": session["status"],
+            "public_session_code": session.get("public_session_code"),
+            "current_stage": session.get("current_stage") or SESSION_STAGE_CONSENT,
+        }
+
+    def resume_session(self, run_slug: str, resume_token: str) -> dict[str, Any]:
+        resume_info = self.get_resume_info(run_slug=run_slug, resume_token=resume_token)
+        if resume_info["resume_status"] != "resumable":
+            return resume_info
+        session = self.get_session(str(resume_info["session_id"]))
+        return {
+            "resume_status": "resumable",
+            "session_id": session["session_id"],
+            "session_status": session["status"],
+            "current_stage": session.get("current_stage") or SESSION_STAGE_CONSENT,
+            "current_block_index": int(session.get("current_block_index", -1)),
+            "current_trial_index": int(session.get("current_trial_index", 0)),
             "public_session_code": session.get("public_session_code"),
         }
 
@@ -423,8 +455,12 @@ class SessionService:
             return {"session_id": session_id, "status": session["status"]}
         now_iso = _now_iso()
         self.store.execute(
-            "UPDATE participant_sessions SET status = ?, started_at = COALESCE(started_at, ?), last_activity_at = ? WHERE session_id = ?",
-            (SESSION_STATUS_IN_PROGRESS, now_iso, now_iso, session_id),
+            """
+            UPDATE participant_sessions
+            SET status = ?, started_at = COALESCE(started_at, ?), consent_at = COALESCE(consent_at, ?), current_stage = ?, last_activity_at = ?
+            WHERE session_id = ?
+            """,
+            (SESSION_STATUS_IN_PROGRESS, now_iso, now_iso, SESSION_STAGE_PRACTICE, now_iso, session_id),
         )
         return {"session_id": session_id, "status": SESSION_STATUS_IN_PROGRESS}
 
@@ -437,6 +473,7 @@ class SessionService:
         row["source_stimulus_set_ids"] = loads(row.get("source_stimulus_set_ids_json") or "[]")
         row["language"] = row.get("language") or "en"
         row["status"] = self._normalize_runtime_status(str(row["status"]))
+        row["current_stage"] = row.get("current_stage") or SESSION_STAGE_CONSENT
         return row
 
     def update_progress(self, session_id: str) -> None:
@@ -446,17 +483,26 @@ class SessionService:
         )
         if not completed:
             self.store.execute(
-                "UPDATE participant_sessions SET current_block_index = ?, current_trial_index = ?, last_activity_at = ? WHERE session_id = ?",
-                (-1, 0, _now_iso(), session_id),
+                """
+                UPDATE participant_sessions
+                SET current_block_index = ?, current_trial_index = ?, current_stage = ?, last_activity_at = ?
+                WHERE session_id = ?
+                """,
+                (-1, 0, SESSION_STAGE_PRACTICE, _now_iso(), session_id),
             )
             return
 
         last = completed[-1]
         current_block_index = int(last["block_index"])
         current_trial_index = int(last["trial_index"]) + 1
+        current_stage = SESSION_STAGE_PRACTICE if current_block_index < 0 else SESSION_STAGE_TRIAL
         self.store.execute(
-            "UPDATE participant_sessions SET current_block_index = ?, current_trial_index = ?, last_activity_at = ? WHERE session_id = ?",
-            (current_block_index, current_trial_index, _now_iso(), session_id),
+            """
+            UPDATE participant_sessions
+            SET current_block_index = ?, current_trial_index = ?, current_stage = ?, last_activity_at = ?
+            WHERE session_id = ?
+            """,
+            (current_block_index, current_trial_index, current_stage, _now_iso(), session_id),
         )
 
     def mark_awaiting_final_submit_if_done(self, session_id: str) -> bool:
@@ -472,8 +518,12 @@ class SessionService:
             return False
 
         self.store.execute(
-            "UPDATE participant_sessions SET status = ?, completed_at = NULL, last_activity_at = ? WHERE session_id = ?",
-            (SESSION_STATUS_AWAITING_FINAL_SUBMIT, _now_iso(), session_id),
+            """
+            UPDATE participant_sessions
+            SET status = ?, current_stage = ?, completed_at = NULL, last_activity_at = ?
+            WHERE session_id = ?
+            """,
+            (SESSION_STATUS_AWAITING_FINAL_SUBMIT, SESSION_STAGE_AWAITING_FINAL_SUBMIT, _now_iso(), session_id),
         )
         return True
 
@@ -521,12 +571,40 @@ class SessionService:
             raise ValueError(f"final_submit_ineligible:missing_block_questionnaires:{missing_blocks}")
 
         self.store.execute(
-            "UPDATE participant_sessions SET status = ?, completed_at = ?, last_activity_at = ? WHERE session_id = ?",
-            (SESSION_STATUS_FINALIZED, _now_iso(), _now_iso(), session_id),
+            """
+            UPDATE participant_sessions
+            SET status = ?, current_stage = ?, completed_at = ?, finalized_at = ?, last_activity_at = ?
+            WHERE session_id = ?
+            """,
+            (SESSION_STATUS_FINALIZED, SESSION_STAGE_COMPLETION, _now_iso(), _now_iso(), _now_iso(), session_id),
         )
         return {
             "session_id": session_id,
             "status": SESSION_STATUS_FINALIZED,
             "final_submit": "accepted",
             "already_finalized": False,
+        }
+
+    def mark_questionnaire_stage(self, session_id: str, block_id: str) -> None:
+        self.store.execute(
+            """
+            UPDATE participant_sessions
+            SET current_stage = ?, current_block_index = CAST(SUBSTR(?, 7) AS INTEGER) - 1, current_trial_index = 0, last_activity_at = ?
+            WHERE session_id = ?
+            """,
+            (SESSION_STAGE_QUESTIONNAIRE, block_id, _now_iso(), session_id),
+        )
+
+    def get_progress_info(self, session_id: str) -> dict[str, Any]:
+        session = self.get_session(session_id)
+        return {
+            "session_id": session_id,
+            "status": session["status"],
+            "current_stage": session.get("current_stage") or SESSION_STAGE_CONSENT,
+            "current_block_index": int(session.get("current_block_index", -1)),
+            "current_trial_index": int(session.get("current_trial_index", 0)),
+            "consent_at": session.get("consent_at"),
+            "last_activity_at": session.get("last_activity_at"),
+            "finalized_at": session.get("finalized_at"),
+            "public_session_code": session.get("public_session_code"),
         }

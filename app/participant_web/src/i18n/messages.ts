@@ -53,6 +53,7 @@ export type MessageKey =
   | 'trial.selfConfidence'
   | 'trial.submit'
   | 'trial.submitHelp'
+  | 'common.progressSaved'
   | 'trial.response.scam'
   | 'trial.response.notScam'
   | 'trial.response.yes'
@@ -125,6 +126,7 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
     'consent.description': 'This is a research task. Your responses will be recorded for pilot research purposes.',
     'consent.checkbox': 'I consent to participate in this research task.',
     'common.continue': 'Continue',
+    'common.progressSaved': 'Progress saved.',
     'instructions.title': 'Before you begin',
     'instructions.defaultRunTitle': 'Pilot study',
     'instructions.item.classify': 'You will review brief cases and choose the best label.',
@@ -218,6 +220,7 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
     'consent.description': 'Это исследовательское задание. Ваши ответы будут записаны для пилотного исследования.',
     'consent.checkbox': 'Я согласен(на) участвовать в этом исследовательском задании.',
     'common.continue': 'Продолжить',
+    'common.progressSaved': 'Прогресс сохранен.',
     'instructions.title': 'Перед началом',
     'instructions.defaultRunTitle': 'Пилотное исследование',
     'instructions.item.classify': 'Вам нужно просматривать короткие кейсы и выбирать лучший вариант ответа.',

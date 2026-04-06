@@ -6,9 +6,10 @@ interface Props {
   blockId: string;
   onSubmit: (payload: { burden: number; trust: number; usefulness: number }) => void;
   loading: boolean;
+  savedFeedback?: boolean;
 }
 
-export function BlockQuestionnairePage({ blockId, onSubmit, loading }: Props) {
+export function BlockQuestionnairePage({ blockId, onSubmit, loading, savedFeedback }: Props) {
   const { t } = useLocale();
   const [mentalDemand, setMentalDemand] = useState(50);
   const [effort, setEffort] = useState(50);
@@ -65,6 +66,7 @@ export function BlockQuestionnairePage({ blockId, onSubmit, loading }: Props) {
       >
         {t('questionnaire.submit')}
       </button>
+      {savedFeedback ? <p className="muted">{t('common.progressSaved')}</p> : null}
     </section>
   );
 }

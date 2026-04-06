@@ -47,6 +47,7 @@ class TrialService:
 
         blocked = self._questionnaire_block_gate(session_id)
         if blocked:
+            self.session_service.mark_questionnaire_stage(session_id, blocked)
             raise ValueError(f"block_questionnaire_required:{blocked}")
 
         trial = self.store.fetchone(
@@ -115,6 +116,7 @@ class TrialService:
             "policy_decision": policy_decision,
             "self_confidence_scale": CONFIDENCE_SCALE,
             "progress": progress,
+            "saved_ack": {"saved": True, "saved_at": session.get("last_activity_at")},
         }
 
     def _validate_snapshot_integrity(self, session: dict[str, Any]) -> None:
@@ -238,6 +240,7 @@ class TrialService:
             "status": "completed",
             "session_completed": awaiting_final_submit,
             "session_status": session["status"],
+            "saved_ack": {"saved": True, "saved_at": session.get("last_activity_at")},
         }
 
     def submit_block_questionnaire(self, session_id: str, block_id: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -271,6 +274,7 @@ class TrialService:
             "status": "submitted",
             "session_completed": awaiting_final_submit,
             "session_status": session["status"],
+            "saved_ack": {"saved": True, "saved_at": session.get("last_activity_at")},
         }
 
     def _questionnaire_block_gate(self, session_id: str) -> str | None:

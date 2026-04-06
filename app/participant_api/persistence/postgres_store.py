@@ -23,7 +23,7 @@ class Migration:
 
 
 class PostgresStore:
-    CURRENT_SCHEMA_VERSION = 7
+    CURRENT_SCHEMA_VERSION = 9
 
     def __init__(self, db_url: str) -> None:
         if psycopg is None:
@@ -89,6 +89,8 @@ class PostgresStore:
             Migration(5, "enforce_participant_session_run_not_null", self._migration_005_enforce_run_not_null),
             Migration(6, "add_researcher_users_table", self._migration_006_add_researcher_users_table),
             Migration(7, "add_session_created_at_and_preserve_started_at_semantics", self._migration_007_add_session_created_at),
+            Migration(8, "add_run_snapshot_and_selection_semantics_columns", self._migration_008_add_run_snapshot_columns),
+            Migration(9, "add_session_stage_and_lifecycle_columns", self._migration_009_add_session_stage_columns),
         ]
 
     def _ensure_migration_table(self, conn: Any) -> None:
@@ -312,6 +314,42 @@ class PostgresStore:
         conn.execute("UPDATE participant_sessions SET created_at = started_at WHERE created_at IS NULL")
         conn.execute("ALTER TABLE participant_sessions ALTER COLUMN created_at SET NOT NULL")
         conn.execute("ALTER TABLE participant_sessions ALTER COLUMN started_at DROP NOT NULL")
+
+    def _migration_008_add_run_snapshot_columns(self, conn: Any) -> None:
+        conn.execute("ALTER TABLE participant_sessions ADD COLUMN expected_trial_count INTEGER NOT NULL DEFAULT 0")
+        conn.execute("ALTER TABLE participant_sessions ADD COLUMN source_stimulus_set_ids_json TEXT NOT NULL DEFAULT '[]'")
+        conn.execute("ALTER TABLE participant_sessions ADD COLUMN snapshot_frozen_at TEXT")
+
+        conn.execute("ALTER TABLE session_trials ADD COLUMN expected_trial_count INTEGER NOT NULL DEFAULT 0")
+        conn.execute("ALTER TABLE session_trials ADD COLUMN source_stimulus_set_ids_json TEXT NOT NULL DEFAULT '[]'")
+        conn.execute("ALTER TABLE session_trials ADD COLUMN is_practice INTEGER NOT NULL DEFAULT 0")
+        conn.execute("ALTER TABLE session_trials ADD COLUMN payload_schema_version TEXT NOT NULL DEFAULT 'stimulus_payload.v1'")
+
+        conn.execute("ALTER TABLE researcher_runs ADD COLUMN aggregation_mode INTEGER NOT NULL DEFAULT 0")
+        conn.execute("ALTER TABLE researcher_runs ADD COLUMN practice_stimulus_set_id TEXT")
+
+    def _migration_009_add_session_stage_columns(self, conn: Any) -> None:
+        conn.execute("ALTER TABLE participant_sessions ADD COLUMN current_stage TEXT NOT NULL DEFAULT 'consent'")
+        conn.execute("ALTER TABLE participant_sessions ADD COLUMN consent_at TEXT")
+        conn.execute("ALTER TABLE participant_sessions ADD COLUMN finalized_at TEXT")
+        conn.execute(
+            """
+            UPDATE participant_sessions
+            SET current_stage = CASE
+                WHEN status = 'finalized' OR status = 'completed' THEN 'completion'
+                WHEN status = 'awaiting_final_submit' THEN 'awaiting_final_submit'
+                WHEN status = 'created' THEN 'consent'
+                ELSE 'trial'
+            END
+            """
+        )
+        conn.execute(
+            """
+            UPDATE participant_sessions
+            SET finalized_at = completed_at
+            WHERE finalized_at IS NULL AND (status = 'finalized' OR status = 'completed') AND completed_at IS NOT NULL
+            """
+        )
 
     def fetchone(self, query: str, params: tuple[Any, ...]) -> dict[str, Any] | None:
         with self.connect() as conn:
