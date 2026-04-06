@@ -22,7 +22,7 @@ from packages.logging_schema.pilot_logs import TrialEventLog, TrialSummaryLog
 from packages.shared_types.pilot_types import SESSION_STATUS_ABANDONED, StimulusItem, TrialContext
 
 
-CONFIDENCE_SCALE = {"min": 0, "max": 100, "step": 1}
+CONFIDENCE_SCALE = {"type": "4_point", "min": 1, "max": 4, "step": 1}
 
 
 def _now_iso() -> str:
@@ -106,7 +106,12 @@ class TrialService:
                 block_id=trial["block_id"],
                 trial_id=trial["trial_id"],
                 event_type="assistance_rendered",
-                payload={"policy_decision": policy_decision},
+                payload={
+                    "assistance_rendered": True,
+                    "panel_visible_on_first_paint": None,
+                    "shown_help_components": _shown_components(policy_decision),
+                    "policy_decision": policy_decision,
+                },
             )
 
         return {

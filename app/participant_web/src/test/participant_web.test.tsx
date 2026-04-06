@@ -43,7 +43,7 @@ function makeTrial(
       budget_signature: {},
       ...policyDecision,
     },
-    self_confidence_scale: { min: 0, max: 100, step: 1 },
+    self_confidence_scale: { type: '4_point', min: 1, max: 4, step: 1 },
     progress: { completed_trials: 0, total_trials: 12, current_ordinal: 1 },
     ...overrides,
   };
@@ -173,6 +173,7 @@ test('forced verification blocks submission until completed', async () => {
 
   await screen.findByTestId('trial-layout');
   await user.click(screen.getAllByRole('button', { name: /^scam$/i })[0]);
+  await user.click(screen.getByLabelText(/very confident/i));
 
   const submit = screen.getByRole('button', { name: /submit response/i });
   expect(submit).toBeDisabled();

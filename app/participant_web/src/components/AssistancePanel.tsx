@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useLocale } from '../i18n/useLocale';
 import type { PolicyDecision, StimulusItem } from '../lib/types';
@@ -10,6 +10,7 @@ interface Props {
   onEvidenceOpen: () => void;
   verificationChecked: boolean;
   setVerificationChecked: (value: boolean) => void;
+  onPanelFirstPaint: (payload: { panelVisibleOnFirstPaint: boolean; shownHelpComponents: string[] }) => void;
 }
 
 function densityClass(compressionMode: PolicyDecision['compression_mode']): string {
@@ -40,16 +41,38 @@ export function AssistancePanel({
   onEvidenceOpen,
   verificationChecked,
   setVerificationChecked,
+  onPanelFirstPaint,
 }: Props) {
   const { t } = useLocale();
   const [rationaleRevealed, setRationaleRevealed] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
+  const panelRef = useRef<HTMLElement | null>(null);
 
   const rationaleText = String(stimulus.payload.rationale ?? t('assistance.defaultRationale'));
   const evidenceText = String(stimulus.payload.evidence ?? t('assistance.defaultEvidence'));
+  const shownHelpComponents = useMemo(() => {
+    const components: string[] = [];
+    if (policyDecision.show_prediction) components.push('prediction');
+    if (policyDecision.show_confidence) components.push('confidence');
+    if (policyDecision.show_rationale !== 'none') components.push('rationale');
+    if (policyDecision.show_evidence) components.push('evidence');
+    return components;
+  }, [policyDecision]);
+
+  useEffect(() => {
+    const rect = panelRef.current?.getBoundingClientRect();
+    const panelVisibleOnFirstPaint = Boolean(rect && rect.top < window.innerHeight && rect.bottom > 0);
+    onPanelFirstPaint({ panelVisibleOnFirstPaint, shownHelpComponents });
+  }, [onPanelFirstPaint, shownHelpComponents]);
 
   return (
-    <aside className={densityClass(policyDecision.compression_mode)} aria-label={t('assistance.panelAria')}>
+    <aside
+      ref={panelRef}
+      className={`${densityClass(policyDecision.compression_mode)} assistance-salient`}
+      aria-label={t('assistance.panelAria')}
+      data-testid="assistance-panel"
+    >
+      <p className="panel-kicker">{t('assistance.panelKicker')}</p>
       <h3>{t('assistance.title')}</h3>
       {policyDecision.show_prediction && (
         <p>
