@@ -32,6 +32,10 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def compute_expected_trial_count(*, practice_item_count: int, main_item_count: int) -> int:
+    return int(practice_item_count) + int(main_item_count)
+
+
 class RunService:
     def __init__(self, store: PilotStore, *, participant_base_url: str = "http://localhost:5173") -> None:
         self.store = store
@@ -454,10 +458,8 @@ class RunService:
         practice_stimulus_set_id: str | None,
         aggregation_mode: str,
     ) -> dict[str, Any]:
-        default_experiment = load_experiment_config("pilot/configs/default_experiment.yaml")
-        expected_trial_count = int(default_experiment.practice_trials + (default_experiment.n_blocks * default_experiment.trials_per_block))
         banks: list[dict[str, Any]] = []
-        total_main_items = 0
+        main_item_count = 0
         for stimulus_set_id in main_stimulus_set_ids:
             row = self.store.fetchone(
                 "SELECT stimulus_set_id, name, n_items FROM researcher_stimulus_sets WHERE stimulus_set_id = ?",
@@ -466,7 +468,7 @@ class RunService:
             if row is None:
                 continue
             n_items = int(row.get("n_items") or 0)
-            total_main_items += n_items
+            main_item_count += n_items
             banks.append(
                 {
                     "stimulus_set_id": row["stimulus_set_id"],
@@ -488,13 +490,23 @@ class RunService:
                     "n_items": int(row.get("n_items") or 0),
                     "role": "practice",
                 }
+        practice_item_count = int(practice_bank.get("n_items") or 0) if practice_bank else 0
+        expected_trial_count = compute_expected_trial_count(
+            practice_item_count=practice_item_count,
+            main_item_count=main_item_count,
+        )
         return {
             "aggregation_mode": aggregation_mode,
             "aggregation_enabled": aggregation_mode == AGGREGATION_MODE_MULTI,
             "practice_stimulus_set_id": practice_stimulus_set_id,
+            "selected_practice_bank": practice_bank,
+            "selected_practice_bank_id": practice_stimulus_set_id,
             "selected_main_stimulus_set_ids": main_stimulus_set_ids,
+            "selected_main_bank_ids": main_stimulus_set_ids,
             "banks": banks,
             "practice_bank": practice_bank,
-            "total_main_items": total_main_items,
+            "practice_item_count": practice_item_count,
+            "main_item_count": main_item_count,
+            "total_main_items": main_item_count,
             "expected_trial_count": expected_trial_count,
         }

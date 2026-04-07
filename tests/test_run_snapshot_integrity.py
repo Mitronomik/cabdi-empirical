@@ -88,7 +88,7 @@ def test_session_trial_snapshot_freezes_on_start_and_stays_stable(tmp_path) -> N
         "SELECT expected_trial_count, source_stimulus_set_ids_json, snapshot_frozen_at FROM participant_sessions WHERE session_id = ?",
         (session_id,),
     )
-    assert int(session_row["expected_trial_count"]) > 0
+    assert int(session_row["expected_trial_count"]) == 3
     assert loads(session_row["source_stimulus_set_ids_json"]) == [stimulus_set_id]
     assert session_row["snapshot_frozen_at"] is not None
 
@@ -117,4 +117,3 @@ def test_session_trial_snapshot_freezes_on_start_and_stays_stable(tmp_path) -> N
         (session_id,),
     )
     assert first_after["stimulus_json"] == first_before["stimulus_json"]
-

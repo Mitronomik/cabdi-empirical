@@ -50,7 +50,81 @@ def test_run_summary_includes_per_bank_and_total_counts(tmp_path) -> None:
     summary = create.json()["run_summary"]
     assert len(summary["banks"]) == 2
     assert summary["total_main_items"] == 54
-    assert summary["expected_trial_count"] > 0
+    assert summary["expected_trial_count"] == 54
+
+
+def test_run_summary_single_main_bank_expected_count_equals_selected_bank_size(tmp_path) -> None:
+    client = TestClient(create_app(str(tmp_path / "summary.sqlite3")))
+    _login(client)
+    set_a = _upload_set(client, name="bank_a", n_items=6)
+
+    create = client.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "summary-run-single",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"mode": "test"},
+            "stimulus_set_ids": [set_a],
+            "aggregation_mode": "single",
+        },
+    )
+    assert create.status_code == 200
+    run_id = create.json()["run_id"]
+    details = client.get(f"/admin/api/v1/runs/{run_id}")
+    assert details.status_code == 200
+    summary = details.json()["run_summary"]
+    assert summary["main_item_count"] == 6
+    assert summary["practice_item_count"] == 0
+    assert summary["expected_trial_count"] == 6
+
+
+def test_run_summary_single_select_does_not_include_unselected_main_bank(tmp_path) -> None:
+    client = TestClient(create_app(str(tmp_path / "summary.sqlite3")))
+    _login(client)
+    selected_main = _upload_set(client, name="selected_main", n_items=6)
+    _upload_set(client, name="other_main", n_items=48)
+
+    create = client.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "summary-run-single-protection",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"mode": "test"},
+            "stimulus_set_ids": [selected_main],
+            "aggregation_mode": "single",
+        },
+    )
+    assert create.status_code == 200
+    summary = create.json()["run_summary"]
+    assert summary["main_item_count"] == 6
+    assert summary["expected_trial_count"] == 6
+
+
+def test_run_summary_practice_plus_main_expected_count_is_sum(tmp_path) -> None:
+    client = TestClient(create_app(str(tmp_path / "summary.sqlite3")))
+    _login(client)
+    main_set = _upload_set(client, name="main_set", n_items=48)
+    practice_set = _upload_set(client, name="practice_set", n_items=6)
+
+    create = client.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "summary-run-practice-main",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"mode": "test"},
+            "stimulus_set_ids": [main_set],
+            "practice_stimulus_set_id": practice_set,
+            "aggregation_mode": "single",
+        },
+    )
+    assert create.status_code == 200
+    summary = create.json()["run_summary"]
+    assert summary["practice_item_count"] == 6
+    assert summary["main_item_count"] == 48
+    assert summary["expected_trial_count"] == 54
 
 
 def test_activation_blocked_for_invalid_selection(tmp_path) -> None:
@@ -72,4 +146,3 @@ def test_activation_blocked_for_invalid_selection(tmp_path) -> None:
     )
     assert create.status_code == 400
     assert "match run task_family" in create.json()["detail"]
-

@@ -193,12 +193,13 @@ export function RunBuilderPage() {
     () => validStimulusSets.filter((item) => selectedMainStimulusSetIds.includes(String(item.stimulus_set_id))),
     [selectedMainStimulusSetIds, validStimulusSets],
   );
-  const selectedConfig = ((selectedPreset?.config as Record<string, unknown> | undefined) ?? {}) as Record<string, unknown>;
-  const executionConfig = ((selectedConfig.execution as Record<string, unknown> | undefined) ?? {}) as Record<string, unknown>;
-  const expectedTrialCount =
-    Number(selectedConfig.trials_per_block ?? executionConfig.trials_per_block ?? 0) *
-      Number(selectedConfig.n_blocks ?? executionConfig.n_blocks ?? 0) +
-    Number(executionConfig.practice_trials ?? 0);
+  const selectedPracticeStimulus = useMemo(
+    () => validStimulusSets.find((item) => String(item.stimulus_set_id) === selectedPracticeStimulusSetId),
+    [selectedPracticeStimulusSetId, validStimulusSets],
+  );
+  const mainItemCount = selectedMainStimuli.reduce((acc, item) => acc + Number(item.n_items || 0), 0);
+  const practiceItemCount = Number(selectedPracticeStimulus?.n_items || 0);
+  const expectedTrialCount = mainItemCount + practiceItemCount;
 
   return (
     <section>
@@ -258,8 +259,8 @@ export function RunBuilderPage() {
               {t('run.loadRecent')}
             </button>
           </div>
-          {aggregationEnabled ? (
-            <div className="form-row" style={{ marginTop: 8 }}>
+          <div className="form-row" style={{ marginTop: 8 }}>
+            {aggregationEnabled ? (
               <select
                 multiple
                 value={selectedMainStimulusSetIds}
@@ -271,16 +272,16 @@ export function RunBuilderPage() {
                   </option>
                 ))}
               </select>
-              <select value={selectedPracticeStimulusSetId} onChange={(e) => setSelectedPracticeStimulusSetId(e.target.value)}>
-                <option value="">Practice bank (optional)</option>
-                {validStimulusSets.map((item) => (
-                  <option key={`practice-${item.stimulus_set_id}`} value={item.stimulus_set_id}>
-                    {item.name} • {item.n_items}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : null}
+            ) : null}
+            <select value={selectedPracticeStimulusSetId} onChange={(e) => setSelectedPracticeStimulusSetId(e.target.value)}>
+              <option value="">Practice bank (optional)</option>
+              {validStimulusSets.map((item) => (
+                <option key={`practice-${item.stimulus_set_id}`} value={item.stimulus_set_id}>
+                  {item.name} • {item.n_items}
+                </option>
+              ))}
+            </select>
+          </div>
         </form>
       </section>
 
@@ -292,10 +293,11 @@ export function RunBuilderPage() {
       ) : null}
       <section className="panel">
         <h3>Run summary before activation</h3>
-        <p>Practice bank: {selectedPracticeStimulusSetId || 'none'}</p>
-        <p>Main bank(s): {(aggregationEnabled ? selectedMainStimulusSetIds : [selectedStimulusSetId]).filter(Boolean).join(', ') || 'none'}</p>
+        <p>Practice bank: {selectedPracticeStimulus ? `${selectedPracticeStimulus.name} (${practiceItemCount})` : 'none'}</p>
+        <p>Main bank(s): {selectedMainStimuli.map((bank) => `${bank.name} (${bank.n_items})`).join(', ') || 'none'}</p>
         <p>Aggregation: {aggregationEnabled ? 'enabled (explicit)' : 'disabled (single-select)'}</p>
-        <p>Total main items: {selectedMainStimuli.reduce((acc, item) => acc + Number(item.n_items || 0), 0)}</p>
+        <p>Total practice items: {practiceItemCount}</p>
+        <p>Total main items: {mainItemCount}</p>
         <p>Expected trial count: {expectedTrialCount}</p>
       </section>
       {error ? (
@@ -364,6 +366,8 @@ export function RunBuilderPage() {
             Selected banks:{' '}
             {runDetails.run_summary?.banks?.map((bank) => `${bank.name} (${bank.role}, ${bank.n_items})`).join(', ') || t('common.na')}
           </p>
+          <p>Selected practice bank: {runDetails.run_summary?.selected_practice_bank?.name ?? runDetails.run_summary?.practice_bank?.name ?? 'none'}</p>
+          <p>Total practice items: {String(runDetails.run_summary?.practice_item_count ?? '0')}</p>
           <p>Total main items: {String(runDetails.run_summary?.total_main_items ?? t('common.na'))}</p>
           <p>Expected trial count: {String(runDetails.run_summary?.expected_trial_count ?? t('common.na'))}</p>
         </section>

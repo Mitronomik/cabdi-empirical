@@ -17,9 +17,11 @@ from app.researcher_api.services.run_service import (
     RUN_STATUS_CLOSED,
     RUN_STATUS_DRAFT,
     RUN_STATUS_PAUSED,
+    compute_expected_trial_count,
 )
 from packages.shared_types.pilot_types import (
     RESUMABLE_SESSION_STATUSES,
+    ExperimentConfig,
     SESSION_STATUS_AWAITING_FINAL_SUBMIT,
     SESSION_STATUS_COMPLETED_LEGACY,
     SESSION_STATUS_CREATED,
@@ -340,30 +342,59 @@ class SessionService:
         return items
 
     def _compute_run_summary(self, run: dict[str, Any]) -> dict[str, Any]:
-        run_config = loads(run["config_json"])
-        experiment = resolve_execution_config_from_run(
-            run_config=run_config,
-            run_experiment_id=run["experiment_id"],
-            run_task_family=run["task_family"],
-        )
         main_stimulus_set_ids = list(run["stimulus_set_ids"])
         practice_stimulus_set_id = run.get("practice_stimulus_set_id")
+        main_item_count = 0
+        for stimulus_set_id in main_stimulus_set_ids:
+            row = self.store.fetchone(
+                "SELECT n_items FROM researcher_stimulus_sets WHERE stimulus_set_id = ?",
+                (stimulus_set_id,),
+            )
+            if row is None:
+                continue
+            main_item_count += int(row.get("n_items") or 0)
+        practice_item_count = 0
+        if practice_stimulus_set_id:
+            row = self.store.fetchone(
+                "SELECT n_items FROM researcher_stimulus_sets WHERE stimulus_set_id = ?",
+                (practice_stimulus_set_id,),
+            )
+            if row is not None:
+                practice_item_count = int(row.get("n_items") or 0)
         all_set_ids = list(main_stimulus_set_ids)
         if practice_stimulus_set_id:
             all_set_ids.append(practice_stimulus_set_id)
         return {
             "main_stimulus_set_ids": main_stimulus_set_ids,
             "practice_stimulus_set_id": practice_stimulus_set_id,
+            "main_item_count": main_item_count,
+            "practice_item_count": practice_item_count,
             "all_stimulus_set_ids": all_set_ids,
-            "expected_trial_count": int(experiment.practice_trials + (experiment.n_blocks * experiment.trials_per_block)),
+            "expected_trial_count": compute_expected_trial_count(
+                practice_item_count=practice_item_count,
+                main_item_count=main_item_count,
+            ),
         }
 
     def _build_session_trial_snapshot(self, *, session: dict[str, Any], run: dict[str, Any]) -> None:
         run_config = loads(run["config_json"])
-        experiment = resolve_execution_config_from_run(
+        base_experiment = resolve_execution_config_from_run(
             run_config=run_config,
             run_experiment_id=run["experiment_id"],
             run_task_family=run["task_family"],
+        )
+        run_summary = self._compute_run_summary(run)
+        main_item_count = int(run_summary["main_item_count"])
+        practice_item_count = int(run_summary["practice_item_count"])
+        if main_item_count <= 0:
+            raise ValueError("run has no main items available for snapshot generation")
+        experiment = ExperimentConfig.from_dict(
+            base_experiment.to_dict()
+            | {
+                "n_blocks": 1,
+                "trials_per_block": main_item_count,
+                "practice_trials": practice_item_count,
+            }
         )
         stimuli = self._load_run_stimuli(run)
         trial_plan = build_trial_plan(
@@ -372,7 +403,7 @@ class SessionService:
             assign_order_id(session["participant_id"], experiment.experiment_id)[1],
             [StimulusItem.from_dict(item["stimulus"].to_dict()) for item in stimuli],
         )
-        expected_trial_count = int(experiment.practice_trials + (experiment.n_blocks * experiment.trials_per_block))
+        expected_trial_count = int(run_summary["expected_trial_count"])
         if len(trial_plan) != expected_trial_count:
             raise ValueError("session trial snapshot mismatch: trial plan length does not match run summary")
         if self.store.fetchone("SELECT trial_id FROM session_trials WHERE session_id = ? LIMIT 1", (session["session_id"],)) is not None:
