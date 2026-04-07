@@ -54,7 +54,9 @@ def test_run_details_include_selected_banks_expected_trials_and_participant_link
     assert body["run_status"] == "draft"
     assert body["launchable"] is False
     assert body["launchability_state"] == "not_launchable"
-    assert body["run_summary"]["expected_trial_count"] > 0
+    assert body["run_summary"]["practice_item_count"] == 1
+    assert body["run_summary"]["main_item_count"] == 1
+    assert body["run_summary"]["expected_trial_count"] == 2
     assert body["run_summary"]["selected_main_stimulus_set_ids"] == [main_set_id]
     assert len(body["run_summary"]["banks"]) == 1
     assert body["run_summary"]["banks"][0]["stimulus_set_id"] == main_set_id

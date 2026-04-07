@@ -15,7 +15,13 @@ export interface RunSummary {
   run_summary?: {
     expected_trial_count?: number;
     aggregation_enabled?: boolean;
+    practice_item_count?: number;
+    main_item_count?: number;
     total_main_items?: number;
+    selected_main_bank_ids?: string[];
+    selected_practice_bank_id?: string | null;
+    selected_practice_bank?: { stimulus_set_id: string; name: string; n_items: number; role: string } | null;
+    practice_bank?: { stimulus_set_id: string; name: string; n_items: number; role: string } | null;
     banks?: Array<{ stimulus_set_id: string; name: string; n_items: number; role: string }>;
   };
   created_at?: string;
@@ -53,7 +59,13 @@ export function parseRunSummary(raw: Record<string, unknown>): RunSummary {
         ? (raw.run_summary as {
             expected_trial_count?: number;
             aggregation_enabled?: boolean;
+            practice_item_count?: number;
+            main_item_count?: number;
             total_main_items?: number;
+            selected_main_bank_ids?: string[];
+            selected_practice_bank_id?: string | null;
+            selected_practice_bank?: { stimulus_set_id: string; name: string; n_items: number; role: string } | null;
+            practice_bank?: { stimulus_set_id: string; name: string; n_items: number; role: string } | null;
             banks?: Array<{ stimulus_set_id: string; name: string; n_items: number; role: string }>;
           })
         : undefined,
