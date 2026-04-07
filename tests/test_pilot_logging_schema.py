@@ -82,7 +82,7 @@ def test_trial_summary_log_completeness_and_roundtrip():
         reason_clicked=True,
         evidence_opened=False,
         reaction_time_ms=1800,
-        self_confidence=76,
+        self_confidence=4,
     )
 
     data = summary.to_dict()
@@ -104,7 +104,7 @@ def test_completed_trials_have_summary_rows_and_required_fields(tmp_path):
         json={
             "human_response": trial["stimulus"]["true_label"],
             "reaction_time_ms": 999,
-            "self_confidence": 55,
+            "self_confidence": 3,
             "reason_clicked": False,
             "evidence_opened": False,
             "verification_completed": False,

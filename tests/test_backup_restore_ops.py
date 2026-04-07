@@ -59,7 +59,7 @@ def _seed_minimal_run(tmp_db: str) -> tuple[str, str]:
         json={
             "human_response": trial["stimulus"]["true_label"],
             "reaction_time_ms": 900,
-            "self_confidence": 70,
+            "self_confidence": 3,
             "reason_clicked": False,
             "evidence_opened": False,
             "verification_completed": False,

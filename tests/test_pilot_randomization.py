@@ -15,7 +15,7 @@ def _experiment(*, n_blocks: int = 3, trials_per_block: int = 3, practice_trials
         block_order_strategy="latin_square",
         budget_matching_mode="fixed",
         risk_proxy_mode="pre_render_features_v1",
-        self_confidence_scale="0_100",
+        self_confidence_scale="4_point",
         block_questionnaires=[],
     )
 

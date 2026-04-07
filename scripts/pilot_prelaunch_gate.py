@@ -165,7 +165,7 @@ def _submit_trial(participant: TestClient, session_id: str, trial_payload: dict[
         json={
             "human_response": trial_payload["stimulus"]["true_label"],
             "reaction_time_ms": 900,
-            "self_confidence": 65,
+            "self_confidence": 3,
             "reason_clicked": False,
             "evidence_opened": False,
             "verification_completed": False,
@@ -238,7 +238,7 @@ def _submit_trial_http(participant: httpx.Client, session_id: str, trial_payload
         json={
             "human_response": trial_payload["stimulus"]["true_label"],
             "reaction_time_ms": 900,
-            "self_confidence": 65,
+            "self_confidence": 3,
             "reason_clicked": False,
             "evidence_opened": False,
             "verification_completed": False,

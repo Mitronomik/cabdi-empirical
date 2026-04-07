@@ -39,7 +39,7 @@ def _progress_session_to_awaiting_final_submit(client: TestClient, session_id: s
             json={
                 "human_response": body["stimulus"]["true_label"],
                 "reaction_time_ms": 1000,
-                "self_confidence": 70,
+                "self_confidence": 3,
                 "reason_clicked": False,
                 "evidence_opened": False,
                 "verification_completed": False,
@@ -161,7 +161,7 @@ def test_session_flow_happy_path_with_exports(tmp_path):
             json={
                 "human_response": payload["stimulus"]["true_label"],
                 "reaction_time_ms": 1200,
-                "self_confidence": 61,
+                "self_confidence": 3,
                 "reason_clicked": True,
                 "evidence_opened": False,
                 "verification_completed": True,
@@ -433,7 +433,7 @@ def test_progress_is_persisted_incrementally_and_not_finalized_on_trial_exhausti
         json={
             "human_response": payload["stimulus"]["true_label"],
             "reaction_time_ms": 1000,
-            "self_confidence": 70,
+            "self_confidence": 3,
             "reason_clicked": False,
             "evidence_opened": False,
             "verification_completed": False,
@@ -469,7 +469,7 @@ def test_progress_is_persisted_incrementally_and_not_finalized_on_trial_exhausti
             json={
                 "human_response": body["stimulus"]["true_label"],
                 "reaction_time_ms": 1000,
-                "self_confidence": 70,
+                "self_confidence": 3,
                 "reason_clicked": False,
                 "evidence_opened": False,
                 "verification_completed": False,
@@ -582,7 +582,7 @@ def test_final_submit_is_idempotent_and_finalized_session_is_locked(tmp_path):
         json={
             "human_response": "scam",
             "reaction_time_ms": 1000,
-            "self_confidence": 70,
+            "self_confidence": 3,
             "reason_clicked": False,
             "evidence_opened": False,
             "verification_completed": False,
@@ -661,7 +661,7 @@ def test_session_trial_shape_comes_from_run_config_json(tmp_path):
                     "block_order_strategy": "latin_square",
                     "budget_matching_mode": "matched",
                     "risk_proxy_mode": "pre_render_features_v1",
-                    "self_confidence_scale": "0_100_int",
+                    "self_confidence_scale": "4_point",
                     "block_questionnaires": ["burden", "trust", "usefulness"],
                 }
             },
@@ -724,7 +724,7 @@ def test_resume_info_and_create_session_resume_existing_unfinished_session(tmp_p
         json={
             "human_response": trial["stimulus"]["true_label"],
             "reaction_time_ms": 900,
-            "self_confidence": 70,
+            "self_confidence": 3,
             "reason_clicked": False,
             "evidence_opened": False,
             "verification_completed": False,

@@ -51,7 +51,7 @@ def test_progress_survives_reload_after_trial_submit(tmp_path) -> None:
         json={
             'human_response': trial['stimulus']['true_label'],
             'reaction_time_ms': 800,
-            'self_confidence': 50,
+            'self_confidence': 2,
             'reason_clicked': False,
             'evidence_opened': False,
             'verification_completed': False,
@@ -86,7 +86,7 @@ def test_progress_survives_reload_after_questionnaire_submit(tmp_path) -> None:
             json={
                 'human_response': body['stimulus']['true_label'],
                 'reaction_time_ms': 900,
-                'self_confidence': 65,
+                'self_confidence': 3,
                 'reason_clicked': False,
                 'evidence_opened': False,
                 'verification_completed': False,

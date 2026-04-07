@@ -86,7 +86,7 @@ def test_postgres_backend_end_to_end_parity_flow() -> None:
             json={
                 "human_response": trial_payload["stimulus"]["true_label"],
                 "reaction_time_ms": 900,
-                "self_confidence": 65,
+                "self_confidence": 3,
                 "reason_clicked": False,
                 "evidence_opened": False,
                 "verification_completed": False,

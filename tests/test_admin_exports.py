@@ -103,7 +103,7 @@ def test_run_exports_include_analysis_ready_outputs_when_trial_data_exists(tmp_p
         f"/api/v1/sessions/{session_id}/trials/{trial_id}/submit",
         json={
             "human_response": trial_payload["stimulus"]["model_prediction"],
-            "self_confidence": 50,
+            "self_confidence": 2,
             "reaction_time_ms": 1200,
             "reason_clicked": False,
             "evidence_opened": False,
