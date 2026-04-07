@@ -132,7 +132,7 @@ def decide_trial_submission(
     return {
         "human_response": human_response,
         "reaction_time_ms": rng.randint(rt_min, rt_max),
-        "self_confidence": rng.randint(conf_min, conf_max),
+        "self_confidence": rng.randint(1, 4),
         "reason_clicked": reason_clicked,
         "evidence_opened": evidence_opened,
         "verification_completed": verification_completed,

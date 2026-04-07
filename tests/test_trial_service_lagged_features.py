@@ -45,7 +45,7 @@ def _bootstrap_small_run(tmp_path) -> str:
                     "block_order_strategy": "latin_square",
                     "budget_matching_mode": "matched",
                     "risk_proxy_mode": "pre_render_features_v1",
-                    "self_confidence_scale": "0_100_int",
+                    "self_confidence_scale": "4_point",
                     "block_questionnaires": ["burden", "trust", "usefulness"],
                 }
             },
@@ -84,7 +84,7 @@ def test_live_routing_uses_prior_persisted_summaries_only(tmp_path):
         json={
             "human_response": first_trial["stimulus"]["model_prediction"],
             "reaction_time_ms": 2000,
-            "self_confidence": 20,
+            "self_confidence": 1,
             "reason_clicked": False,
             "evidence_opened": False,
             "verification_completed": False,
@@ -129,7 +129,7 @@ def test_event_trace_complements_summary_for_blind_accept_and_error_flags(tmp_pa
         json={
             "human_response": first_trial["stimulus"]["model_prediction"],
             "reaction_time_ms": 600,
-            "self_confidence": 55,
+            "self_confidence": 3,
             "reason_clicked": False,
             "evidence_opened": False,
             "verification_completed": False,

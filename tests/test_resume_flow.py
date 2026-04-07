@@ -59,7 +59,7 @@ def test_refresh_restore_unfinished_session_and_stage(tmp_path) -> None:
         json={
             'human_response': next_trial['stimulus']['true_label'],
             'reaction_time_ms': 900,
-            'self_confidence': 60,
+            'self_confidence': 3,
             'reason_clicked': False,
             'evidence_opened': False,
             'verification_completed': False,

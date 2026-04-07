@@ -42,7 +42,7 @@ def _complete_one_non_practice_trial(participant: TestClient, session_id: str) -
             json={
                 "human_response": trial["stimulus"]["model_prediction"],
                 "reaction_time_ms": 1200,
-                "self_confidence": 60,
+                "self_confidence": 3,
                 "reason_clicked": False,
                 "evidence_opened": False,
                 "verification_completed": False,
@@ -407,7 +407,7 @@ def test_budget_diagnostics_detect_display_and_interaction_drift(tmp_path):
                     "reason_clicked": True,
                     "evidence_opened": True,
                     "reaction_time_ms": 1200,
-                    "self_confidence": 70,
+                    "self_confidence": 3,
                 }
             ),
             session_id,

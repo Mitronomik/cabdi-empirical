@@ -57,7 +57,7 @@ def _finish_required_work(client: TestClient, session_id: str) -> None:
             json={
                 'human_response': body['stimulus']['true_label'],
                 'reaction_time_ms': 1000,
-                'self_confidence': 70,
+                'self_confidence': 3,
                 'reason_clicked': False,
                 'evidence_opened': False,
                 'verification_completed': False,
