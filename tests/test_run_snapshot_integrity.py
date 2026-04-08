@@ -243,6 +243,38 @@ def test_snapshot_materializes_practice_bank_and_persists_true_per_trial_provena
             assert source_ids == [main_set_id]
 
 
+def test_session_materialization_expected_counts_match_researcher_run_summary(tmp_path) -> None:
+    db_path = str(tmp_path / "snapshot-summary-alignment.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    participant = TestClient(create_app(db_path))
+    _login(researcher)
+    main_set_id = _upload_set(researcher, name="main-bank", n_items=5)
+    practice_set_id = _upload_set(researcher, name="practice-bank", n_items=2)
+    run_id, run_slug = _create_active_run_with_execution(
+        researcher,
+        stimulus_set_ids=[main_set_id],
+        practice_stimulus_set_id=practice_set_id,
+    )
+
+    run_details = researcher.get(f"/admin/api/v1/runs/{run_id}")
+    assert run_details.status_code == 200
+    run_summary = run_details.json()["run_summary"]
+    assert int(run_summary["expected_trial_count"]) == 7
+
+    created = participant.post("/api/v1/sessions", json={"run_slug": run_slug})
+    assert created.status_code == 200
+    session_id = created.json()["session_id"]
+    started = participant.post(f"/api/v1/sessions/{session_id}/start")
+    assert started.status_code == 200
+
+    session_row = participant.app.state.store.fetchone(
+        "SELECT expected_trial_count, source_stimulus_set_ids_json FROM participant_sessions WHERE session_id = ?",
+        (session_id,),
+    )
+    assert int(session_row["expected_trial_count"]) == int(run_summary["expected_trial_count"])
+    assert loads(session_row["source_stimulus_set_ids_json"]) == [main_set_id, practice_set_id]
+
+
 def test_snapshot_integrity_fails_when_trial_provenance_is_mutated_to_non_run_source(tmp_path) -> None:
     db_path = str(tmp_path / "snapshot-provenance-integrity.sqlite3")
     researcher = TestClient(create_researcher_app(db_path))

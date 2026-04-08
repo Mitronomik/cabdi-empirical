@@ -37,6 +37,12 @@ export interface StimulusSetSummary {
   payload_schema_version?: string;
 }
 
+export interface RunSummaryCounts {
+  practiceItemCount: number;
+  mainItemCount: number;
+  expectedTrialCount: number;
+}
+
 export function parseRunSummary(raw: Record<string, unknown>): RunSummary {
   return {
     run_id: String(raw.run_id ?? ''),
@@ -99,4 +105,21 @@ export function pickDefaultRunId(runs: RunSummary[]): string {
   const active = runs.find((item) => item.status === 'active');
   if (active) return active.run_id;
   return runs[0]?.run_id ?? '';
+}
+
+export function resolveRunSummaryCounts(
+  backendSummary?: RunSummary['run_summary'],
+  fallback?: { practiceItemCount: number; mainItemCount: number; expectedTrialCount: number },
+): RunSummaryCounts {
+  if (backendSummary) {
+    const practiceItemCount = Number(backendSummary.practice_item_count ?? 0);
+    const mainItemCount = Number(backendSummary.main_item_count ?? backendSummary.total_main_items ?? 0);
+    const expectedTrialCount = Number(backendSummary.expected_trial_count ?? practiceItemCount + mainItemCount);
+    return { practiceItemCount, mainItemCount, expectedTrialCount };
+  }
+  return {
+    practiceItemCount: Number(fallback?.practiceItemCount ?? 0),
+    mainItemCount: Number(fallback?.mainItemCount ?? 0),
+    expectedTrialCount: Number(fallback?.expectedTrialCount ?? 0),
+  };
 }

@@ -17,7 +17,7 @@ from app.researcher_api.services.run_service import (
     RUN_STATUS_CLOSED,
     RUN_STATUS_DRAFT,
     RUN_STATUS_PAUSED,
-    compute_expected_trial_count,
+    compute_run_summary,
 )
 from packages.shared_types.pilot_types import (
     RESUMABLE_SESSION_STATUSES,
@@ -108,7 +108,7 @@ class SessionService:
             experiment_id=run["experiment_id"],
             run_id=run["run_id"],
             assigned_order=order_id,
-            stimulus_set_map={f"set_{idx + 1}": set_id for idx, set_id in enumerate(run_summary["main_stimulus_set_ids"])},
+            stimulus_set_map={f"set_{idx + 1}": set_id for idx, set_id in enumerate(run_summary["selected_main_stimulus_set_ids"])},
             current_block_index=-1,
             current_trial_index=0,
             status=SESSION_STATUS_CREATED,
@@ -342,39 +342,12 @@ class SessionService:
         return items
 
     def _compute_run_summary(self, run: dict[str, Any]) -> dict[str, Any]:
-        main_stimulus_set_ids = list(run["stimulus_set_ids"])
-        practice_stimulus_set_id = run.get("practice_stimulus_set_id")
-        main_item_count = 0
-        for stimulus_set_id in main_stimulus_set_ids:
-            row = self.store.fetchone(
-                "SELECT n_items FROM researcher_stimulus_sets WHERE stimulus_set_id = ?",
-                (stimulus_set_id,),
-            )
-            if row is None:
-                continue
-            main_item_count += int(row.get("n_items") or 0)
-        practice_item_count = 0
-        if practice_stimulus_set_id:
-            row = self.store.fetchone(
-                "SELECT n_items FROM researcher_stimulus_sets WHERE stimulus_set_id = ?",
-                (practice_stimulus_set_id,),
-            )
-            if row is not None:
-                practice_item_count = int(row.get("n_items") or 0)
-        all_set_ids = list(main_stimulus_set_ids)
-        if practice_stimulus_set_id:
-            all_set_ids.append(practice_stimulus_set_id)
-        return {
-            "main_stimulus_set_ids": main_stimulus_set_ids,
-            "practice_stimulus_set_id": practice_stimulus_set_id,
-            "main_item_count": main_item_count,
-            "practice_item_count": practice_item_count,
-            "all_stimulus_set_ids": all_set_ids,
-            "expected_trial_count": compute_expected_trial_count(
-                practice_item_count=practice_item_count,
-                main_item_count=main_item_count,
-            ),
-        }
+        return compute_run_summary(
+            store=self.store,
+            main_stimulus_set_ids=list(run["stimulus_set_ids"]),
+            practice_stimulus_set_id=run.get("practice_stimulus_set_id"),
+            aggregation_mode=str(run.get("aggregation_mode") or "single"),
+        )
 
     def _build_session_trial_snapshot(self, *, session: dict[str, Any], run: dict[str, Any]) -> None:
         run_config = loads(run["config_json"])
@@ -419,9 +392,7 @@ class SessionService:
         if self.store.fetchone("SELECT trial_id FROM session_trials WHERE session_id = ? LIMIT 1", (session["session_id"],)) is not None:
             return
 
-        all_source_ids = list(run["stimulus_set_ids"])
-        if run.get("practice_stimulus_set_id"):
-            all_source_ids.append(run["practice_stimulus_set_id"])
+        all_source_ids = list(run_summary["all_stimulus_set_ids"])
         payload_versions = {
             str(item.get("payload_schema_version") or "stimulus_payload.v1")
             for item in [*main_stimuli, *practice_stimuli]

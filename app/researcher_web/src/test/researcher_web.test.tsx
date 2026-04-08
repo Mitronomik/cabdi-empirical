@@ -337,4 +337,79 @@ describe('researcher auth shell', () => {
     expect(screen.queryByText('Expected trial count: 54')).not.toBeInTheDocument();
   });
 
+  it('prefers backend run_summary counts over local stimulus reductions when available', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('/auth/me')) {
+          return new Response(JSON.stringify({ authenticated: true, user: { user_id: 'u1', username: 'admin', is_admin: true } }), { status: 200 });
+        }
+        if (url.endsWith('/runs/defaults')) {
+          return new Response(JSON.stringify({ experiment_id: 'exp_1', task_family: 'scam_detection', config_preset_options: [] }), { status: 200 });
+        }
+        if (url.endsWith('/stimuli')) {
+          return new Response(
+            JSON.stringify([
+              { stimulus_set_id: 'stim_main', name: 'Main A', task_family: 'scam_detection', validation_status: 'valid', n_items: 6 },
+              { stimulus_set_id: 'stim_practice', name: 'Practice A', task_family: 'scam_detection', validation_status: 'valid', n_items: 1 },
+            ]),
+            { status: 200 },
+          );
+        }
+        if (url.endsWith('/runs') && (!init?.method || init.method === 'GET')) {
+          return new Response(
+            JSON.stringify([
+              {
+                run_id: 'run_1',
+                run_name: 'pilot-run',
+                public_slug: 'pilot-run',
+                status: 'draft',
+                task_family: 'scam_detection',
+                linked_stimulus_set_ids: ['stim_main'],
+                aggregation_mode: 'single',
+                launchable: false,
+                launchability_reason: 'draft',
+              },
+            ]),
+            { status: 200 },
+          );
+        }
+        if (url.endsWith('/runs/run_1')) {
+          return new Response(
+            JSON.stringify({
+              run_id: 'run_1',
+              run_name: 'pilot-run',
+              public_slug: 'pilot-run',
+              status: 'draft',
+              run_status: 'draft',
+              task_family: 'scam_detection',
+              linked_stimulus_set_ids: ['stim_main'],
+              launchable: false,
+              launchability_state: 'not_launchable',
+              launchability_reason: 'draft',
+              run_summary: {
+                practice_item_count: 2,
+                main_item_count: 8,
+                expected_trial_count: 10,
+              },
+            }),
+            { status: 200 },
+          );
+        }
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText('Logged in as: admin');
+    await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
+
+    expect((await screen.findAllByText('Total practice items: 2')).length).toBeGreaterThanOrEqual(1);
+    expect((await screen.findAllByText('Total main items: 8')).length).toBeGreaterThanOrEqual(1);
+    expect((await screen.findAllByText('Expected trial count: 10')).length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText('Expected trial count: 7')).not.toBeInTheDocument();
+  });
+
 });

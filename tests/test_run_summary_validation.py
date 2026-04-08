@@ -127,6 +127,45 @@ def test_run_summary_practice_plus_main_expected_count_is_sum(tmp_path) -> None:
     assert summary["expected_trial_count"] == 54
 
 
+def test_run_summary_counts_align_across_create_details_and_list_surfaces(tmp_path) -> None:
+    client = TestClient(create_app(str(tmp_path / "summary.sqlite3")))
+    _login(client)
+    main_set = _upload_set(client, name="main_set", n_items=8)
+    practice_set = _upload_set(client, name="practice_set", n_items=3)
+
+    create = client.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "summary-alignment-run",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"mode": "test"},
+            "stimulus_set_ids": [main_set],
+            "practice_stimulus_set_id": practice_set,
+            "aggregation_mode": "single",
+        },
+    )
+    assert create.status_code == 200
+    created_summary = create.json()["run_summary"]
+    run_id = create.json()["run_id"]
+
+    details = client.get(f"/admin/api/v1/runs/{run_id}")
+    assert details.status_code == 200
+    details_summary = details.json()["run_summary"]
+
+    listed = client.get("/admin/api/v1/runs")
+    assert listed.status_code == 200
+    list_summary = next(item["run_summary"] for item in listed.json() if item["run_id"] == run_id)
+
+    assert created_summary["practice_item_count"] == 3
+    assert created_summary["main_item_count"] == 8
+    assert created_summary["expected_trial_count"] == 11
+    assert details_summary["expected_trial_count"] == created_summary["expected_trial_count"]
+    assert list_summary["expected_trial_count"] == created_summary["expected_trial_count"]
+    assert details_summary["practice_item_count"] == created_summary["practice_item_count"]
+    assert list_summary["main_item_count"] == created_summary["main_item_count"]
+
+
 def test_activation_blocked_for_invalid_selection(tmp_path) -> None:
     client = TestClient(create_app(str(tmp_path / "summary.sqlite3")))
     _login(client)

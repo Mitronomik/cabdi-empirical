@@ -4,7 +4,7 @@ import { KbdMono, StatusBadge, SummaryCard } from '../components/OperatorPrimiti
 import { localizeOperatorError, localizeStatus } from '../i18n/uiText';
 import { useLocale } from '../i18n/useLocale';
 import { activateRun, closeRun, createRun, getRun, getRunBuilderDefaults, listRuns, listStimuli, pauseRun } from '../lib/api';
-import { parseRunSummary, parseStimulusSetSummary } from '../lib/researcherUi';
+import { parseRunSummary, parseStimulusSetSummary, resolveRunSummaryCounts } from '../lib/researcherUi';
 
 function runTone(status: string): 'good' | 'warn' | 'bad' | 'neutral' {
   if (status === 'active') return 'good';
@@ -199,7 +199,16 @@ export function RunBuilderPage() {
   );
   const mainItemCount = selectedMainStimuli.reduce((acc, item) => acc + Number(item.n_items || 0), 0);
   const practiceItemCount = Number(selectedPracticeStimulus?.n_items || 0);
-  const expectedTrialCount = mainItemCount + practiceItemCount;
+  const createResponseRunSummary =
+    response && typeof response.run_summary === 'object' && response.run_summary !== null
+      ? (response.run_summary as NonNullable<ReturnType<typeof parseRunSummary>['run_summary']>)
+      : undefined;
+  const selectedSummary = runDetails?.run_summary ?? createResponseRunSummary;
+  const preActivationCounts = resolveRunSummaryCounts(selectedSummary, {
+    practiceItemCount,
+    mainItemCount,
+    expectedTrialCount: mainItemCount + practiceItemCount,
+  });
 
   return (
     <section>
@@ -296,9 +305,9 @@ export function RunBuilderPage() {
         <p>Practice bank: {selectedPracticeStimulus ? `${selectedPracticeStimulus.name} (${practiceItemCount})` : 'none'}</p>
         <p>Main bank(s): {selectedMainStimuli.map((bank) => `${bank.name} (${bank.n_items})`).join(', ') || 'none'}</p>
         <p>Aggregation: {aggregationEnabled ? 'enabled (explicit)' : 'disabled (single-select)'}</p>
-        <p>Total practice items: {practiceItemCount}</p>
-        <p>Total main items: {mainItemCount}</p>
-        <p>Expected trial count: {expectedTrialCount}</p>
+        <p>Total practice items: {preActivationCounts.practiceItemCount}</p>
+        <p>Total main items: {preActivationCounts.mainItemCount}</p>
+        <p>Expected trial count: {preActivationCounts.expectedTrialCount}</p>
       </section>
       {error ? (
         <p role="alert" className="alert-error">
