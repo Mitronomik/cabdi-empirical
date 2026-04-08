@@ -222,3 +222,74 @@ def test_activation_rejects_practice_main_overlap_if_invalid_row_exists(tmp_path
     activate = client.post(f"/admin/api/v1/runs/{run_id}/activate")
     assert activate.status_code == 400
     assert "practice_stimulus_set_id must not overlap with main stimulus_set_ids" in activate.json()["detail"]
+
+
+def test_activation_rejects_run_that_would_create_empty_main_blocks(tmp_path) -> None:
+    client = TestClient(create_app(str(tmp_path / "summary.sqlite3")))
+    _login(client)
+    main_set = _upload_set(client, name="main-too-small", n_items=2)
+
+    create = client.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "empty-main-blocks-rejected",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"execution": {"n_blocks": 3, "trials_per_block": 2, "practice_trials": 0}},
+            "stimulus_set_ids": [main_set],
+            "aggregation_mode": "single",
+        },
+    )
+    assert create.status_code == 200
+    run_id = create.json()["run_id"]
+
+    activate = client.post(f"/admin/api/v1/runs/{run_id}/activate")
+    assert activate.status_code == 400
+    assert "run has insufficient main items for configured block design" in activate.json()["detail"]
+    assert "main_item_count=2, n_blocks=3" in activate.json()["detail"]
+
+
+def test_activation_allows_exactly_one_main_trial_per_block_boundary(tmp_path) -> None:
+    client = TestClient(create_app(str(tmp_path / "summary.sqlite3")))
+    _login(client)
+    main_set = _upload_set(client, name="main-boundary", n_items=3)
+
+    create = client.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "non-empty-main-blocks-boundary",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"execution": {"n_blocks": 3, "trials_per_block": 2, "practice_trials": 0}},
+            "stimulus_set_ids": [main_set],
+            "aggregation_mode": "single",
+        },
+    )
+    assert create.status_code == 200
+    run_id = create.json()["run_id"]
+
+    activate = client.post(f"/admin/api/v1/runs/{run_id}/activate")
+    assert activate.status_code == 200
+
+
+def test_activation_allows_uneven_but_non_empty_main_block_distribution(tmp_path) -> None:
+    client = TestClient(create_app(str(tmp_path / "summary.sqlite3")))
+    _login(client)
+    main_set = _upload_set(client, name="main-uneven", n_items=5)
+
+    create = client.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "non-empty-main-blocks-uneven",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"execution": {"n_blocks": 3, "trials_per_block": 2, "practice_trials": 0}},
+            "stimulus_set_ids": [main_set],
+            "aggregation_mode": "single",
+        },
+    )
+    assert create.status_code == 200
+    run_id = create.json()["run_id"]
+
+    activate = client.post(f"/admin/api/v1/runs/{run_id}/activate")
+    assert activate.status_code == 200

@@ -26,6 +26,10 @@ _ALLOWED_TRANSITIONS: dict[str, set[str]] = {
     RUN_STATUS_PAUSED: {RUN_STATUS_ACTIVE, RUN_STATUS_CLOSED},
     RUN_STATUS_CLOSED: set(),
 }
+_EMPTY_MAIN_BLOCKS_REASON_TEMPLATE = (
+    "run has insufficient main items for configured block design: "
+    "main_item_count={main_item_count}, n_blocks={n_blocks}; would produce one or more empty main blocks"
+)
 
 
 def _now_iso() -> str:
@@ -34,6 +38,20 @@ def _now_iso() -> str:
 
 def compute_expected_trial_count(*, practice_item_count: int, main_item_count: int) -> int:
     return int(practice_item_count) + int(main_item_count)
+
+
+def validate_non_empty_main_blocks(*, main_item_count: int, n_blocks: int) -> str | None:
+    """Return a launchability error message when main-block structure would be empty."""
+    normalized_main_item_count = int(main_item_count)
+    normalized_n_blocks = int(n_blocks)
+    if normalized_n_blocks <= 0:
+        return f"run execution config must define n_blocks > 0 (got n_blocks={normalized_n_blocks})"
+    if normalized_main_item_count < normalized_n_blocks:
+        return _EMPTY_MAIN_BLOCKS_REASON_TEMPLATE.format(
+            main_item_count=normalized_main_item_count,
+            n_blocks=normalized_n_blocks,
+        )
+    return None
 
 
 def compute_run_summary(
@@ -348,6 +366,7 @@ class RunService:
 
     def _validate_launchability(self, run: dict[str, Any]) -> list[str]:
         errors: list[str] = []
+        execution_config = None
         if not str(run.get("experiment_id", "")).strip():
             errors.append("run.experiment_id must be non-empty")
         if not str(run.get("task_family", "")).strip():
@@ -358,7 +377,7 @@ class RunService:
             errors.append("run.config must be a non-empty object")
         else:
             try:
-                resolve_execution_config_from_run(
+                execution_config = resolve_execution_config_from_run(
                     run_config=config,
                     run_experiment_id=str(run.get("experiment_id", "")),
                     run_task_family=str(run.get("task_family", "")),
@@ -388,6 +407,13 @@ class RunService:
             expected_total = int(run_summary.get("expected_trial_count", 0))
             if expected_total <= 0:
                 errors.append("run summary expected_trial_count must be positive")
+            if execution_config is not None:
+                non_empty_blocks_error = validate_non_empty_main_blocks(
+                    main_item_count=int(run_summary.get("main_item_count", 0)),
+                    n_blocks=int(execution_config.n_blocks),
+                )
+                if non_empty_blocks_error:
+                    errors.append(non_empty_blocks_error)
 
         for stimulus_set_id in stimulus_set_ids:
             row = self.store.fetchone(
