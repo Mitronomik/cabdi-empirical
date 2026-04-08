@@ -31,6 +31,9 @@ def build_trial_plan(
     experiment: ExperimentConfig,
     assigned_conditions: list[str],
     stimuli: list[StimulusItem],
+    *,
+    practice_trials_override: int | None = None,
+    main_trials_per_block_override: list[int] | None = None,
 ) -> list[dict[str, Any]]:
     rng = random.Random(_stable_seed(participant_id, experiment.experiment_id, "trial_plan"))
     plan: list[dict[str, Any]] = []
@@ -38,10 +41,17 @@ def build_trial_plan(
     if not stimuli:
         raise ValueError("cannot build trial plan from an empty stimulus bank")
 
-    practice_trials = _build_practice_trials(experiment.practice_trials, stimuli, rng=rng)
+    practice_trials_count = experiment.practice_trials if practice_trials_override is None else int(practice_trials_override)
+    practice_trials = _build_practice_trials(practice_trials_count, stimuli, rng=rng)
     plan.extend(practice_trials)
 
-    main_trials = _build_main_trials(experiment, assigned_conditions, stimuli, rng=rng)
+    main_trials = _build_main_trials(
+        experiment,
+        assigned_conditions,
+        stimuli,
+        rng=rng,
+        main_trials_per_block_override=main_trials_per_block_override,
+    )
     plan.extend(main_trials)
     return plan
 
@@ -93,8 +103,17 @@ def _build_main_trials(
     stimuli: list[StimulusItem],
     *,
     rng: random.Random,
+    main_trials_per_block_override: list[int] | None = None,
 ) -> list[dict[str, Any]]:
-    total_main_trials = experiment.n_blocks * experiment.trials_per_block
+    if main_trials_per_block_override is None:
+        per_block_trial_counts = [experiment.trials_per_block] * experiment.n_blocks
+    else:
+        per_block_trial_counts = [int(value) for value in main_trials_per_block_override]
+        if len(per_block_trial_counts) != experiment.n_blocks:
+            raise ValueError("main_trials_per_block_override must match experiment.n_blocks")
+        if any(value < 0 for value in per_block_trial_counts):
+            raise ValueError("main_trials_per_block_override entries must be >= 0")
+    total_main_trials = sum(per_block_trial_counts)
     unique_required = len(stimuli) >= total_main_trials
     pool = sorted(stimuli, key=lambda stim: _stable_seed("main", stim.stimulus_id, str(rng.random())))
 
@@ -108,8 +127,7 @@ def _build_main_trials(
         require_unique=unique_required,
     )
     main_sequence = _allocate_main_sequence(
-        n_blocks=experiment.n_blocks,
-        trials_per_block=experiment.trials_per_block,
+        per_block_trial_counts=per_block_trial_counts,
         wrong_targets=per_block_wrong_targets,
         wrong_pool=wrong_pool,
         correct_pool=correct_pool,
@@ -144,8 +162,7 @@ def _build_main_trials(
 
 def _allocate_main_sequence(
     *,
-    n_blocks: int,
-    trials_per_block: int,
+    per_block_trial_counts: list[int],
     wrong_targets: list[int],
     wrong_pool: list[StimulusItem],
     correct_pool: list[StimulusItem],
@@ -158,12 +175,11 @@ def _allocate_main_sequence(
         raise ValueError("cannot build trial plan from an empty stimulus bank")
 
     blocks: list[list[StimulusItem]] = []
-    for block_index in range(n_blocks):
-        block_target_wrong = min(wrong_targets[block_index], trials_per_block)
-        block_target_total = trials_per_block
+    for block_index, block_target_total in enumerate(per_block_trial_counts):
+        block_target_wrong = min(wrong_targets[block_index], block_target_total)
         block: list[StimulusItem] = []
         block_diff_counts = {"low": 0, "medium": 0, "high": 0}
-        diff_targets = _difficulty_targets(trials_per_block)
+        diff_targets = _difficulty_targets(block_target_total)
 
         for _ in range(block_target_wrong):
             stim = _pop_balanced_candidate(

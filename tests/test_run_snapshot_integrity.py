@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.participant_api.main import create_app
 from app.participant_api.persistence.json_codec import dumps, loads
+from app.participant_api.services.randomization_service import assign_order_id
 from app.researcher_api.main import create_app as create_researcher_app
 
 
@@ -41,6 +42,30 @@ def _create_active_run(client: TestClient, *, stimulus_set_ids: list[str]) -> tu
             "task_family": "scam_detection",
             "config": {"mode": "test"},
             "stimulus_set_ids": stimulus_set_ids,
+            "aggregation_mode": "single",
+        },
+    )
+    assert run.status_code == 200
+    run_id = run.json()["run_id"]
+    assert client.post(f"/admin/api/v1/runs/{run_id}/activate").status_code == 200
+    return run_id, run.json()["public_slug"]
+
+
+def _create_active_run_with_execution(
+    client: TestClient,
+    *,
+    stimulus_set_ids: list[str],
+    practice_stimulus_set_id: str,
+) -> tuple[str, str]:
+    run = client.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "snapshot-protocol-run",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"execution": {"n_blocks": 3, "trials_per_block": 2, "practice_trials": 2}},
+            "stimulus_set_ids": stimulus_set_ids,
+            "practice_stimulus_set_id": practice_stimulus_set_id,
             "aggregation_mode": "single",
         },
     )
@@ -117,3 +142,63 @@ def test_session_trial_snapshot_freezes_on_start_and_stays_stable(tmp_path) -> N
         (session_id,),
     )
     assert first_after["stimulus_json"] == first_before["stimulus_json"]
+
+
+def test_snapshot_preserves_protocol_blocks_and_truthful_expected_count(tmp_path) -> None:
+    db_path = str(tmp_path / "snapshot-blocks.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    participant = TestClient(create_app(db_path))
+    _login(researcher)
+    main_set_id = _upload_set(researcher, name="main-protocol", n_items=6)
+    practice_set_id = _upload_set(researcher, name="practice-protocol", n_items=2)
+    _, run_slug = _create_active_run_with_execution(
+        researcher,
+        stimulus_set_ids=[main_set_id],
+        practice_stimulus_set_id=practice_set_id,
+    )
+
+    created = participant.post("/api/v1/sessions", json={"run_slug": run_slug})
+    assert created.status_code == 200
+    session_id = created.json()["session_id"]
+    started = participant.post(f"/api/v1/sessions/{session_id}/start")
+    assert started.status_code == 200
+
+    session_row = participant.app.state.store.fetchone(
+        "SELECT participant_id, expected_trial_count FROM participant_sessions WHERE session_id = ?",
+        (session_id,),
+    )
+    rows = participant.app.state.store.fetchall(
+        """
+        SELECT block_id, block_index, trial_index, condition, status, is_practice
+        FROM session_trials
+        WHERE session_id = ?
+        ORDER BY block_index, trial_index
+        """,
+        (session_id,),
+    )
+    assert len(rows) == int(session_row["expected_trial_count"])
+    assert len(rows) == 8
+
+    practice_trials = [row for row in rows if int(row["is_practice"]) == 1]
+    main_trials = [row for row in rows if int(row["is_practice"]) == 0]
+    assert len(practice_trials) == 2
+    main_block_ids = sorted({str(row["block_id"]) for row in main_trials})
+    assert main_block_ids == ["block_1", "block_2", "block_3"]
+
+    expected_conditions = ["static_help", "monotone_help", "cabdi_lite"]
+    assigned_conditions = assign_order_id(str(session_row["participant_id"]), "toy_v1")[1]
+    assert assigned_conditions in [
+        expected_conditions,
+        ["monotone_help", "cabdi_lite", "static_help"],
+        ["cabdi_lite", "static_help", "monotone_help"],
+    ]
+    for block_index, expected_condition in enumerate(assigned_conditions):
+        block_conditions = {row["condition"] for row in main_trials if int(row["block_index"]) == block_index}
+        assert block_conditions == {expected_condition}
+
+    participant.app.state.store.execute(
+        "UPDATE session_trials SET status = 'completed' WHERE session_id = ? AND block_id = 'block_1'",
+        (session_id,),
+    )
+    blocked_block = participant.app.state.trial_service._questionnaire_block_gate(session_id)
+    assert blocked_block == "block_1"
