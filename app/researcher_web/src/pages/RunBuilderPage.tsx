@@ -43,11 +43,6 @@ export function RunBuilderPage() {
     [stimulusSets],
   );
 
-  const selectedStimulus = useMemo(
-    () => validStimulusSets.find((item) => String(item.stimulus_set_id) === selectedStimulusSetId),
-    [selectedStimulusSetId, validStimulusSets],
-  );
-
   const configPresetOptions = (defaults?.config_preset_options as Array<Record<string, unknown>> | undefined) ?? [];
   const selectedPreset = configPresetOptions[0] ?? null;
 
@@ -160,7 +155,7 @@ export function RunBuilderPage() {
     try {
       setIsCreating(true);
       const experimentId = String(defaults?.experiment_id ?? '').trim();
-      const taskFamily = String(derivedMainTaskFamily || (defaults?.task_family ?? '')).trim();
+      const taskFamily = String(derivedMainTaskFamily).trim();
       if (!experimentId || !taskFamily) {
         setError(t('run.errorMissingDefaults'));
         return;
@@ -253,7 +248,13 @@ export function RunBuilderPage() {
   );
   const mainTaskFamilyMixed = selectedMainTaskFamilies.length > 1;
   const derivedMainTaskFamily = selectedMainTaskFamilies.length === 1 ? selectedMainTaskFamilies[0] : '';
-  const taskFamilyFieldValue = mainTaskFamilyMixed ? 'mixed task families (invalid)' : (derivedMainTaskFamily || String(defaults?.task_family ?? ''));
+  const taskFamilyFieldValue = mainTaskFamilyMixed
+    ? 'mixed task families (invalid)'
+    : selectedMainSetIds.length === 0
+      ? 'no main bank selected'
+      : (derivedMainTaskFamily || 'no main bank selected');
+  const selectedMainSummary = selectedMainBanks.map((bank) => `${bank.name} (${bank.n_items})`).join(', ') || 'none';
+  const selectedSingleMainBank = !aggregationEnabled && selectedMainBanks.length === 1 ? selectedMainBanks[0] : null;
   const mainItemCount = selectedMainBanks.reduce((acc, item) => acc + Number(item.n_items || 0), 0);
   const practiceItemCount = Number(selectedPracticeStimulus?.n_items || 0);
   const preActivationCounts = resolveRunSummaryCounts(undefined, {
@@ -358,16 +359,16 @@ export function RunBuilderPage() {
         </form>
       </section>
 
-      {selectedStimulus ? (
+      {selectedSingleMainBank ? (
         <p>
-          {t('run.selectedStimulusSummary')}: {selectedStimulus.name} ({selectedStimulus.n_items} items, {localizeStatus(t, selectedStimulus.validation_status)}) ·{' '}
-          <KbdMono>{selectedStimulus.stimulus_set_id}</KbdMono>
+          {t('run.selectedStimulusSummary')}: {selectedSingleMainBank.name} ({selectedSingleMainBank.n_items} items,{' '}
+          {localizeStatus(t, selectedSingleMainBank.validation_status)}) · <KbdMono>{selectedSingleMainBank.stimulus_set_id}</KbdMono>
         </p>
       ) : null}
       <section className="panel">
         <h3>Run summary before activation</h3>
         <p>Practice bank: {selectedPracticeStimulus ? `${selectedPracticeStimulus.name} (${practiceItemCount})` : 'none'}</p>
-        <p>Main bank(s): {selectedMainBanks.map((bank) => `${bank.name} (${bank.n_items})`).join(', ') || 'none'}</p>
+        <p>Main bank(s): {selectedMainSummary}</p>
         <p>Aggregation: {aggregationEnabled ? 'enabled (explicit)' : 'disabled (single-select)'}</p>
         <p>Total practice items: {preActivationCounts.practiceItemCount}</p>
         <p>Total main items: {preActivationCounts.mainItemCount}</p>
