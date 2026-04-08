@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import sqlite3
+
 from fastapi.testclient import TestClient
 
 from app.researcher_api.main import create_app
@@ -185,3 +188,37 @@ def test_activation_blocked_for_invalid_selection(tmp_path) -> None:
     )
     assert create.status_code == 400
     assert "match run task_family" in create.json()["detail"]
+
+
+def test_activation_rejects_practice_main_overlap_if_invalid_row_exists(tmp_path) -> None:
+    db_path = tmp_path / "summary.sqlite3"
+    client = TestClient(create_app(str(db_path)))
+    _login(client)
+    main_set = _upload_set(client, name="main_set", n_items=8)
+    practice_set = _upload_set(client, name="practice_set", n_items=3)
+
+    create = client.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "overlap-defensive-validation",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"mode": "test"},
+            "stimulus_set_ids": [main_set],
+            "practice_stimulus_set_id": practice_set,
+            "aggregation_mode": "single",
+        },
+    )
+    assert create.status_code == 200
+    run_id = create.json()["run_id"]
+
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "UPDATE researcher_runs SET stimulus_set_ids_json = ?, practice_stimulus_set_id = ? WHERE run_id = ?",
+            (json.dumps([main_set]), main_set, run_id),
+        )
+        conn.commit()
+
+    activate = client.post(f"/admin/api/v1/runs/{run_id}/activate")
+    assert activate.status_code == 400
+    assert "practice_stimulus_set_id must not overlap with main stimulus_set_ids" in activate.json()["detail"]

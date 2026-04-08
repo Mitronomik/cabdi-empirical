@@ -145,6 +145,10 @@ export function RunBuilderPage() {
       setError(t('run.errorMissingStimulus'));
       return;
     }
+    if (selectedPracticeStimulusSetId && mainSetIds.includes(selectedPracticeStimulusSetId)) {
+      setError('practice_stimulus_set_id must not overlap with main stimulus_set_ids');
+      return;
+    }
     try {
       setIsCreating(true);
       const experimentId = String(defaults?.experiment_id ?? '').trim();
@@ -220,6 +224,14 @@ export function RunBuilderPage() {
     () => validStimulusSets.find((item) => String(item.stimulus_set_id) === selectedPracticeStimulusSetId),
     [selectedPracticeStimulusSetId, validStimulusSets],
   );
+  const availableMainStimulusSets = useMemo(
+    () => validStimulusSets.filter((item) => String(item.stimulus_set_id) !== selectedPracticeStimulusSetId),
+    [selectedPracticeStimulusSetId, validStimulusSets],
+  );
+  const availablePracticeStimulusSets = useMemo(
+    () => validStimulusSets.filter((item) => !selectedMainStimulusSetIds.includes(String(item.stimulus_set_id))),
+    [selectedMainStimulusSetIds, validStimulusSets],
+  );
   const mainItemCount = selectedMainStimuli.reduce((acc, item) => acc + Number(item.n_items || 0), 0);
   const practiceItemCount = Number(selectedPracticeStimulus?.n_items || 0);
   const preActivationCounts = resolveRunSummaryCounts(undefined, {
@@ -262,7 +274,7 @@ export function RunBuilderPage() {
               if (!aggregationEnabled) setSelectedMainStimulusSetIds(e.target.value ? [e.target.value] : []);
             }} required>
               <option value="">{t('run.selectStimulus')}</option>
-              {validStimulusSets.map((item) => (
+              {availableMainStimulusSets.map((item) => (
                 <option key={item.stimulus_set_id} value={item.stimulus_set_id}>
                   {item.name} • {item.task_family} • {item.n_items} • {localizeStatus(t, item.validation_status)}
                 </option>
@@ -293,7 +305,7 @@ export function RunBuilderPage() {
                 value={selectedMainStimulusSetIds}
                 onChange={(e) => setSelectedMainStimulusSetIds(Array.from(e.target.selectedOptions).map((o) => o.value))}
               >
-                {validStimulusSets.map((item) => (
+                {availableMainStimulusSets.map((item) => (
                   <option key={`main-${item.stimulus_set_id}`} value={item.stimulus_set_id}>
                     {item.name} • {item.n_items}
                   </option>
@@ -302,7 +314,7 @@ export function RunBuilderPage() {
             ) : null}
             <select value={selectedPracticeStimulusSetId} onChange={(e) => setSelectedPracticeStimulusSetId(e.target.value)}>
               <option value="">Practice bank (optional)</option>
-              {validStimulusSets.map((item) => (
+              {availablePracticeStimulusSets.map((item) => (
                 <option key={`practice-${item.stimulus_set_id}`} value={item.stimulus_set_id}>
                   {item.name} • {item.n_items}
                 </option>

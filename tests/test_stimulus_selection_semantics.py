@@ -83,3 +83,23 @@ def test_multi_select_requires_explicit_aggregation_mode(tmp_path) -> None:
     assert explicit.json()["aggregation_mode"] == "multi"
     assert explicit.json()["run_summary"]["total_main_items"] == 54
 
+
+def test_create_run_rejects_practice_main_stimulus_overlap(tmp_path) -> None:
+    client = TestClient(create_app(str(tmp_path / "semantics.sqlite3")))
+    _login(client)
+    set_a = _upload_set(client, name="bank_a", n_items=6)
+
+    create = client.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "practice-main-overlap",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"mode": "test"},
+            "stimulus_set_ids": [set_a],
+            "practice_stimulus_set_id": set_a,
+            "aggregation_mode": "single",
+        },
+    )
+    assert create.status_code == 400
+    assert "practice_stimulus_set_id must not overlap with main stimulus_set_ids" in create.json()["detail"]
