@@ -37,7 +37,7 @@ def test_invite_url_is_returned_and_derived_from_public_slug(tmp_path, monkeypat
             "run_name": "Invite Link Run",
             "experiment_id": "toy_v1",
             "task_family": "scam_detection",
-            "config": {"n_blocks": 3},
+            "config": {"n_blocks": 1},
             "stimulus_set_ids": [stimulus_set_id],
         },
     )
@@ -61,7 +61,7 @@ def test_run_states_expose_launchability_consistently(tmp_path) -> None:
             "run_name": "Launchability Run",
             "experiment_id": "toy_v1",
             "task_family": "scam_detection",
-            "config": {"n_blocks": 3},
+            "config": {"n_blocks": 1},
             "stimulus_set_ids": [stimulus_set_id],
         },
     )

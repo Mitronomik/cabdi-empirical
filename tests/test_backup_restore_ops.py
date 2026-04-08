@@ -38,7 +38,7 @@ def _seed_minimal_run(tmp_db: str) -> tuple[str, str]:
             "run_name": "backup run",
             "experiment_id": "toy_v1",
             "task_family": "scam_detection",
-            "config": {"mode": "backup-test"},
+            "config": {"mode": "backup-test", "n_blocks": 1},
             "stimulus_set_ids": [upload.json()["stimulus_set_id"]],
         },
     )

@@ -31,7 +31,7 @@ def _bootstrap(tmp_path) -> tuple[TestClient, str]:
             'run_name': 'incremental run',
             'experiment_id': 'toy_v1',
             'task_family': 'scam_detection',
-            'config': {'mode': 'test'},
+            'config': {'mode': 'test', 'n_blocks': 1},
             'stimulus_set_ids': [upload.json()['stimulus_set_id']],
         },
     )

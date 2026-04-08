@@ -34,7 +34,7 @@ def _bootstrap_run(researcher: TestClient) -> dict[str, str]:
             "run_name": "run export",
             "experiment_id": "toy_v1",
             "task_family": "scam_detection",
-            "config": {"n_blocks": 3},
+            "config": {"n_blocks": 1},
             "stimulus_set_ids": [stimulus_set_id],
         },
     )

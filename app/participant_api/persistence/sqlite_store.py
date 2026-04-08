@@ -38,6 +38,7 @@ class SQLiteStore:
 
     def init_db(self) -> None:
         with self.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
             self._ensure_migration_table(conn)
             current_version = self._current_schema_version(conn)
             if current_version is None:
@@ -125,6 +126,10 @@ class SQLiteStore:
             "researcher_runs",
         }
         if not required_base_tables.issubset(non_migration_tables):
+            if non_migration_tables and non_migration_tables.issubset(required_base_tables):
+                # Another process may have partially bootstrapped a fresh DB before recording
+                # schema_migrations; treat as uninitialized and let canonical migrations run.
+                return 0
             missing = sorted(required_base_tables - non_migration_tables)
             raise RuntimeError(
                 "Detected unversioned legacy database with missing required pilot tables: "
@@ -402,6 +407,7 @@ class SQLiteStore:
     def _migration_007_add_session_created_at(self, conn: sqlite3.Connection) -> None:
         conn.executescript(
             """
+            DROP TABLE IF EXISTS participant_sessions_new;
             CREATE TABLE participant_sessions_new (
                 session_id TEXT PRIMARY KEY,
                 participant_id TEXT NOT NULL,
