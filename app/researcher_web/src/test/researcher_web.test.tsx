@@ -739,6 +739,8 @@ describe('researcher auth shell', () => {
 
     await user.selectOptions(screen.getByDisplayValue('Main Scam • scam_detection • 10 • Valid'), 'stim_claim');
     expect(screen.getByLabelText('task family')).toHaveValue('claim_review');
+    expect(screen.getByText(/Selected stimulus set: Main Claim/)).toBeInTheDocument();
+    expect(screen.getByText('Main bank(s): Main Claim (8)')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Create Run' }));
 
     await waitFor(() => expect(createPayload).not.toBeNull());
@@ -788,6 +790,8 @@ describe('researcher auth shell', () => {
     await user.selectOptions(multiSelect, ['stim_multi_a', 'stim_multi_b']);
 
     expect(screen.getByLabelText('task family')).toHaveValue('claim_review');
+    expect(screen.queryByText(/Selected stimulus set:/)).not.toBeInTheDocument();
+    expect(screen.getByText('Main bank(s): Multi A (8), Multi B (7)')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Create Run' }));
 
     await waitFor(() => expect(createPayload).not.toBeNull());
@@ -833,6 +837,7 @@ describe('researcher auth shell', () => {
     await user.selectOptions(screen.getByRole('listbox'), ['stim_a', 'stim_b']);
 
     expect(await screen.findByText(/Selected main banks have mixed task families/)).toBeInTheDocument();
+    expect(screen.getByLabelText('task family')).toHaveValue('mixed task families (invalid)');
     await user.click(screen.getByRole('button', { name: 'Create Run' }));
     const alerts = await screen.findAllByRole('alert');
     expect(alerts.some((item) => item.textContent?.includes('Selected main banks have mixed task families'))).toBe(true);
@@ -878,6 +883,50 @@ describe('researcher auth shell', () => {
     await user.click(screen.getByRole('button', { name: 'Create Run' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Aggregation mode requires selecting at least two main banks.');
+    expect(createSpy).not.toHaveBeenCalled();
+  });
+
+  it('shows explicit unset task family and blocks submit when no main bank is selected', async () => {
+    const user = userEvent.setup();
+    const createSpy = vi.fn();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('/auth/me')) {
+          return new Response(JSON.stringify({ authenticated: true, user: { user_id: 'u1', username: 'admin', is_admin: true } }), { status: 200 });
+        }
+        if (url.endsWith('/runs/defaults')) {
+          return new Response(JSON.stringify({ experiment_id: 'exp_1', task_family: 'default_family', config_preset_options: [] }), { status: 200 });
+        }
+        if (url.endsWith('/stimuli')) {
+          return new Response(
+            JSON.stringify([
+              { stimulus_set_id: 'stim_a', name: 'Main A', task_family: 'scam_detection', validation_status: 'valid', n_items: 10 },
+              { stimulus_set_id: 'stim_b', name: 'Main B', task_family: 'scam_detection', validation_status: 'valid', n_items: 8 },
+            ]),
+            { status: 200 },
+          );
+        }
+        if (url.endsWith('/runs') && init?.method === 'POST') {
+          createSpy();
+          return new Response(JSON.stringify({ run_id: 'run_new' }), { status: 200 });
+        }
+        if (url.endsWith('/runs')) return new Response(JSON.stringify([]), { status: 200 });
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText('Logged in as: admin');
+    await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
+    await user.click(screen.getByLabelText('Aggregation mode'));
+    await user.deselectOptions(screen.getByRole('listbox'), ['stim_a']);
+
+    expect(screen.getByLabelText('task family')).toHaveValue('no main bank selected');
+    expect(screen.getByText('Main bank(s): none')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Create Run' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Select a validated stimulus set before creating a run.');
     expect(createSpy).not.toHaveBeenCalled();
   });
 
