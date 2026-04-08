@@ -129,24 +129,53 @@ class TrialService:
         run = self.store.fetchone("SELECT stimulus_set_ids_json, practice_stimulus_set_id FROM researcher_runs WHERE run_id = ?", (session["run_id"],))
         if run is None:
             raise ValueError("session run reference is invalid")
-        allowed_set_ids = set(loads(run["stimulus_set_ids_json"]))
-        practice_set_id = run.get("practice_stimulus_set_id")
+        main_set_ids = {str(item) for item in loads(run["stimulus_set_ids_json"])}
+        practice_set_id = str(run["practice_stimulus_set_id"]) if run.get("practice_stimulus_set_id") else None
+        allowed_set_ids = set(main_set_ids)
         if practice_set_id:
-            allowed_set_ids.add(str(practice_set_id))
+            allowed_set_ids.add(practice_set_id)
 
         total_row = self.store.fetchone("SELECT COUNT(*) AS n FROM session_trials WHERE session_id = ?", (session_id,))
         total_trials = int(total_row["n"]) if total_row else 0
         if total_trials != int(session.get("expected_trial_count", 0)):
             raise ValueError("session trial count mismatch: frozen snapshot is inconsistent")
 
+        stimulus_ids_by_set: dict[str, set[str]] = {}
+        for source_set_id in sorted(allowed_set_ids):
+            source_row = self.store.fetchone(
+                "SELECT items_json FROM researcher_stimulus_sets WHERE stimulus_set_id = ?",
+                (source_set_id,),
+            )
+            if source_row is None:
+                raise ValueError("session references missing run stimulus-set source")
+            set_item_ids: set[str] = set()
+            for raw_item in loads(source_row["items_json"]):
+                set_item_ids.add(str(raw_item.get("stimulus_id")))
+            stimulus_ids_by_set[source_set_id] = set_item_ids
+
         trial_rows = self.store.fetchall(
-            "SELECT trial_id, source_stimulus_set_ids_json FROM session_trials WHERE session_id = ?",
+            "SELECT trial_id, block_id, is_practice, stimulus_json, source_stimulus_set_ids_json FROM session_trials WHERE session_id = ?",
             (session_id,),
         )
         for row in trial_rows:
             source_set_ids = set(loads(row.get("source_stimulus_set_ids_json") or "[]"))
-            if source_set_ids and not source_set_ids.issubset(allowed_set_ids):
+            if not source_set_ids:
+                raise ValueError("session trial provenance is missing source stimulus-set ids")
+            if not source_set_ids.issubset(allowed_set_ids):
                 raise ValueError("session contains trials outside run stimulus-set definition")
+            stimulus = StimulusItem.from_dict(loads(row["stimulus_json"]))
+            if int(row.get("is_practice") or 0) == 1 or str(row.get("block_id")) == "practice":
+                if not practice_set_id:
+                    raise ValueError("practice trial exists but run has no practice bank")
+                if source_set_ids != {practice_set_id}:
+                    raise ValueError("practice trial provenance must match configured practice bank")
+            else:
+                if source_set_ids - main_set_ids:
+                    raise ValueError("main trial provenance includes non-main bank source ids")
+                if practice_set_id and practice_set_id in source_set_ids:
+                    raise ValueError("main trial provenance must not include practice bank source ids")
+            if not any(stimulus.stimulus_id in stimulus_ids_by_set[source_id] for source_id in source_set_ids):
+                raise ValueError("trial provenance does not match any source item in referenced stimulus set")
 
     def _progress(self, session_id: str) -> dict[str, int]:
         total_row = self.store.fetchone("SELECT COUNT(*) AS n FROM session_trials WHERE session_id = ?", (session_id,))

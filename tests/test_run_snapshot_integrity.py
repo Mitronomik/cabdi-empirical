@@ -202,3 +202,76 @@ def test_snapshot_preserves_protocol_blocks_and_truthful_expected_count(tmp_path
     )
     blocked_block = participant.app.state.trial_service._questionnaire_block_gate(session_id)
     assert blocked_block == "block_1"
+
+
+def test_snapshot_materializes_practice_bank_and_persists_true_per_trial_provenance(tmp_path) -> None:
+    db_path = str(tmp_path / "snapshot-provenance.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    participant = TestClient(create_app(db_path))
+    _login(researcher)
+    main_set_id = _upload_set(researcher, name="main-bank", n_items=6)
+    practice_set_id = _upload_set(researcher, name="practice-bank", n_items=2)
+    _, run_slug = _create_active_run_with_execution(
+        researcher,
+        stimulus_set_ids=[main_set_id],
+        practice_stimulus_set_id=practice_set_id,
+    )
+
+    created = participant.post("/api/v1/sessions", json={"run_slug": run_slug})
+    assert created.status_code == 200
+    session_id = created.json()["session_id"]
+    started = participant.post(f"/api/v1/sessions/{session_id}/start")
+    assert started.status_code == 200
+
+    rows = participant.app.state.store.fetchall(
+        """
+        SELECT trial_id, block_id, is_practice, source_stimulus_set_ids_json
+        FROM session_trials
+        WHERE session_id = ?
+        ORDER BY block_index, trial_index
+        """,
+        (session_id,),
+    )
+    assert rows
+    for row in rows:
+        source_ids = loads(row["source_stimulus_set_ids_json"])
+        if int(row["is_practice"]) == 1:
+            assert row["block_id"] == "practice"
+            assert source_ids == [practice_set_id]
+        else:
+            assert row["block_id"] != "practice"
+            assert source_ids == [main_set_id]
+
+
+def test_snapshot_integrity_fails_when_trial_provenance_is_mutated_to_non_run_source(tmp_path) -> None:
+    db_path = str(tmp_path / "snapshot-provenance-integrity.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    participant = TestClient(create_app(db_path))
+    _login(researcher)
+    main_set_id = _upload_set(researcher, name="main-bank", n_items=6)
+    practice_set_id = _upload_set(researcher, name="practice-bank", n_items=2)
+    outside_set_id = _upload_set(researcher, name="outside-bank", n_items=1)
+    _, run_slug = _create_active_run_with_execution(
+        researcher,
+        stimulus_set_ids=[main_set_id],
+        practice_stimulus_set_id=practice_set_id,
+    )
+
+    created = participant.post("/api/v1/sessions", json={"run_slug": run_slug})
+    assert created.status_code == 200
+    session_id = created.json()["session_id"]
+    started = participant.post(f"/api/v1/sessions/{session_id}/start")
+    assert started.status_code == 200
+
+    mutated_trial = participant.app.state.store.fetchone(
+        "SELECT trial_id FROM session_trials WHERE session_id = ? AND is_practice = 0 ORDER BY trial_id LIMIT 1",
+        (session_id,),
+    )
+    assert mutated_trial is not None
+    participant.app.state.store.execute(
+        "UPDATE session_trials SET source_stimulus_set_ids_json = ? WHERE trial_id = ?",
+        (dumps([outside_set_id]), mutated_trial["trial_id"]),
+    )
+    next_trial = participant.get(f"/api/v1/sessions/{session_id}/next-trial")
+    assert next_trial.status_code == 400
+    assert "outside run stimulus-set definition" in next_trial.json()["detail"]
