@@ -701,4 +701,184 @@ describe('researcher auth shell', () => {
     expect(within(multiSelect).getByRole('option', { name: /Main A/ })).toBeInTheDocument();
   });
 
+  it('single mode derives task family and payload from the selected main bank', async () => {
+    const user = userEvent.setup();
+    let createPayload: Record<string, unknown> | null = null;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('/auth/me')) {
+          return new Response(JSON.stringify({ authenticated: true, user: { user_id: 'u1', username: 'admin', is_admin: true } }), { status: 200 });
+        }
+        if (url.endsWith('/runs/defaults')) {
+          return new Response(JSON.stringify({ experiment_id: 'exp_1', task_family: 'default_family', config_preset_options: [] }), { status: 200 });
+        }
+        if (url.endsWith('/stimuli')) {
+          return new Response(
+            JSON.stringify([
+              { stimulus_set_id: 'stim_scam', name: 'Main Scam', task_family: 'scam_detection', validation_status: 'valid', n_items: 10 },
+              { stimulus_set_id: 'stim_claim', name: 'Main Claim', task_family: 'claim_review', validation_status: 'valid', n_items: 8 },
+            ]),
+            { status: 200 },
+          );
+        }
+        if (url.endsWith('/runs') && init?.method === 'POST') {
+          createPayload = JSON.parse(String(init.body ?? '{}')) as Record<string, unknown>;
+          return new Response(JSON.stringify({ run_id: 'run_new', run_name: 'run-new', public_slug: 'run-new', status: 'draft' }), { status: 200 });
+        }
+        if (url.endsWith('/runs')) return new Response(JSON.stringify([]), { status: 200 });
+        if (url.endsWith('/runs/run_new')) return new Response(JSON.stringify({ run_id: 'run_new', run_name: 'run-new', status: 'draft' }), { status: 200 });
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText('Logged in as: admin');
+    await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
+
+    await user.selectOptions(screen.getByDisplayValue('Main Scam • scam_detection • 10 • Valid'), 'stim_claim');
+    expect(screen.getByLabelText('task family')).toHaveValue('claim_review');
+    await user.click(screen.getByRole('button', { name: 'Create Run' }));
+
+    await waitFor(() => expect(createPayload).not.toBeNull());
+    expect(createPayload?.stimulus_set_ids).toEqual(['stim_claim']);
+    expect(createPayload?.task_family).toBe('claim_review');
+  });
+
+  it('multi mode derives task family and payload from selected banks only when consistent', async () => {
+    const user = userEvent.setup();
+    let createPayload: Record<string, unknown> | null = null;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('/auth/me')) {
+          return new Response(JSON.stringify({ authenticated: true, user: { user_id: 'u1', username: 'admin', is_admin: true } }), { status: 200 });
+        }
+        if (url.endsWith('/runs/defaults')) {
+          return new Response(JSON.stringify({ experiment_id: 'exp_1', task_family: 'default_family', config_preset_options: [] }), { status: 200 });
+        }
+        if (url.endsWith('/stimuli')) {
+          return new Response(
+            JSON.stringify([
+              { stimulus_set_id: 'stim_single', name: 'Single Main', task_family: 'scam_detection', validation_status: 'valid', n_items: 10 },
+              { stimulus_set_id: 'stim_multi_a', name: 'Multi A', task_family: 'claim_review', validation_status: 'valid', n_items: 8 },
+              { stimulus_set_id: 'stim_multi_b', name: 'Multi B', task_family: 'claim_review', validation_status: 'valid', n_items: 7 },
+            ]),
+            { status: 200 },
+          );
+        }
+        if (url.endsWith('/runs') && init?.method === 'POST') {
+          createPayload = JSON.parse(String(init.body ?? '{}')) as Record<string, unknown>;
+          return new Response(JSON.stringify({ run_id: 'run_new', run_name: 'run-new', public_slug: 'run-new', status: 'draft' }), { status: 200 });
+        }
+        if (url.endsWith('/runs')) return new Response(JSON.stringify([]), { status: 200 });
+        if (url.endsWith('/runs/run_new')) return new Response(JSON.stringify({ run_id: 'run_new', run_name: 'run-new', status: 'draft' }), { status: 200 });
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText('Logged in as: admin');
+    await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
+    await user.click(screen.getByLabelText('Aggregation mode'));
+    const multiSelect = screen.getByRole('listbox');
+    await user.deselectOptions(multiSelect, ['stim_single']);
+    await user.selectOptions(multiSelect, ['stim_multi_a', 'stim_multi_b']);
+
+    expect(screen.getByLabelText('task family')).toHaveValue('claim_review');
+    await user.click(screen.getByRole('button', { name: 'Create Run' }));
+
+    await waitFor(() => expect(createPayload).not.toBeNull());
+    expect(createPayload?.stimulus_set_ids).toEqual(['stim_multi_a', 'stim_multi_b']);
+    expect(createPayload?.task_family).toBe('claim_review');
+  });
+
+  it('blocks submit in multi mode when selected banks have mixed task families', async () => {
+    const user = userEvent.setup();
+    const createSpy = vi.fn();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('/auth/me')) {
+          return new Response(JSON.stringify({ authenticated: true, user: { user_id: 'u1', username: 'admin', is_admin: true } }), { status: 200 });
+        }
+        if (url.endsWith('/runs/defaults')) {
+          return new Response(JSON.stringify({ experiment_id: 'exp_1', task_family: 'default_family', config_preset_options: [] }), { status: 200 });
+        }
+        if (url.endsWith('/stimuli')) {
+          return new Response(
+            JSON.stringify([
+              { stimulus_set_id: 'stim_a', name: 'Main A', task_family: 'scam_detection', validation_status: 'valid', n_items: 10 },
+              { stimulus_set_id: 'stim_b', name: 'Main B', task_family: 'claim_review', validation_status: 'valid', n_items: 8 },
+            ]),
+            { status: 200 },
+          );
+        }
+        if (url.endsWith('/runs') && init?.method === 'POST') {
+          createSpy();
+          return new Response(JSON.stringify({ run_id: 'run_new' }), { status: 200 });
+        }
+        if (url.endsWith('/runs')) return new Response(JSON.stringify([]), { status: 200 });
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText('Logged in as: admin');
+    await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
+    await user.click(screen.getByLabelText('Aggregation mode'));
+    await user.selectOptions(screen.getByRole('listbox'), ['stim_a', 'stim_b']);
+
+    expect(await screen.findByText(/Selected main banks have mixed task families/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Create Run' }));
+    const alerts = await screen.findAllByRole('alert');
+    expect(alerts.some((item) => item.textContent?.includes('Selected main banks have mixed task families'))).toBe(true);
+    expect(createSpy).not.toHaveBeenCalled();
+  });
+
+  it('blocks submit in multi mode when fewer than two main banks are selected', async () => {
+    const user = userEvent.setup();
+    const createSpy = vi.fn();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('/auth/me')) {
+          return new Response(JSON.stringify({ authenticated: true, user: { user_id: 'u1', username: 'admin', is_admin: true } }), { status: 200 });
+        }
+        if (url.endsWith('/runs/defaults')) {
+          return new Response(JSON.stringify({ experiment_id: 'exp_1', task_family: 'scam_detection', config_preset_options: [] }), { status: 200 });
+        }
+        if (url.endsWith('/stimuli')) {
+          return new Response(
+            JSON.stringify([
+              { stimulus_set_id: 'stim_a', name: 'Main A', task_family: 'scam_detection', validation_status: 'valid', n_items: 10 },
+              { stimulus_set_id: 'stim_b', name: 'Main B', task_family: 'scam_detection', validation_status: 'valid', n_items: 8 },
+            ]),
+            { status: 200 },
+          );
+        }
+        if (url.endsWith('/runs') && init?.method === 'POST') {
+          createSpy();
+          return new Response(JSON.stringify({ run_id: 'run_new' }), { status: 200 });
+        }
+        if (url.endsWith('/runs')) return new Response(JSON.stringify([]), { status: 200 });
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText('Logged in as: admin');
+    await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
+    await user.click(screen.getByLabelText('Aggregation mode'));
+    await user.selectOptions(screen.getByRole('listbox'), ['stim_a']);
+    await user.click(screen.getByRole('button', { name: 'Create Run' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Aggregation mode requires selecting at least two main banks.');
+    expect(createSpy).not.toHaveBeenCalled();
+  });
+
 });
