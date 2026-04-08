@@ -626,4 +626,79 @@ describe('researcher auth shell', () => {
     expect(await screen.findByText('Participant link copied.')).toBeInTheDocument();
   });
 
+  it('excludes selected main bank from practice selector options', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith('/auth/me')) {
+          return new Response(JSON.stringify({ authenticated: true, user: { user_id: 'u1', username: 'admin', is_admin: true } }), { status: 200 });
+        }
+        if (url.endsWith('/runs/defaults')) {
+          return new Response(JSON.stringify({ experiment_id: 'exp_1', task_family: 'scam_detection', config_preset_options: [] }), { status: 200 });
+        }
+        if (url.endsWith('/stimuli')) {
+          return new Response(
+            JSON.stringify([
+              { stimulus_set_id: 'stim_main', name: 'Main A', task_family: 'scam_detection', validation_status: 'valid', n_items: 48 },
+              { stimulus_set_id: 'stim_practice', name: 'Practice A', task_family: 'scam_detection', validation_status: 'valid', n_items: 6 },
+            ]),
+            { status: 200 },
+          );
+        }
+        if (url.endsWith('/runs')) return new Response(JSON.stringify([]), { status: 200 });
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText('Logged in as: admin');
+    await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
+
+    const practiceSelect = screen.getByDisplayValue('Practice bank (optional)');
+    expect(within(practiceSelect).queryByRole('option', { name: /Main A/ })).not.toBeInTheDocument();
+    expect(within(practiceSelect).getByRole('option', { name: /Practice A/ })).toBeInTheDocument();
+  });
+
+  it('excludes selected practice bank from main selector options in single and multi selection', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith('/auth/me')) {
+          return new Response(JSON.stringify({ authenticated: true, user: { user_id: 'u1', username: 'admin', is_admin: true } }), { status: 200 });
+        }
+        if (url.endsWith('/runs/defaults')) {
+          return new Response(JSON.stringify({ experiment_id: 'exp_1', task_family: 'scam_detection', config_preset_options: [] }), { status: 200 });
+        }
+        if (url.endsWith('/stimuli')) {
+          return new Response(
+            JSON.stringify([
+              { stimulus_set_id: 'stim_main', name: 'Main A', task_family: 'scam_detection', validation_status: 'valid', n_items: 48 },
+              { stimulus_set_id: 'stim_other', name: 'Main B', task_family: 'scam_detection', validation_status: 'valid', n_items: 40 },
+              { stimulus_set_id: 'stim_practice', name: 'Practice A', task_family: 'scam_detection', validation_status: 'valid', n_items: 6 },
+            ]),
+            { status: 200 },
+          );
+        }
+        if (url.endsWith('/runs')) return new Response(JSON.stringify([]), { status: 200 });
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText('Logged in as: admin');
+    await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
+    await user.selectOptions(screen.getByDisplayValue('Practice bank (optional)'), 'stim_practice');
+
+    expect(screen.queryByRole('option', { name: /Practice A • scam_detection • 6 • Valid/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByLabelText('Aggregation mode'));
+    const multiSelect = screen.getByRole('listbox');
+    expect(within(multiSelect).queryByRole('option', { name: /Practice A/ })).not.toBeInTheDocument();
+    expect(within(multiSelect).getByRole('option', { name: /Main A/ })).toBeInTheDocument();
+  });
+
 });

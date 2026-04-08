@@ -377,6 +377,9 @@ class RunService:
             errors.append("single-set run cannot include more than one main stimulus set")
         if aggregation_mode == AGGREGATION_MODE_MULTI and len(stimulus_set_ids) < 2:
             errors.append("multi-set run requires at least two main stimulus sets")
+        practice_stimulus_set_id = run.get("practice_stimulus_set_id")
+        if practice_stimulus_set_id and practice_stimulus_set_id in stimulus_set_ids:
+            errors.append("practice_stimulus_set_id must not overlap with main stimulus_set_ids")
 
         run_summary = run.get("run_summary")
         if not isinstance(run_summary, dict):
@@ -493,6 +496,10 @@ class RunService:
         main_stimulus_set_ids: list[str],
         practice_stimulus_set_id: str | None,
     ) -> None:
+        self._validate_no_stimulus_overlap(
+            main_stimulus_set_ids=main_stimulus_set_ids,
+            practice_stimulus_set_id=practice_stimulus_set_id,
+        )
         all_set_ids = list(main_stimulus_set_ids)
         if practice_stimulus_set_id:
             all_set_ids.append(practice_stimulus_set_id)
@@ -516,6 +523,11 @@ class RunService:
             payload_versions.add(str(row.get("payload_schema_version") or "stimulus_payload.v1"))
         if len(payload_versions) > 1:
             raise ValueError("Selected stimulus sets have incompatible payload_schema_version values")
+
+    @staticmethod
+    def _validate_no_stimulus_overlap(*, main_stimulus_set_ids: list[str], practice_stimulus_set_id: str | None) -> None:
+        if practice_stimulus_set_id and practice_stimulus_set_id in main_stimulus_set_ids:
+            raise ValueError("practice_stimulus_set_id must not overlap with main stimulus_set_ids")
 
     def _compute_run_summary(
         self,
