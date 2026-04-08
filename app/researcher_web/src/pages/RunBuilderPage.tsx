@@ -140,9 +140,17 @@ export function RunBuilderPage() {
     setError('');
     setSuccess('');
     setResponse(null);
-    const mainSetIds = aggregationEnabled ? selectedMainStimulusSetIds : [selectedStimulusSetId].filter(Boolean);
+    const mainSetIds = selectedMainSetIds;
     if (mainSetIds.length === 0) {
       setError(t('run.errorMissingStimulus'));
+      return;
+    }
+    if (aggregationEnabled && mainSetIds.length < 2) {
+      setError('Aggregation mode requires selecting at least two main banks.');
+      return;
+    }
+    if (mainTaskFamilyMixed) {
+      setError('Selected main banks have mixed task families. Choose banks with one shared task family.');
       return;
     }
     if (selectedPracticeStimulusSetId && mainSetIds.includes(selectedPracticeStimulusSetId)) {
@@ -152,7 +160,7 @@ export function RunBuilderPage() {
     try {
       setIsCreating(true);
       const experimentId = String(defaults?.experiment_id ?? '').trim();
-      const taskFamily = String(selectedStimulus?.task_family ?? defaults?.task_family ?? '').trim();
+      const taskFamily = String(derivedMainTaskFamily || (defaults?.task_family ?? '')).trim();
       if (!experimentId || !taskFamily) {
         setError(t('run.errorMissingDefaults'));
         return;
@@ -216,10 +224,6 @@ export function RunBuilderPage() {
     }
   }
 
-  const selectedMainStimuli = useMemo(
-    () => validStimulusSets.filter((item) => selectedMainStimulusSetIds.includes(String(item.stimulus_set_id))),
-    [selectedMainStimulusSetIds, validStimulusSets],
-  );
   const selectedPracticeStimulus = useMemo(
     () => validStimulusSets.find((item) => String(item.stimulus_set_id) === selectedPracticeStimulusSetId),
     [selectedPracticeStimulusSetId, validStimulusSets],
@@ -228,17 +232,42 @@ export function RunBuilderPage() {
     () => validStimulusSets.filter((item) => String(item.stimulus_set_id) !== selectedPracticeStimulusSetId),
     [selectedPracticeStimulusSetId, validStimulusSets],
   );
-  const availablePracticeStimulusSets = useMemo(
-    () => validStimulusSets.filter((item) => !selectedMainStimulusSetIds.includes(String(item.stimulus_set_id))),
-    [selectedMainStimulusSetIds, validStimulusSets],
+  const selectedMainSetIds = useMemo(
+    () =>
+      aggregationEnabled
+        ? selectedMainStimulusSetIds.filter((id, idx, arr) => id && arr.indexOf(id) === idx)
+        : [selectedStimulusSetId].filter(Boolean),
+    [aggregationEnabled, selectedMainStimulusSetIds, selectedStimulusSetId],
   );
-  const mainItemCount = selectedMainStimuli.reduce((acc, item) => acc + Number(item.n_items || 0), 0);
+  const selectedMainBanks = useMemo(
+    () => validStimulusSets.filter((item) => selectedMainSetIds.includes(String(item.stimulus_set_id))),
+    [selectedMainSetIds, validStimulusSets],
+  );
+  const availablePracticeStimulusSets = useMemo(
+    () => validStimulusSets.filter((item) => !selectedMainSetIds.includes(String(item.stimulus_set_id))),
+    [selectedMainSetIds, validStimulusSets],
+  );
+  const selectedMainTaskFamilies = useMemo(
+    () => Array.from(new Set(selectedMainBanks.map((item) => String(item.task_family || '').trim()).filter(Boolean))),
+    [selectedMainBanks],
+  );
+  const mainTaskFamilyMixed = selectedMainTaskFamilies.length > 1;
+  const derivedMainTaskFamily = selectedMainTaskFamilies.length === 1 ? selectedMainTaskFamilies[0] : '';
+  const taskFamilyFieldValue = mainTaskFamilyMixed ? 'mixed task families (invalid)' : (derivedMainTaskFamily || String(defaults?.task_family ?? ''));
+  const mainItemCount = selectedMainBanks.reduce((acc, item) => acc + Number(item.n_items || 0), 0);
   const practiceItemCount = Number(selectedPracticeStimulus?.n_items || 0);
   const preActivationCounts = resolveRunSummaryCounts(undefined, {
     practiceItemCount,
     mainItemCount,
     expectedTrialCount: mainItemCount + practiceItemCount,
   });
+
+  useEffect(() => {
+    if (aggregationEnabled) return;
+    if (selectedStimulusSetId) return;
+    const firstAvailable = availableMainStimulusSets[0];
+    if (firstAvailable) setSelectedStimulusSetId(String(firstAvailable.stimulus_set_id));
+  }, [aggregationEnabled, availableMainStimulusSets, selectedStimulusSetId]);
 
   return (
     <section>
@@ -266,7 +295,7 @@ export function RunBuilderPage() {
             <input name="run_name" value={runName} onChange={(e) => setRunName(e.target.value)} placeholder={t('run.name')} required />
             <input name="public_slug" value={publicSlug} onChange={(e) => setPublicSlug(e.target.value)} placeholder={t('run.slug')} />
             <input value={String(defaults?.experiment_id ?? '')} readOnly aria-label={t('run.experimentId')} />
-            <input value={String(selectedStimulus?.task_family ?? defaults?.task_family ?? '')} readOnly aria-label={t('run.taskFamily')} />
+            <input value={taskFamilyFieldValue} readOnly aria-label={t('run.taskFamily')} />
           </div>
           <div className="form-row" style={{ marginTop: 8 }}>
             <select value={selectedStimulusSetId} onChange={(e) => {
@@ -321,6 +350,11 @@ export function RunBuilderPage() {
               ))}
             </select>
           </div>
+          {mainTaskFamilyMixed ? (
+            <p role="alert" className="alert-error">
+              Selected main banks have mixed task families. Choose banks with one shared task family before creating a run.
+            </p>
+          ) : null}
         </form>
       </section>
 
@@ -333,7 +367,7 @@ export function RunBuilderPage() {
       <section className="panel">
         <h3>Run summary before activation</h3>
         <p>Practice bank: {selectedPracticeStimulus ? `${selectedPracticeStimulus.name} (${practiceItemCount})` : 'none'}</p>
-        <p>Main bank(s): {selectedMainStimuli.map((bank) => `${bank.name} (${bank.n_items})`).join(', ') || 'none'}</p>
+        <p>Main bank(s): {selectedMainBanks.map((bank) => `${bank.name} (${bank.n_items})`).join(', ') || 'none'}</p>
         <p>Aggregation: {aggregationEnabled ? 'enabled (explicit)' : 'disabled (single-select)'}</p>
         <p>Total practice items: {preActivationCounts.practiceItemCount}</p>
         <p>Total main items: {preActivationCounts.mainItemCount}</p>
