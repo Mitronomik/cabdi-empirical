@@ -314,9 +314,9 @@ class SessionService:
             "run_status": run["status"],
         }
 
-    def _load_run_stimuli(self, run: dict[str, Any]) -> list[dict[str, Any]]:
-        items: list[StimulusItem] = []
-        for stimulus_set_id in run["stimulus_set_ids"]:
+    def _load_stimuli_for_set_ids(self, *, run: dict[str, Any], stimulus_set_ids: list[str]) -> list[dict[str, Any]]:
+        items: list[dict[str, Any]] = []
+        for stimulus_set_id in stimulus_set_ids:
             row = self.store.fetchone(
                 "SELECT stimulus_set_id, task_family, items_json, payload_schema_version FROM researcher_stimulus_sets WHERE stimulus_set_id = ?",
                 (stimulus_set_id,),
@@ -392,12 +392,24 @@ class SessionService:
             total_main_trials=main_item_count,
             n_blocks=base_experiment.n_blocks,
         )
-        stimuli = self._load_run_stimuli(run)
+        main_stimuli = self._load_stimuli_for_set_ids(run=run, stimulus_set_ids=list(run["stimulus_set_ids"]))
+        practice_stimulus_set_id = run.get("practice_stimulus_set_id")
+        practice_stimuli = (
+            self._load_stimuli_for_set_ids(run=run, stimulus_set_ids=[str(practice_stimulus_set_id)])
+            if practice_stimulus_set_id
+            else []
+        )
+        source_map: dict[str, list[str]] = {}
+        for row in [*main_stimuli, *practice_stimuli]:
+            stimulus = row["stimulus"]
+            source_map[stimulus.stimulus_id] = list(row["source_stimulus_set_ids"])
         trial_plan = build_trial_plan(
             session["participant_id"],
             base_experiment,
             assign_order_id(session["participant_id"], base_experiment.experiment_id)[1],
-            [StimulusItem.from_dict(item["stimulus"].to_dict()) for item in stimuli],
+            [StimulusItem.from_dict(item["stimulus"].to_dict()) for item in main_stimuli],
+            practice_stimuli=[StimulusItem.from_dict(item["stimulus"].to_dict()) for item in practice_stimuli],
+            stimulus_source_map=source_map,
             practice_trials_override=practice_item_count,
             main_trials_per_block_override=main_trials_per_block,
         )
@@ -412,7 +424,7 @@ class SessionService:
             all_source_ids.append(run["practice_stimulus_set_id"])
         payload_versions = {
             str(item.get("payload_schema_version") or "stimulus_payload.v1")
-            for item in stimuli
+            for item in [*main_stimuli, *practice_stimuli]
         }
         payload_schema_version = sorted(payload_versions)[0] if payload_versions else "stimulus_payload.v1"
 
@@ -435,7 +447,7 @@ class SessionService:
                     None,
                     "pending",
                     expected_trial_count,
-                    dumps(all_source_ids),
+                    dumps(trial.get("source_stimulus_set_ids") or []),
                     1 if str(trial["block_id"]) == "practice" else 0,
                     payload_schema_version,
                 )

@@ -30,26 +30,37 @@ def build_trial_plan(
     participant_id: str,
     experiment: ExperimentConfig,
     assigned_conditions: list[str],
-    stimuli: list[StimulusItem],
+    main_stimuli: list[StimulusItem],
     *,
+    practice_stimuli: list[StimulusItem] | None = None,
+    stimulus_source_map: dict[str, list[str]] | None = None,
     practice_trials_override: int | None = None,
     main_trials_per_block_override: list[int] | None = None,
 ) -> list[dict[str, Any]]:
     rng = random.Random(_stable_seed(participant_id, experiment.experiment_id, "trial_plan"))
     plan: list[dict[str, Any]] = []
 
-    if not stimuli:
-        raise ValueError("cannot build trial plan from an empty stimulus bank")
+    if not main_stimuli:
+        raise ValueError("cannot build trial plan from an empty main stimulus bank")
 
     practice_trials_count = experiment.practice_trials if practice_trials_override is None else int(practice_trials_override)
-    practice_trials = _build_practice_trials(practice_trials_count, stimuli, rng=rng)
+    practice_pool = main_stimuli if practice_stimuli is None else practice_stimuli
+    if practice_trials_count > 0 and not practice_pool:
+        raise ValueError("cannot allocate practice trials without a practice stimulus bank")
+    practice_trials = _build_practice_trials(
+        practice_trials_count,
+        practice_pool,
+        rng=rng,
+        stimulus_source_map=stimulus_source_map,
+    )
     plan.extend(practice_trials)
 
     main_trials = _build_main_trials(
         experiment,
         assigned_conditions,
-        stimuli,
+        main_stimuli,
         rng=rng,
+        stimulus_source_map=stimulus_source_map,
         main_trials_per_block_override=main_trials_per_block_override,
     )
     plan.extend(main_trials)
@@ -63,7 +74,13 @@ def _base_features(stimulus: StimulusItem) -> dict[str, Any]:
     }
 
 
-def _build_practice_trials(practice_trials: int, stimuli: list[StimulusItem], *, rng: random.Random) -> list[dict[str, Any]]:
+def _build_practice_trials(
+    practice_trials: int,
+    stimuli: list[StimulusItem],
+    *,
+    rng: random.Random,
+    stimulus_source_map: dict[str, list[str]] | None,
+) -> list[dict[str, Any]]:
     if practice_trials <= 0:
         return []
 
@@ -87,6 +104,7 @@ def _build_practice_trials(practice_trials: int, stimuli: list[StimulusItem], *,
                 "trial_index": trial_index,
                 "condition": "static_help",
                 "stimulus": stim.to_dict(),
+                "source_stimulus_set_ids": _sources_for_stimulus(stimulus=stim, stimulus_source_map=stimulus_source_map),
                 "pre_render_features": _base_features(stim)
                 | {
                     "allocation_phase": "practice",
@@ -103,6 +121,7 @@ def _build_main_trials(
     stimuli: list[StimulusItem],
     *,
     rng: random.Random,
+    stimulus_source_map: dict[str, list[str]] | None,
     main_trials_per_block_override: list[int] | None = None,
 ) -> list[dict[str, Any]]:
     if main_trials_per_block_override is None:
@@ -148,6 +167,7 @@ def _build_main_trials(
                     "trial_index": trial_index,
                     "condition": condition,
                     "stimulus": stim.to_dict(),
+                    "source_stimulus_set_ids": _sources_for_stimulus(stimulus=stim, stimulus_source_map=stimulus_source_map),
                     "pre_render_features": _base_features(stim)
                     | {
                         "allocation_phase": "main",
@@ -158,6 +178,12 @@ def _build_main_trials(
                 }
             )
     return out
+
+
+def _sources_for_stimulus(*, stimulus: StimulusItem, stimulus_source_map: dict[str, list[str]] | None) -> list[str]:
+    if stimulus_source_map is None:
+        return []
+    return list(stimulus_source_map.get(stimulus.stimulus_id, []))
 
 
 def _allocate_main_sequence(
