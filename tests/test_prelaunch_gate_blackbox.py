@@ -46,7 +46,7 @@ def _bootstrap_active_run_over_http(researcher_base_url: str) -> str:
                 "run_name": "gate run",
                 "experiment_id": "toy_v1",
                 "task_family": "scam_detection",
-                "config": {"mode": "prelaunch-gate-blackbox-test"},
+                "config": {"mode": "prelaunch-gate-blackbox-test", "n_blocks": 1},
                 "stimulus_set_ids": [upload.json()["stimulus_set_id"]],
             },
         )

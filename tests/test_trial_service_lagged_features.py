@@ -21,6 +21,9 @@ def _bootstrap_small_run(tmp_path) -> str:
         '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"title":"Case","body":"a"},'
         '"true_label":"not_scam","difficulty_prior":"low","model_prediction":"scam","model_confidence":"high",'
         '"model_correct":false,"eligible_sets":["demo"]}\n'
+        '{"stimulus_id":"s2","task_family":"scam_detection","content_type":"text","payload":{"title":"Case 2","body":"b"},'
+        '"true_label":"not_scam","difficulty_prior":"low","model_prediction":"scam","model_confidence":"high",'
+        '"model_correct":false,"eligible_sets":["demo"]}\n'
     )
     upload = researcher.post(
         "/admin/api/v1/stimuli/upload",

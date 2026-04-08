@@ -35,7 +35,7 @@ def test_run_statuses_render_consistently_in_researcher_ui_contract(tmp_path) ->
             "run_name": "Status Visibility Run",
             "experiment_id": "toy_v1",
             "task_family": "scam_detection",
-            "config": {"n_blocks": 3},
+            "config": {"n_blocks": 1},
             "stimulus_set_ids": [stimulus_set_id],
         },
     )

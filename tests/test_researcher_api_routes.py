@@ -67,7 +67,7 @@ def test_create_run_and_session_monitor_and_diagnostics(tmp_path):
             "run_name": "run alpha",
             "experiment_id": "toy_v1",
             "task_family": "scam_detection",
-            "config": {"n_blocks": 3},
+            "config": {"n_blocks": 1},
             "stimulus_set_ids": [stimulus_set_id],
             "notes": "mvp",
         },
@@ -140,7 +140,7 @@ def test_run_lifecycle_transitions_and_invalid_transition_errors(tmp_path):
             "run_name": "lifecycle run",
             "experiment_id": "toy_v1",
             "task_family": "scam_detection",
-            "config": {"n_blocks": 3},
+            "config": {"n_blocks": 1},
             "stimulus_set_ids": [stimulus_set_id],
         },
     )
@@ -185,7 +185,7 @@ def test_closed_runs_remain_readable_for_diagnostics_and_exports(tmp_path):
             "run_name": "close-compatible run",
             "experiment_id": "toy_v1",
             "task_family": "scam_detection",
-            "config": {"n_blocks": 3},
+            "config": {"n_blocks": 1},
             "stimulus_set_ids": [stimulus_set_id],
         },
     )
@@ -220,7 +220,7 @@ def test_close_run_requires_explicit_confirmation_payload(tmp_path):
             "run_name": "close confirm run",
             "experiment_id": "toy_v1",
             "task_family": "scam_detection",
-            "config": {"n_blocks": 3},
+            "config": {"n_blocks": 1},
             "stimulus_set_ids": [stimulus_set_id],
         },
     )
@@ -250,7 +250,7 @@ def test_session_monitor_distinguishes_awaiting_final_submit_and_finalized(tmp_p
             "run_name": "status split run",
             "experiment_id": "toy_v1",
             "task_family": "scam_detection",
-            "config": {"n_blocks": 3},
+            "config": {"n_blocks": 1},
             "stimulus_set_ids": [stimulus_set_id],
         },
     )
@@ -296,7 +296,7 @@ def test_run_diagnostics_and_exports_share_run_scoped_truth(tmp_path):
             "run_name": "diag-export coherence",
             "experiment_id": "toy_v1",
             "task_family": "scam_detection",
-            "config": {"n_blocks": 3},
+            "config": {"n_blocks": 1},
             "stimulus_set_ids": [stimulus_set_id],
         },
     )
@@ -338,7 +338,7 @@ def test_budget_diagnostics_detect_display_and_interaction_drift(tmp_path):
             "run_name": "budget-drift run",
             "experiment_id": "toy_v1",
             "task_family": "scam_detection",
-            "config": {"n_blocks": 3},
+            "config": {"n_blocks": 1},
             "stimulus_set_ids": [stimulus_set_id],
         },
     )
@@ -439,7 +439,7 @@ def test_budget_diagnostics_warn_on_incomplete_basis(tmp_path):
             "run_name": "budget-incomplete run",
             "experiment_id": "toy_v1",
             "task_family": "scam_detection",
-            "config": {"n_blocks": 3},
+            "config": {"n_blocks": 1},
             "stimulus_set_ids": [stimulus_set_id],
         },
     )

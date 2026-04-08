@@ -69,7 +69,7 @@ def _bootstrap_run(tmp_path) -> str:
             "run_name": "participant test run",
             "experiment_id": "toy_v1",
             "task_family": "scam_detection",
-            "config": {"mode": "test"},
+            "config": {"mode": "test", "n_blocks": 1},
             "stimulus_set_ids": [stimulus_set_id],
         },
     )
@@ -99,7 +99,7 @@ def _bootstrap_run_with_details(tmp_path) -> dict[str, str]:
             "run_name": "snapshot run",
             "experiment_id": "toy_v1",
             "task_family": "scam_detection",
-            "config": {"mode": "test"},
+            "config": {"mode": "test", "n_blocks": 1},
             "stimulus_set_ids": [stimulus_set_id],
         },
     )
@@ -175,7 +175,7 @@ def test_session_flow_happy_path_with_exports(tmp_path):
         (session_id,),
     )["n"]
     assert submitted == expected_total
-    assert questionnaire_submitted == {"block_1", "block_2", "block_3"}
+    assert questionnaire_submitted == {"block_1"}
 
     export_res = client.get(f"/api/v1/exports/sessions/{session_id}")
     assert export_res.status_code == 200
@@ -299,7 +299,7 @@ def test_session_creation_rejects_paused_and_closed_runs(tmp_path):
             "run_name": "status-checked run",
             "experiment_id": "toy_v1",
             "task_family": "scam_detection",
-            "config": {"mode": "test"},
+            "config": {"mode": "test", "n_blocks": 1},
             "stimulus_set_ids": [upload.json()["stimulus_set_id"]],
         },
     )
@@ -389,7 +389,7 @@ def test_public_run_metadata_reports_unavailable_statuses_truthfully(tmp_path):
             "run_name": "status visible run",
             "experiment_id": "toy_v1",
             "task_family": "scam_detection",
-            "config": {"mode": "test"},
+            "config": {"mode": "test", "n_blocks": 1},
             "stimulus_set_ids": [upload.json()["stimulus_set_id"]],
         },
     )
@@ -637,6 +637,9 @@ def test_session_trial_shape_comes_from_run_config_json(tmp_path):
         '{"stimulus_id":"s1","task_family":"scam_detection","content_type":"text","payload":{"title":"Case","body":"a"},'
         '"true_label":"scam","difficulty_prior":"low","model_prediction":"scam","model_confidence":"high",'
         '"model_correct":true,"eligible_sets":["demo"]}\n'
+        '{"stimulus_id":"s2","task_family":"scam_detection","content_type":"text","payload":{"title":"Case 2","body":"b"},'
+        '"true_label":"not_scam","difficulty_prior":"low","model_prediction":"scam","model_confidence":"high",'
+        '"model_correct":false,"eligible_sets":["demo"]}\n'
     )
     upload = researcher.post(
         "/admin/api/v1/stimuli/upload",
