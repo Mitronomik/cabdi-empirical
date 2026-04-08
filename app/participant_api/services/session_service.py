@@ -18,6 +18,7 @@ from app.researcher_api.services.run_service import (
     RUN_STATUS_DRAFT,
     RUN_STATUS_PAUSED,
     compute_run_summary,
+    validate_non_empty_main_blocks,
 )
 from packages.shared_types.pilot_types import (
     RESUMABLE_SESSION_STATUSES,
@@ -361,6 +362,12 @@ class SessionService:
         practice_item_count = int(run_summary["practice_item_count"])
         if main_item_count <= 0:
             raise ValueError("run has no main items available for snapshot generation")
+        non_empty_blocks_error = validate_non_empty_main_blocks(
+            main_item_count=main_item_count,
+            n_blocks=int(base_experiment.n_blocks),
+        )
+        if non_empty_blocks_error:
+            raise ValueError(non_empty_blocks_error)
         main_trials_per_block = self._distribute_main_trials_per_block(
             total_main_trials=main_item_count,
             n_blocks=base_experiment.n_blocks,

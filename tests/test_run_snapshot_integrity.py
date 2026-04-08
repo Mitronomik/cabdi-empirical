@@ -275,6 +275,43 @@ def test_session_materialization_expected_counts_match_researcher_run_summary(tm
     assert loads(session_row["source_stimulus_set_ids_json"]) == [main_set_id, practice_set_id]
 
 
+def test_snapshot_materialization_defensively_rejects_empty_main_block_protocol(tmp_path) -> None:
+    db_path = str(tmp_path / "snapshot-empty-main-blocks.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    participant = TestClient(create_app(db_path))
+    _login(researcher)
+    main_set_id = _upload_set(researcher, name="main-too-small", n_items=2)
+
+    run = researcher.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "snapshot-empty-main-blocks",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"execution": {"n_blocks": 3, "trials_per_block": 2, "practice_trials": 0}},
+            "stimulus_set_ids": [main_set_id],
+            "aggregation_mode": "single",
+        },
+    )
+    assert run.status_code == 200
+    run_id = run.json()["run_id"]
+    run_slug = run.json()["public_slug"]
+
+    # Defensive-path setup: simulate invalid status bypassing activation-time validation.
+    researcher.app.state.store.execute(
+        "UPDATE researcher_runs SET status = 'active' WHERE run_id = ?",
+        (run_id,),
+    )
+
+    created = participant.post("/api/v1/sessions", json={"run_slug": run_slug})
+    assert created.status_code == 200
+    session_id = created.json()["session_id"]
+
+    started = participant.post(f"/api/v1/sessions/{session_id}/start")
+    assert started.status_code == 400
+    assert "run has insufficient main items for configured block design" in started.json()["detail"]
+
+
 def test_snapshot_integrity_fails_when_trial_provenance_is_mutated_to_non_run_source(tmp_path) -> None:
     db_path = str(tmp_path / "snapshot-provenance-integrity.sqlite3")
     researcher = TestClient(create_researcher_app(db_path))
