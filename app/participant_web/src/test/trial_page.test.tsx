@@ -83,6 +83,23 @@ test('trial page keeps legacy family defaults when response_options are absent',
   expect(screen.getByRole('button', { name: 'Not a scam' })).toBeInTheDocument();
 });
 
+test('trial page shows explicit error when no payload or fallback response options exist', () => {
+  const trial = makeTrial({
+    stimulus: {
+      ...makeTrial().stimulus,
+      task_family: 'custom_runtime_family',
+      payload: {
+        title: 'Case',
+        body: 'Body',
+      },
+    },
+  });
+  renderTrial(trial);
+
+  expect(screen.getByRole('alert')).toHaveTextContent('Unable to render response options for this trial');
+  expect(screen.queryByRole('button', { name: 'Scam' })).not.toBeInTheDocument();
+});
+
 test('confidence UI no longer shows obsolete low/high slider labels', async () => {
   const trial = makeTrial();
   renderTrial(trial);

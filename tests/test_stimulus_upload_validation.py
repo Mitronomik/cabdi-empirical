@@ -63,12 +63,74 @@ def test_stimulus_upload_jsonl_success_returns_contract_metadata(tmp_path, task_
 def test_new_task_family_registry_entry_validates_with_own_label_space(tmp_path):
     register_task_family(task_family="binary_yes_no", label_space={"yes", "no"})
     client = _client(tmp_path)
-    row = _base_item(task_family="binary_yes_no", true_label="yes", model_prediction="no", model_correct=False)
+    row = _base_item(
+        task_family="binary_yes_no",
+        true_label="yes",
+        model_prediction="no",
+        model_correct=False,
+        payload={"title": "Prompt", "body": "Choose one", "response_options": ["yes", "no"]},
+    )
     res = _upload(client, [row])
     assert res.status_code == 200
     body = res.json()
     assert body["ok"] is True
     assert body["task_family"] == "binary_yes_no"
+
+
+@pytest.mark.parametrize("task_family", ["scam_detection", "scam_not_scam"])
+def test_legacy_family_without_response_options_remains_valid(tmp_path, task_family: str):
+    client = _client(tmp_path)
+    res = _upload(client, [_base_item(task_family=task_family)])
+    assert res.status_code == 200
+    body = res.json()
+    assert body["ok"] is True
+    assert body["task_family"] == task_family
+
+
+def test_non_legacy_family_requires_explicit_response_options(tmp_path):
+    register_task_family(task_family="binary_yes_no_missing_options", label_space={"yes", "no"})
+    client = _client(tmp_path)
+    row = _base_item(
+        task_family="binary_yes_no_missing_options",
+        true_label="yes",
+        model_prediction="no",
+        model_correct=False,
+        payload={"title": "Prompt", "body": "Choose one"},
+    )
+    res = _upload(client, [row])
+    assert res.status_code == 200
+    body = res.json()
+    assert body["ok"] is False
+    assert any(
+        e["code"] == "missing_response_options"
+        and "payload.response_options is required for task_family values without built-in UI defaults" in e["message"]
+        for e in body["errors"]
+    )
+
+
+@pytest.mark.parametrize(
+    "response_options",
+    [
+        [],
+        ["yes", ""],
+        "yes/no",
+    ],
+)
+def test_non_legacy_family_rejects_invalid_response_options(tmp_path, response_options):
+    register_task_family(task_family="binary_yes_no_invalid_options", label_space={"yes", "no"})
+    client = _client(tmp_path)
+    row = _base_item(
+        task_family="binary_yes_no_invalid_options",
+        true_label="yes",
+        model_prediction="no",
+        model_correct=False,
+        payload={"title": "Prompt", "body": "Choose one", "response_options": response_options},
+    )
+    res = _upload(client, [row])
+    assert res.status_code == 200
+    body = res.json()
+    assert body["ok"] is False
+    assert any(e["code"] == "invalid_response_options" for e in body["errors"])
 
 
 def test_stimulus_upload_rejects_malformed_required_fields(tmp_path):

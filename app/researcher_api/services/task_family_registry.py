@@ -17,6 +17,7 @@ _REGISTRY: dict[str, TaskFamilySpec] = {
     "scam_detection": TaskFamilySpec(task_family="scam_detection", label_space=frozenset({"scam", "not_scam"})),
     "scam_not_scam": TaskFamilySpec(task_family="scam_not_scam", label_space=frozenset({"scam", "not_scam"})),
 }
+_LEGACY_UI_DEFAULT_TASK_FAMILIES = frozenset({"scam_detection", "scam_not_scam"})
 
 
 def list_supported_task_families() -> frozenset[str]:
@@ -29,6 +30,12 @@ def get_task_family_spec(task_family: str) -> TaskFamilySpec | None:
     """Return task-family spec, if registered."""
 
     return _REGISTRY.get(task_family)
+
+
+def has_builtin_ui_defaults(task_family: str) -> bool:
+    """Return whether participant UI has built-in fallback response options."""
+
+    return task_family in _LEGACY_UI_DEFAULT_TASK_FAMILIES
 
 
 def register_task_family(*, task_family: str, label_space: set[str] | frozenset[str]) -> None:
