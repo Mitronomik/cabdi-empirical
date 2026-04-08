@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { AssistancePanel } from '../components/AssistancePanel';
 import { useLocale } from '../i18n/useLocale';
+import { getDefaultResponseOptions } from '../lib/taskFamilyRegistry';
 import type { TrialPayload } from '../lib/types';
 
 interface Props {
@@ -38,9 +39,10 @@ export function TrialPage({ trial, loading, savedFeedback, onSubmit }: Props) {
     null,
   );
 
-  const responseOptions = Array.isArray(trial.stimulus.payload.response_options)
-    ? (trial.stimulus.payload.response_options as string[])
-    : ['scam', 'not_scam'];
+  const payloadResponseOptions = Array.isArray(trial.stimulus.payload.response_options)
+    ? (trial.stimulus.payload.response_options as string[]).map((option) => String(option).trim()).filter(Boolean)
+    : [];
+  const responseOptions = payloadResponseOptions.length > 0 ? payloadResponseOptions : getDefaultResponseOptions(trial.stimulus.task_family);
   const stimulusTitle = String(trial.stimulus.payload.title ?? t('trial.caseTitle'));
   const stimulusBody = String(trial.stimulus.payload.body ?? trial.stimulus.payload.prompt ?? t('trial.noPrompt'));
 
@@ -124,10 +126,6 @@ export function TrialPage({ trial, loading, savedFeedback, onSubmit }: Props) {
                 ))}
               </div>
             </fieldset>
-            <div className="range-labels muted">
-              <span>{t('trial.confidenceLow')}</span>
-              <span>{t('trial.confidenceHigh')}</span>
-            </div>
           </>
         )}
 
