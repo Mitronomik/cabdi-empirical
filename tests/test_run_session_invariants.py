@@ -38,6 +38,7 @@ def _create_and_activate_run(
     main_set_ids: list[str],
     practice_set_id: str | None = None,
     n_blocks: int = 3,
+    practice_trials: int = 2,
 ) -> tuple[str, str]:
     create = client.post(
         "/admin/api/v1/runs",
@@ -45,7 +46,7 @@ def _create_and_activate_run(
             "run_name": "invariant-run",
             "experiment_id": "toy_v1",
             "task_family": "scam_detection",
-            "config": {"execution": {"n_blocks": n_blocks, "trials_per_block": 2, "practice_trials": 2}},
+            "config": {"execution": {"n_blocks": n_blocks, "trials_per_block": 2, "practice_trials": practice_trials}},
             "stimulus_set_ids": main_set_ids,
             "practice_stimulus_set_id": practice_set_id,
             "aggregation_mode": "single",
@@ -64,6 +65,48 @@ def _start_session(participant: TestClient, *, run_slug: str) -> str:
     started = participant.post(f"/api/v1/sessions/{session_id}/start")
     assert started.status_code == 200
     return session_id
+
+
+def test_start_session_sets_trial_stage_when_no_practice_trials_materialize(tmp_path) -> None:
+    db_path = str(tmp_path / "run-session-start-stage-trial.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    participant = TestClient(create_app(db_path))
+    _login(researcher)
+
+    main_set_id = _upload_set(researcher, name="main-bank", n_items=4)
+    _, run_slug = _create_and_activate_run(researcher, main_set_ids=[main_set_id], practice_set_id=None, practice_trials=0)
+    session_id = _start_session(participant, run_slug=run_slug)
+
+    session_row = participant.app.state.store.fetchone(
+        "SELECT current_stage FROM participant_sessions WHERE session_id = ?",
+        (session_id,),
+    )
+    assert session_row is not None
+    assert str(session_row["current_stage"]) == "trial"
+
+
+def test_start_session_sets_practice_stage_when_practice_trials_materialize(tmp_path) -> None:
+    db_path = str(tmp_path / "run-session-start-stage-practice.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    participant = TestClient(create_app(db_path))
+    _login(researcher)
+
+    main_set_id = _upload_set(researcher, name="main-bank", n_items=4)
+    practice_set_id = _upload_set(researcher, name="practice-bank", n_items=2)
+    _, run_slug = _create_and_activate_run(
+        researcher,
+        main_set_ids=[main_set_id],
+        practice_set_id=practice_set_id,
+        practice_trials=2,
+    )
+    session_id = _start_session(participant, run_slug=run_slug)
+
+    session_row = participant.app.state.store.fetchone(
+        "SELECT current_stage FROM participant_sessions WHERE session_id = ?",
+        (session_id,),
+    )
+    assert session_row is not None
+    assert str(session_row["current_stage"]) == "practice"
 
 
 def test_invariant_protocol_blocks_preserved_in_session_snapshot(tmp_path) -> None:

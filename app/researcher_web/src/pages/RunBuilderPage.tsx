@@ -222,12 +222,7 @@ export function RunBuilderPage() {
   );
   const mainItemCount = selectedMainStimuli.reduce((acc, item) => acc + Number(item.n_items || 0), 0);
   const practiceItemCount = Number(selectedPracticeStimulus?.n_items || 0);
-  const createResponseRunSummary =
-    response && typeof response.run_summary === 'object' && response.run_summary !== null
-      ? (response.run_summary as NonNullable<ReturnType<typeof parseRunSummary>['run_summary']>)
-      : undefined;
-  const selectedSummary = runDetails?.run_summary ?? createResponseRunSummary;
-  const preActivationCounts = resolveRunSummaryCounts(selectedSummary, {
+  const preActivationCounts = resolveRunSummaryCounts(undefined, {
     practiceItemCount,
     mainItemCount,
     expectedTrialCount: mainItemCount + practiceItemCount,

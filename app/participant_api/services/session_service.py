@@ -473,6 +473,11 @@ class SessionService:
         )
         if int(actual_trial_count["n"]) != int(session["expected_trial_count"]):
             raise ValueError("session trial snapshot count does not match expected trial count")
+        practice_trial_count = self.store.fetchone(
+            "SELECT COUNT(*) AS n FROM session_trials WHERE session_id = ? AND is_practice = 1",
+            (session_id,),
+        )
+        initial_stage = SESSION_STAGE_PRACTICE if int(practice_trial_count["n"]) > 0 else SESSION_STAGE_TRIAL
         runtime_status = self._normalize_runtime_status(session["status"])
         if runtime_status in TERMINAL_SESSION_STATUSES | {SESSION_STATUS_AWAITING_FINAL_SUBMIT}:
             return {"session_id": session_id, "status": runtime_status}
@@ -485,7 +490,7 @@ class SessionService:
             SET status = ?, started_at = COALESCE(started_at, ?), consent_at = COALESCE(consent_at, ?), current_stage = ?, last_activity_at = ?
             WHERE session_id = ?
             """,
-            (SESSION_STATUS_IN_PROGRESS, now_iso, now_iso, SESSION_STAGE_PRACTICE, now_iso, session_id),
+            (SESSION_STATUS_IN_PROGRESS, now_iso, now_iso, initial_stage, now_iso, session_id),
         )
         return {"session_id": session_id, "status": SESSION_STATUS_IN_PROGRESS}
 
