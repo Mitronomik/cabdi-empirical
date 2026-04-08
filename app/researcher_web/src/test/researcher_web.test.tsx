@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -410,6 +410,141 @@ describe('researcher auth shell', () => {
     expect((await screen.findAllByText('Total main items: 8')).length).toBeGreaterThanOrEqual(1);
     expect((await screen.findAllByText('Expected trial count: 10')).length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText('Expected trial count: 7')).not.toBeInTheDocument();
+  });
+
+  it('loads details when clicking Details on a non-selected run', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith('/auth/me')) {
+          return new Response(JSON.stringify({ authenticated: true, user: { user_id: 'u1', username: 'admin', is_admin: true } }), { status: 200 });
+        }
+        if (url.endsWith('/runs/defaults')) {
+          return new Response(JSON.stringify({ experiment_id: 'exp_1', task_family: 'scam_detection', config_preset_options: [] }), { status: 200 });
+        }
+        if (url.endsWith('/stimuli')) {
+          return new Response(JSON.stringify([{ stimulus_set_id: 'stim_1', name: 'A', task_family: 'scam_detection', validation_status: 'valid', n_items: 3 }]), { status: 200 });
+        }
+        if (url.endsWith('/runs')) {
+          return new Response(
+            JSON.stringify([
+              { run_id: 'run_1', run_name: 'run-1', public_slug: 'run-1', status: 'draft', task_family: 'scam_detection', linked_stimulus_set_ids: ['stim_1'], launchable: false, launchability_reason: 'draft' },
+              { run_id: 'run_2', run_name: 'run-2', public_slug: 'run-2', status: 'paused', task_family: 'scam_detection', linked_stimulus_set_ids: ['stim_1'], launchable: true, launchability_reason: 'paused' },
+            ]),
+            { status: 200 },
+          );
+        }
+        if (url.endsWith('/runs/run_1')) {
+          return new Response(JSON.stringify({ run_id: 'run_1', run_name: 'run-1', run_status: 'draft', status: 'draft', launchability_state: 'not_launchable' }), { status: 200 });
+        }
+        if (url.endsWith('/runs/run_2')) {
+          return new Response(JSON.stringify({ run_id: 'run_2', run_name: 'run-2', run_status: 'paused', status: 'paused', launchability_state: 'launchable' }), { status: 200 });
+        }
+        return new Response(JSON.stringify([]), { status: 200 });
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText('Logged in as: admin');
+    await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
+
+    const detailsHeading = await screen.findByText('Run details');
+    const detailsPanel = detailsHeading.closest('section');
+    expect(detailsPanel).not.toBeNull();
+    expect(within(detailsPanel as HTMLElement).getByText(/Run name: run-1/)).toBeInTheDocument();
+    await user.click((await screen.findAllByRole('button', { name: 'Details' }))[1]);
+    expect(await within(detailsPanel as HTMLElement).findByText(/Run name: run-2/)).toBeInTheDocument();
+  });
+
+  it('refreshes details when clicking Details on the already-selected run', async () => {
+    const user = userEvent.setup();
+    const run1DetailsFetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ run_id: 'run_1', run_name: 'run-1-a', run_status: 'draft', status: 'draft', launchability_state: 'not_launchable' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ run_id: 'run_1', run_name: 'run-1-b', run_status: 'draft', status: 'draft', launchability_state: 'not_launchable' }), { status: 200 }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith('/auth/me')) {
+          return new Response(JSON.stringify({ authenticated: true, user: { user_id: 'u1', username: 'admin', is_admin: true } }), { status: 200 });
+        }
+        if (url.endsWith('/runs/defaults')) {
+          return new Response(JSON.stringify({ experiment_id: 'exp_1', task_family: 'scam_detection', config_preset_options: [] }), { status: 200 });
+        }
+        if (url.endsWith('/stimuli')) {
+          return new Response(JSON.stringify([{ stimulus_set_id: 'stim_1', name: 'A', task_family: 'scam_detection', validation_status: 'valid', n_items: 3 }]), { status: 200 });
+        }
+        if (url.endsWith('/runs')) {
+          return new Response(
+            JSON.stringify([{ run_id: 'run_1', run_name: 'run-1', public_slug: 'run-1', status: 'draft', task_family: 'scam_detection', linked_stimulus_set_ids: ['stim_1'], launchable: false, launchability_reason: 'draft' }]),
+            { status: 200 },
+          );
+        }
+        if (url.endsWith('/runs/run_1')) {
+          return run1DetailsFetch();
+        }
+        return new Response(JSON.stringify([]), { status: 200 });
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText('Logged in as: admin');
+    await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
+
+    expect(await screen.findByText(/Run name: run-1-a/)).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Details' }));
+    expect(await screen.findByText(/Run name: run-1-b/)).toBeInTheDocument();
+    expect(run1DetailsFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps copy link action available when invite_url exists', async () => {
+    const user = userEvent.setup();
+    const clipboardWrite = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator, 'clipboard', {
+      value: { writeText: clipboardWrite },
+      configurable: true,
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith('/auth/me')) {
+          return new Response(JSON.stringify({ authenticated: true, user: { user_id: 'u1', username: 'admin', is_admin: true } }), { status: 200 });
+        }
+        if (url.endsWith('/runs/defaults')) {
+          return new Response(JSON.stringify({ experiment_id: 'exp_1', task_family: 'scam_detection', config_preset_options: [] }), { status: 200 });
+        }
+        if (url.endsWith('/stimuli')) {
+          return new Response(JSON.stringify([{ stimulus_set_id: 'stim_1', name: 'A', task_family: 'scam_detection', validation_status: 'valid', n_items: 3 }]), { status: 200 });
+        }
+        if (url.endsWith('/runs')) {
+          return new Response(
+            JSON.stringify([{ run_id: 'run_1', run_name: 'run-1', public_slug: 'run-1', status: 'draft', task_family: 'scam_detection', linked_stimulus_set_ids: ['stim_1'], launchable: false, launchability_reason: 'draft' }]),
+            { status: 200 },
+          );
+        }
+        if (url.endsWith('/runs/run_1')) {
+          return new Response(
+            JSON.stringify({ run_id: 'run_1', run_name: 'run-1', run_status: 'draft', status: 'draft', launchability_state: 'not_launchable', invite_url: 'https://cabdi.local/r/run-1' }),
+            { status: 200 },
+          );
+        }
+        return new Response(JSON.stringify([]), { status: 200 });
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText('Logged in as: admin');
+    await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
+
+    const copyButton = await screen.findByRole('button', { name: 'Copy link' });
+    expect(copyButton).toBeEnabled();
+    await user.click(copyButton);
+    expect(clipboardWrite).toHaveBeenCalledWith('https://cabdi.local/r/run-1');
+    expect(await screen.findByText('Participant link copied.')).toBeInTheDocument();
   });
 
 });
