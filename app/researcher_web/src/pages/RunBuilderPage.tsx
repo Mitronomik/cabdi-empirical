@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import { KbdMono, StatusBadge, SummaryCard } from '../components/OperatorPrimitives';
 import { localizeOperatorError, localizeStatus } from '../i18n/uiText';
@@ -25,6 +25,8 @@ export function RunBuilderPage() {
   const [defaults, setDefaults] = useState<Record<string, unknown> | null>(null);
   const [selectedRunId, setSelectedRunId] = useState('');
   const [runDetails, setRunDetails] = useState<ReturnType<typeof parseRunSummary> | null>(null);
+  const [runDetailsLoading, setRunDetailsLoading] = useState(false);
+  const [runDetailsLoadingRunId, setRunDetailsLoadingRunId] = useState('');
   const [copySuccess, setCopySuccess] = useState('');
   const [selectedStimulusSetId, setSelectedStimulusSetId] = useState('');
   const [selectedMainStimulusSetIds, setSelectedMainStimulusSetIds] = useState<string[]>([]);
@@ -34,6 +36,7 @@ export function RunBuilderPage() {
   const [publicSlug, setPublicSlug] = useState('');
   const [notes, setNotes] = useState('');
   const { t } = useLocale();
+  const latestRunDetailsRequest = useRef(0);
 
   const validStimulusSets = useMemo(
     () => stimulusSets.filter((item) => ['valid', 'warning_only'].includes(String(item.validation_status ?? ''))),
@@ -68,10 +71,24 @@ export function RunBuilderPage() {
   async function loadRunDetails(runId: string) {
     if (!runId) {
       setRunDetails(null);
+      setRunDetailsLoadingRunId('');
       return;
     }
-    const details = await getRun(runId);
-    setRunDetails(parseRunSummary(details));
+    const requestId = latestRunDetailsRequest.current + 1;
+    latestRunDetailsRequest.current = requestId;
+    setRunDetailsLoading(true);
+    setRunDetailsLoadingRunId(runId);
+    try {
+      const details = await getRun(runId);
+      if (latestRunDetailsRequest.current === requestId) {
+        setRunDetails(parseRunSummary(details));
+      }
+    } finally {
+      if (latestRunDetailsRequest.current === requestId) {
+        setRunDetailsLoading(false);
+        setRunDetailsLoadingRunId('');
+      }
+    }
   }
 
   async function loadDependencies() {
@@ -111,6 +128,12 @@ export function RunBuilderPage() {
     if (!selectedRunId) return;
     void loadRunDetails(selectedRunId);
   }, [selectedRunId]);
+
+  async function onDetails(runId: string) {
+    setCopySuccess('');
+    setSelectedRunId(runId);
+    await loadRunDetails(runId);
+  }
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -332,6 +355,10 @@ export function RunBuilderPage() {
         <section className="panel" aria-live="polite">
           <h3>Run details</h3>
           <p>
+            Selected run: <KbdMono>{selectedRunId}</KbdMono>
+          </p>
+          {runDetailsLoading && runDetailsLoadingRunId === selectedRunId ? <p className="muted">Refreshing run details…</p> : null}
+          <p>
             {t('run.tableRunName')}: {runDetails.run_name} · <KbdMono>{runDetails.run_id}</KbdMono>
           </p>
           <p>
@@ -419,7 +446,7 @@ export function RunBuilderPage() {
                       <td>{run.launchability_reason}</td>
                       <td>
                         <div className="toolbar">
-                          <button className="secondary-btn" onClick={() => setSelectedRunId(runId)}>
+                          <button className="secondary-btn" onClick={() => void onDetails(runId)}>
                             Details
                           </button>
                           <button
