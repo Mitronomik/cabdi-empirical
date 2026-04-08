@@ -388,20 +388,18 @@ class SessionService:
         practice_item_count = int(run_summary["practice_item_count"])
         if main_item_count <= 0:
             raise ValueError("run has no main items available for snapshot generation")
-        experiment = ExperimentConfig.from_dict(
-            base_experiment.to_dict()
-            | {
-                "n_blocks": 1,
-                "trials_per_block": main_item_count,
-                "practice_trials": practice_item_count,
-            }
+        main_trials_per_block = self._distribute_main_trials_per_block(
+            total_main_trials=main_item_count,
+            n_blocks=base_experiment.n_blocks,
         )
         stimuli = self._load_run_stimuli(run)
         trial_plan = build_trial_plan(
             session["participant_id"],
-            experiment,
-            assign_order_id(session["participant_id"], experiment.experiment_id)[1],
+            base_experiment,
+            assign_order_id(session["participant_id"], base_experiment.experiment_id)[1],
             [StimulusItem.from_dict(item["stimulus"].to_dict()) for item in stimuli],
+            practice_trials_override=practice_item_count,
+            main_trials_per_block_override=main_trials_per_block,
         )
         expected_trial_count = int(run_summary["expected_trial_count"])
         if len(trial_plan) != expected_trial_count:
@@ -457,6 +455,19 @@ class SessionService:
             "UPDATE participant_sessions SET expected_trial_count = ?, source_stimulus_set_ids_json = ?, snapshot_frozen_at = ? WHERE session_id = ?",
             (expected_trial_count, dumps(all_source_ids), _now_iso(), session["session_id"]),
         )
+
+    @staticmethod
+    def _distribute_main_trials_per_block(*, total_main_trials: int, n_blocks: int) -> list[int]:
+        if n_blocks <= 0:
+            raise ValueError("n_blocks must be > 0")
+        if total_main_trials < 0:
+            raise ValueError("total_main_trials must be >= 0")
+        base = total_main_trials // n_blocks
+        remainder = total_main_trials % n_blocks
+        out = [base] * n_blocks
+        for idx in range(remainder):
+            out[idx] += 1
+        return out
 
     def start_session(self, session_id: str) -> dict[str, Any]:
         session = self.get_session(session_id)
