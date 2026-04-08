@@ -43,6 +43,7 @@ export function TrialPage({ trial, loading, savedFeedback, onSubmit }: Props) {
     ? (trial.stimulus.payload.response_options as string[]).map((option) => String(option).trim()).filter(Boolean)
     : [];
   const responseOptions = payloadResponseOptions.length > 0 ? payloadResponseOptions : getDefaultResponseOptions(trial.stimulus.task_family);
+  const hasRenderableResponseOptions = responseOptions.length > 0;
   const stimulusTitle = String(trial.stimulus.payload.title ?? t('trial.caseTitle'));
   const stimulusBody = String(trial.stimulus.payload.body ?? trial.stimulus.payload.prompt ?? t('trial.noPrompt'));
 
@@ -93,20 +94,24 @@ export function TrialPage({ trial, loading, savedFeedback, onSubmit }: Props) {
         <p>
           <strong>{t('trial.answerLabel')}</strong>
         </p>
-        <div className="button-row">
-          {responseOptions.map((option) => (
-            <button
-              key={option}
-              type="button"
-              className={selectedResponse === option ? 'selected' : ''}
-              onClick={() => setSelectedResponse(option)}
-            >
-              {formatResponseOption(option, t as unknown as (key: string) => string)}
-            </button>
-          ))}
-        </div>
+        {hasRenderableResponseOptions ? (
+          <div className="button-row">
+            {responseOptions.map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={selectedResponse === option ? 'selected' : ''}
+                onClick={() => setSelectedResponse(option)}
+              >
+                {formatResponseOption(option, t as unknown as (key: string) => string)}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p role="alert">Unable to render response options for this trial. Please contact the researcher.</p>
+        )}
 
-        {selectedResponse && (
+        {hasRenderableResponseOptions && selectedResponse && (
           <>
             <fieldset className="confidence-fieldset" aria-label={t('trial.selfConfidence')}>
               <legend>{t('trial.selfConfidence')}</legend>

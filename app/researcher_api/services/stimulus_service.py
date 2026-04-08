@@ -12,7 +12,11 @@ from uuid import uuid4
 
 from app.participant_api.persistence.json_codec import dumps, loads
 from app.participant_api.persistence.store_protocol import PilotStore
-from app.researcher_api.services.task_family_registry import get_task_family_spec, list_supported_task_families
+from app.researcher_api.services.task_family_registry import (
+    get_task_family_spec,
+    has_builtin_ui_defaults,
+    list_supported_task_families,
+)
 from packages.shared_types.pilot_types import StimulusItem
 
 _ALLOWED_CONTENT_TYPES = {"text", "image", "vignette"}
@@ -189,6 +193,7 @@ class StimulusService:
                 errors.append(
                     self._err("invalid_model_prediction", "model_prediction is incompatible with task_family label space")
                 )
+            errors.extend(self._validate_response_options_contract(task_family=task_family, payload=row.get("payload")))
 
         model_correct_raw = row.get("model_correct")
         try:
@@ -273,6 +278,40 @@ class StimulusService:
                 normalized[passthrough_key] = value.strip()
 
         return normalized, errors, warnings
+
+    def _validate_response_options_contract(self, *, task_family: str, payload: Any) -> list[dict[str, str]]:
+        if not isinstance(payload, dict):
+            return []
+
+        raw_options = payload.get("response_options")
+        has_builtin_defaults = has_builtin_ui_defaults(task_family)
+        contract_error_message = (
+            "payload.response_options is required for task_family values without built-in UI defaults"
+        )
+
+        if raw_options is None:
+            if has_builtin_defaults:
+                return []
+            return [self._err("missing_response_options", contract_error_message)]
+
+        if not isinstance(raw_options, list):
+            return [
+                self._err(
+                    "invalid_response_options",
+                    "payload.response_options must be a non-empty array of non-empty strings",
+                )
+            ]
+
+        normalized_options = [option.strip() for option in raw_options if isinstance(option, str) and option.strip()]
+        if len(normalized_options) != len(raw_options) or not normalized_options:
+            return [
+                self._err(
+                    "invalid_response_options",
+                    "payload.response_options must be a non-empty array of non-empty strings",
+                )
+            ]
+
+        return []
 
     def _parse_jsonl(self, content: str) -> list[dict[str, Any]]:
         parsed: list[dict[str, Any]] = []
