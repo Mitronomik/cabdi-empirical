@@ -109,6 +109,118 @@ def test_start_session_sets_practice_stage_when_practice_trials_materialize(tmp_
     assert str(session_row["current_stage"]) == "practice"
 
 
+def test_start_session_restart_preserves_truthful_stage_and_indices_with_practice_snapshot(tmp_path) -> None:
+    db_path = str(tmp_path / "run-session-restart-preserve-practice.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    participant = TestClient(create_app(db_path))
+    _login(researcher)
+
+    main_set_id = _upload_set(researcher, name="main-bank", n_items=4)
+    practice_set_id = _upload_set(researcher, name="practice-bank", n_items=2)
+    _, run_slug = _create_and_activate_run(
+        researcher,
+        main_set_ids=[main_set_id],
+        practice_set_id=practice_set_id,
+        practice_trials=2,
+    )
+    session_id = _start_session(participant, run_slug=run_slug)
+
+    participant.app.state.store.execute(
+        """
+        UPDATE participant_sessions
+        SET current_stage = 'questionnaire', current_block_index = 0, current_trial_index = 1
+        WHERE session_id = ?
+        """,
+        (session_id,),
+    )
+
+    restarted = participant.post(f"/api/v1/sessions/{session_id}/start")
+    assert restarted.status_code == 200
+    assert restarted.json()["status"] == "in_progress"
+
+    session_row = participant.app.state.store.fetchone(
+        "SELECT current_stage, current_block_index, current_trial_index FROM participant_sessions WHERE session_id = ?",
+        (session_id,),
+    )
+    assert session_row is not None
+    assert str(session_row["current_stage"]) == "questionnaire"
+    assert int(session_row["current_block_index"]) == 0
+    assert int(session_row["current_trial_index"]) == 1
+
+
+def test_start_session_restart_preserves_truthful_stage_and_indices_without_practice_snapshot(tmp_path) -> None:
+    db_path = str(tmp_path / "run-session-restart-preserve-trial.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    participant = TestClient(create_app(db_path))
+    _login(researcher)
+
+    main_set_id = _upload_set(researcher, name="main-bank", n_items=4)
+    _, run_slug = _create_and_activate_run(researcher, main_set_ids=[main_set_id], practice_set_id=None, practice_trials=0)
+    session_id = _start_session(participant, run_slug=run_slug)
+
+    participant.app.state.store.execute(
+        """
+        UPDATE participant_sessions
+        SET current_stage = 'trial', current_block_index = 1, current_trial_index = 2
+        WHERE session_id = ?
+        """,
+        (session_id,),
+    )
+
+    restarted = participant.post(f"/api/v1/sessions/{session_id}/start")
+    assert restarted.status_code == 200
+    assert restarted.json()["status"] == "in_progress"
+
+    session_row = participant.app.state.store.fetchone(
+        "SELECT current_stage, current_block_index, current_trial_index FROM participant_sessions WHERE session_id = ?",
+        (session_id,),
+    )
+    assert session_row is not None
+    assert str(session_row["current_stage"]) == "trial"
+    assert int(session_row["current_block_index"]) == 1
+    assert int(session_row["current_trial_index"]) == 2
+
+
+def test_start_session_unpauses_without_clobbering_truthful_progress_state(tmp_path) -> None:
+    db_path = str(tmp_path / "run-session-start-paused-preserve.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    participant = TestClient(create_app(db_path))
+    _login(researcher)
+
+    main_set_id = _upload_set(researcher, name="main-bank", n_items=4)
+    practice_set_id = _upload_set(researcher, name="practice-bank", n_items=2)
+    _, run_slug = _create_and_activate_run(
+        researcher,
+        main_set_ids=[main_set_id],
+        practice_set_id=practice_set_id,
+        practice_trials=2,
+    )
+    session_id = _start_session(participant, run_slug=run_slug)
+
+    participant.app.state.store.execute(
+        """
+        UPDATE participant_sessions
+        SET status = 'paused', current_stage = 'questionnaire', current_block_index = 2, current_trial_index = 0
+        WHERE session_id = ?
+        """,
+        (session_id,),
+    )
+
+    resumed_start = participant.post(f"/api/v1/sessions/{session_id}/start")
+    assert resumed_start.status_code == 200
+    assert resumed_start.json()["status"] == "in_progress"
+
+    session_row = participant.app.state.store.fetchone(
+        "SELECT status, current_stage, current_block_index, current_trial_index FROM participant_sessions WHERE session_id = ?",
+        (session_id,),
+    )
+    assert session_row is not None
+    assert str(session_row["status"]) == "in_progress"
+    assert str(session_row["current_stage"]) == "questionnaire"
+    assert int(session_row["current_block_index"]) == 2
+    assert int(session_row["current_trial_index"]) == 0
+
+
 def test_invariant_protocol_blocks_preserved_in_session_snapshot(tmp_path) -> None:
     db_path = str(tmp_path / "run-session-invariants.sqlite3")
     researcher = TestClient(create_researcher_app(db_path))
