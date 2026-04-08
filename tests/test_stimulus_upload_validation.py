@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.researcher_api.main import create_app
+from app.researcher_api.services.task_family_registry import register_task_family
 
 
 def _client(tmp_path):
@@ -44,16 +46,29 @@ def _upload(client: TestClient, rows: list[dict]):
     )
 
 
-def test_stimulus_upload_jsonl_success_returns_contract_metadata(tmp_path):
+@pytest.mark.parametrize("task_family", ["scam_detection", "scam_not_scam"])
+def test_stimulus_upload_jsonl_success_returns_contract_metadata(tmp_path, task_family: str):
     client = _client(tmp_path)
-    res = _upload(client, [_base_item()])
+    res = _upload(client, [_base_item(task_family=task_family)])
     assert res.status_code == 200
     body = res.json()
     assert body["ok"] is True
     assert body["validation_status"] == "valid"
     assert body["n_items"] == 1
+    assert body["task_family"] == task_family
     assert body["payload_schema_version"] == "stimulus_payload.v1"
     assert body["preview_rows"][0]["payload"]["body"] == "Verify account now"
+
+
+def test_new_task_family_registry_entry_validates_with_own_label_space(tmp_path):
+    register_task_family(task_family="binary_yes_no", label_space={"yes", "no"})
+    client = _client(tmp_path)
+    row = _base_item(task_family="binary_yes_no", true_label="yes", model_prediction="no", model_correct=False)
+    res = _upload(client, [row])
+    assert res.status_code == 200
+    body = res.json()
+    assert body["ok"] is True
+    assert body["task_family"] == "binary_yes_no"
 
 
 def test_stimulus_upload_rejects_malformed_required_fields(tmp_path):

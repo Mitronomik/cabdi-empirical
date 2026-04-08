@@ -12,19 +12,14 @@ from uuid import uuid4
 
 from app.participant_api.persistence.json_codec import dumps, loads
 from app.participant_api.persistence.store_protocol import PilotStore
+from app.researcher_api.services.task_family_registry import get_task_family_spec, list_supported_task_families
 from packages.shared_types.pilot_types import StimulusItem
 
-_ALLOWED_TASK_FAMILIES = {"scam_detection", "scam_not_scam"}
 _ALLOWED_CONTENT_TYPES = {"text", "image", "vignette"}
 _ALLOWED_DIFFICULTY = {"low", "medium", "high"}
 _ALLOWED_CONFIDENCE = {"low", "medium", "high"}
 _PAYLOAD_SCHEMA_VERSION = "stimulus_payload.v1"
 _PREVIEW_ROWS_LIMIT = 5
-
-_TASK_LABEL_SPACE = {
-    "scam_detection": {"scam", "not_scam"},
-    "scam_not_scam": {"scam", "not_scam"},
-}
 
 
 def _now_iso() -> str:
@@ -172,8 +167,10 @@ class StimulusService:
 
         if not stimulus_id:
             errors.append(self._err("missing_required", "stimulus_id must be non-empty"))
-        if task_family not in _ALLOWED_TASK_FAMILIES:
-            errors.append(self._err("invalid_task_family", "task_family must be one of supported task families"))
+        task_family_spec = get_task_family_spec(task_family)
+        if task_family_spec is None:
+            supported = ", ".join(sorted(list_supported_task_families()))
+            errors.append(self._err("invalid_task_family", f"task_family must be one of supported task families: {supported}"))
         if content_type not in _ALLOWED_CONTENT_TYPES:
             errors.append(self._err("invalid_content_type", "content_type must be compatible with supported renderer"))
         if not true_label:
@@ -185,11 +182,10 @@ class StimulusService:
         if model_confidence not in _ALLOWED_CONFIDENCE:
             errors.append(self._err("invalid_model_confidence", "model_confidence must be low|medium|high"))
 
-        label_space = _TASK_LABEL_SPACE.get(task_family, set())
-        if label_space:
-            if true_label and true_label not in label_space:
+        if task_family_spec is not None:
+            if true_label and true_label not in task_family_spec.label_space:
                 errors.append(self._err("invalid_true_label", "true_label is incompatible with task_family label space"))
-            if model_prediction and model_prediction not in label_space:
+            if model_prediction and model_prediction not in task_family_spec.label_space:
                 errors.append(
                     self._err("invalid_model_prediction", "model_prediction is incompatible with task_family label space")
                 )
