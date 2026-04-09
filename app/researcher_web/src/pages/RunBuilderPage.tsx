@@ -298,14 +298,34 @@ export function RunBuilderPage() {
             <input value={taskFamilyFieldValue} readOnly aria-label={t('run.taskFamily')} />
           </div>
           <div className="form-row" style={{ marginTop: 8 }}>
-            <select value={selectedSingleMainSetId} onChange={(e) => setSelectedMainStimulusSetIds(e.target.value ? [e.target.value] : [])} required>
-              <option value="">{t('run.selectStimulus')}</option>
-              {availableMainStimulusSets.map((item) => (
-                <option key={item.stimulus_set_id} value={item.stimulus_set_id}>
-                  {item.name} • {item.task_family} • {item.n_items} • {localizeStatus(t, item.validation_status)}
-                </option>
-              ))}
-            </select>
+            {!aggregationEnabled ? (
+              <select
+                aria-label="Main bank"
+                value={selectedSingleMainSetId}
+                onChange={(e) => setSelectedMainStimulusSetIds(e.target.value ? [e.target.value] : [])}
+                required
+              >
+                <option value="">{t('run.selectStimulus')}</option>
+                {availableMainStimulusSets.map((item) => (
+                  <option key={item.stimulus_set_id} value={item.stimulus_set_id}>
+                    {item.name} • {item.task_family} • {item.n_items} • {localizeStatus(t, item.validation_status)}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <select
+                aria-label="Main banks"
+                multiple
+                value={selectedMainStimulusSetIds}
+                onChange={(e) => setSelectedMainStimulusSetIds(Array.from(e.target.selectedOptions).map((o) => o.value))}
+              >
+                {availableMainStimulusSets.map((item) => (
+                  <option key={`main-${item.stimulus_set_id}`} value={item.stimulus_set_id}>
+                    {item.name} • {item.n_items}
+                  </option>
+                ))}
+              </select>
+            )}
             <input name="notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t('run.notes')} />
             <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <input type="checkbox" checked={aggregationEnabled} onChange={(e) => {
@@ -329,19 +349,6 @@ export function RunBuilderPage() {
             </button>
           </div>
           <div className="form-row" style={{ marginTop: 8 }}>
-            {aggregationEnabled ? (
-              <select
-                multiple
-                value={selectedMainStimulusSetIds}
-                onChange={(e) => setSelectedMainStimulusSetIds(Array.from(e.target.selectedOptions).map((o) => o.value))}
-              >
-                {availableMainStimulusSets.map((item) => (
-                  <option key={`main-${item.stimulus_set_id}`} value={item.stimulus_set_id}>
-                    {item.name} • {item.n_items}
-                  </option>
-                ))}
-              </select>
-            ) : null}
             <select value={selectedPracticeStimulusSetId} onChange={(e) => setSelectedPracticeStimulusSetId(e.target.value)}>
               <option value="">Practice bank (optional)</option>
               {availablePracticeStimulusSets.map((item) => (

@@ -696,7 +696,7 @@ describe('researcher auth shell', () => {
     expect(screen.queryByRole('option', { name: /Practice A • scam_detection • 6 • Valid/ })).not.toBeInTheDocument();
 
     await user.click(screen.getByLabelText('Aggregation mode'));
-    const multiSelect = screen.getByRole('listbox');
+    const multiSelect = screen.getByLabelText('Main banks');
     expect(within(multiSelect).queryByRole('option', { name: /Practice A/ })).not.toBeInTheDocument();
     expect(within(multiSelect).getByRole('option', { name: /Main A/ })).toBeInTheDocument();
   });
@@ -785,7 +785,7 @@ describe('researcher auth shell', () => {
     await screen.findByText('Logged in as: admin');
     await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
     await user.click(screen.getByLabelText('Aggregation mode'));
-    const multiSelect = screen.getByRole('listbox');
+    const multiSelect = screen.getByLabelText('Main banks');
     await user.deselectOptions(multiSelect, ['stim_single']);
     await user.selectOptions(multiSelect, ['stim_multi_a', 'stim_multi_b']);
 
@@ -834,7 +834,7 @@ describe('researcher auth shell', () => {
     await screen.findByText('Logged in as: admin');
     await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
     await user.click(screen.getByLabelText('Aggregation mode'));
-    await user.selectOptions(screen.getByRole('listbox'), ['stim_a', 'stim_b']);
+    await user.selectOptions(screen.getByLabelText('Main banks'), ['stim_a', 'stim_b']);
 
     expect(await screen.findByText(/Selected main banks have mixed task families/)).toBeInTheDocument();
     expect(screen.getByLabelText('task family')).toHaveValue('mixed task families (invalid)');
@@ -879,7 +879,7 @@ describe('researcher auth shell', () => {
     await screen.findByText('Logged in as: admin');
     await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
     await user.click(screen.getByLabelText('Aggregation mode'));
-    await user.selectOptions(screen.getByRole('listbox'), ['stim_a']);
+    await user.selectOptions(screen.getByLabelText('Main banks'), ['stim_a']);
     await user.click(screen.getByRole('button', { name: 'Create Run' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Aggregation mode requires selecting at least two main banks.');
@@ -921,7 +921,7 @@ describe('researcher auth shell', () => {
     await screen.findByText('Logged in as: admin');
     await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
     await user.click(screen.getByLabelText('Aggregation mode'));
-    await user.deselectOptions(screen.getByRole('listbox'), ['stim_a']);
+    await user.deselectOptions(screen.getByLabelText('Main banks'), ['stim_a']);
 
     expect(screen.getByLabelText('task family')).toHaveValue('no main bank selected');
     expect(screen.getByText('Main bank(s): none')).toBeInTheDocument();
@@ -967,13 +967,13 @@ describe('researcher auth shell', () => {
     await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
 
     await user.click(screen.getByLabelText('Aggregation mode'));
-    const multiSelect = screen.getByRole('listbox');
+    const multiSelect = screen.getByLabelText('Main banks');
     await user.selectOptions(multiSelect, ['stim_two', 'stim_three']);
     expect(screen.getByText('Main bank(s): Main One (10), Main Two (8), Main Three (6)')).toBeInTheDocument();
 
     await user.click(screen.getByLabelText('Aggregation mode'));
 
-    const [singleSelect] = screen.getAllByRole('combobox');
+    const singleSelect = screen.getByLabelText('Main bank');
     expect(singleSelect).toHaveValue('stim_one');
     expect(screen.getByText('Main bank(s): Main One (10)')).toBeInTheDocument();
     expect(screen.getByLabelText('task family')).toHaveValue('scam_detection');
@@ -982,6 +982,82 @@ describe('researcher auth shell', () => {
     await user.click(screen.getByRole('button', { name: 'Create Run' }));
     await waitFor(() => expect(createPayload).not.toBeNull());
     expect(createPayload?.stimulus_set_ids).toEqual(['stim_one']);
+  });
+
+  it('renders only the single main-bank control in single mode and updates authoritative selection', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith('/auth/me')) {
+          return new Response(JSON.stringify({ authenticated: true, user: { user_id: 'u1', username: 'admin', is_admin: true } }), { status: 200 });
+        }
+        if (url.endsWith('/runs/defaults')) {
+          return new Response(JSON.stringify({ experiment_id: 'exp_1', task_family: 'default_family', config_preset_options: [] }), { status: 200 });
+        }
+        if (url.endsWith('/stimuli')) {
+          return new Response(
+            JSON.stringify([
+              { stimulus_set_id: 'stim_a', name: 'Main A', task_family: 'scam_detection', validation_status: 'valid', n_items: 10 },
+              { stimulus_set_id: 'stim_b', name: 'Main B', task_family: 'claim_review', validation_status: 'valid', n_items: 8 },
+            ]),
+            { status: 200 },
+          );
+        }
+        if (url.endsWith('/runs')) return new Response(JSON.stringify([]), { status: 200 });
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText('Logged in as: admin');
+    await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
+
+    expect(screen.getByLabelText('Main bank')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Main banks')).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Main bank'), 'stim_b');
+    expect(screen.getByText('Main bank(s): Main B (8)')).toBeInTheDocument();
+    expect(screen.getByLabelText('task family')).toHaveValue('claim_review');
+  });
+
+  it('renders only the multi main-bank control in multi mode and supports multiple selections', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith('/auth/me')) {
+          return new Response(JSON.stringify({ authenticated: true, user: { user_id: 'u1', username: 'admin', is_admin: true } }), { status: 200 });
+        }
+        if (url.endsWith('/runs/defaults')) {
+          return new Response(JSON.stringify({ experiment_id: 'exp_1', task_family: 'default_family', config_preset_options: [] }), { status: 200 });
+        }
+        if (url.endsWith('/stimuli')) {
+          return new Response(
+            JSON.stringify([
+              { stimulus_set_id: 'stim_a', name: 'Main A', task_family: 'scam_detection', validation_status: 'valid', n_items: 10 },
+              { stimulus_set_id: 'stim_b', name: 'Main B', task_family: 'scam_detection', validation_status: 'valid', n_items: 8 },
+              { stimulus_set_id: 'stim_c', name: 'Main C', task_family: 'scam_detection', validation_status: 'valid', n_items: 6 },
+            ]),
+            { status: 200 },
+          );
+        }
+        if (url.endsWith('/runs')) return new Response(JSON.stringify([]), { status: 200 });
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText('Logged in as: admin');
+    await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
+    await user.click(screen.getByLabelText('Aggregation mode'));
+
+    expect(screen.queryByLabelText('Main bank')).not.toBeInTheDocument();
+    const multiSelect = screen.getByLabelText('Main banks');
+    await user.selectOptions(multiSelect, ['stim_a', 'stim_b', 'stim_c']);
+    expect(screen.getByText('Main bank(s): Main A (10), Main B (8), Main C (6)')).toBeInTheDocument();
   });
 
 });
