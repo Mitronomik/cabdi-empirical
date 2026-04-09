@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useLocale } from '../i18n/useLocale';
+import { formatModelPredictionLabel } from '../lib/taskFamilyRegistry';
 import type { PolicyDecision, StimulusItem } from '../lib/types';
 
 interface Props {
@@ -17,13 +18,6 @@ function densityClass(compressionMode: PolicyDecision['compression_mode']): stri
   if (compressionMode === 'high') return 'panel density-high';
   if (compressionMode === 'medium') return 'panel density-medium';
   return 'panel density-none';
-}
-
-function mapOptionLabel(raw: string, t: (key: string) => string): string {
-  const normalized = raw.trim().toLowerCase();
-  if (normalized === 'scam') return t('trial.response.scam');
-  if (normalized === 'not_scam') return t('trial.response.notScam');
-  return raw;
 }
 
 function mapConfidenceLabel(raw: string, t: (key: string) => string): string {
@@ -65,6 +59,11 @@ export function AssistancePanel({
     onPanelFirstPaint({ panelVisibleOnFirstPaint, shownHelpComponents });
   }, [onPanelFirstPaint, shownHelpComponents]);
 
+  useEffect(() => {
+    setRationaleRevealed(false);
+    setEvidenceOpen(false);
+  }, [stimulus.stimulus_id]);
+
   return (
     <aside
       ref={panelRef}
@@ -77,7 +76,7 @@ export function AssistancePanel({
       {policyDecision.show_prediction && (
         <p>
           <strong>{t('assistance.prediction')}:</strong>{' '}
-          {mapOptionLabel(stimulus.model_prediction, t as unknown as (key: string) => string)}
+          {formatModelPredictionLabel(stimulus.model_prediction, stimulus.task_family)}
         </p>
       )}
       {policyDecision.show_confidence && (
@@ -135,20 +134,26 @@ export function AssistancePanel({
       )}
 
       {policyDecision.verification_mode === 'forced_checkbox' && (
-        <label>
-          <input
-            type="checkbox"
-            checked={verificationChecked}
-            onChange={(e) => setVerificationChecked(e.target.checked)}
-          />
-          {t('assistance.forcedCheckbox')}
-        </label>
+        <div className="verification-block" data-testid="verification-required">
+          <p className="verify-hint">{t('assistance.verifyHint')}</p>
+          <label className="verification-check">
+            <input
+              type="checkbox"
+              checked={verificationChecked}
+              onChange={(e) => setVerificationChecked(e.target.checked)}
+            />
+            {t('assistance.forcedCheckbox')}
+          </label>
+        </div>
       )}
 
       {policyDecision.verification_mode === 'forced_second_look' && (
-        <button type="button" onClick={() => setVerificationChecked(true)}>
-          {t('assistance.secondLook')}
-        </button>
+        <div className="verification-block" data-testid="verification-required">
+          <p className="verify-hint">{t('assistance.verifyHint')}</p>
+          <button type="button" onClick={() => setVerificationChecked(true)} disabled={verificationChecked}>
+            {verificationChecked ? `${t('assistance.secondLook')} ✓` : t('assistance.secondLook')}
+          </button>
+        </div>
       )}
     </aside>
   );

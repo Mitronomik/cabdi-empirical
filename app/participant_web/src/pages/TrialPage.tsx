@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { AssistancePanel } from '../components/AssistancePanel';
 import { useLocale } from '../i18n/useLocale';
-import { getDefaultResponseOptions } from '../lib/taskFamilyRegistry';
+import { getRenderableResponseOptions } from '../lib/taskFamilyRegistry';
 import type { TrialPayload } from '../lib/types';
 
 interface Props {
@@ -19,15 +19,6 @@ interface Props {
   }) => void;
 }
 
-function formatResponseOption(value: string, t: (key: string) => string): string {
-  const normalized = value.trim().toLowerCase();
-  if (normalized === 'scam') return t('trial.response.scam');
-  if (normalized === 'not_scam') return t('trial.response.notScam');
-  if (normalized === 'yes') return t('trial.response.yes');
-  if (normalized === 'no') return t('trial.response.no');
-  return value;
-}
-
 export function TrialPage({ trial, loading, savedFeedback, onSubmit }: Props) {
   const { t } = useLocale();
   const [selectedResponse, setSelectedResponse] = useState<string>('');
@@ -39,10 +30,10 @@ export function TrialPage({ trial, loading, savedFeedback, onSubmit }: Props) {
     null,
   );
 
-  const payloadResponseOptions = Array.isArray(trial.stimulus.payload.response_options)
-    ? (trial.stimulus.payload.response_options as string[]).map((option) => String(option).trim()).filter(Boolean)
-    : [];
-  const responseOptions = payloadResponseOptions.length > 0 ? payloadResponseOptions : getDefaultResponseOptions(trial.stimulus.task_family);
+  const responseOptions = useMemo(
+    () => getRenderableResponseOptions(trial.stimulus.task_family, trial.stimulus.payload.response_options),
+    [trial.stimulus.task_family, trial.stimulus.payload.response_options],
+  );
   const hasRenderableResponseOptions = responseOptions.length > 0;
   const stimulusTitle = String(trial.stimulus.payload.title ?? t('trial.caseTitle'));
   const stimulusBody = String(trial.stimulus.payload.body ?? trial.stimulus.payload.prompt ?? t('trial.noPrompt'));
@@ -71,12 +62,14 @@ export function TrialPage({ trial, loading, savedFeedback, onSubmit }: Props) {
         <p className="muted">{t('trial.resumeHint')}</p>
       </header>
 
-      <div className="trial-grid">
-        <article className="card stimulus-card">
-          <h2>{stimulusTitle}</h2>
-          <p>{stimulusBody}</p>
-        </article>
+      <article className="card stimulus-card">
+        <p className="section-kicker">1. {t('trial.caseTitle')}</p>
+        <h2>{stimulusTitle}</h2>
+        <p>{stimulusBody}</p>
+      </article>
 
+      <section className="card assistance-card">
+        <p className="section-kicker">2. {t('assistance.title')}</p>
         <AssistancePanel
           policyDecision={trial.policy_decision}
           stimulus={trial.stimulus}
@@ -86,56 +79,63 @@ export function TrialPage({ trial, loading, savedFeedback, onSubmit }: Props) {
           setVerificationChecked={setVerificationCompleted}
           onPanelFirstPaint={setPanelExposure}
         />
-      </div>
+      </section>
 
-      <section className="card">
-        <h3>{t('trial.decisionTitle')}</h3>
+      <section className="card decision-card">
+        <p className="section-kicker">3. {t('trial.decisionTitle')}</p>
+        <h3>{t('trial.answerLabel')}</h3>
         <p className="muted">{t('trial.decisionHelp')}</p>
-        <p>
-          <strong>{t('trial.answerLabel')}</strong>
-        </p>
+
         {hasRenderableResponseOptions ? (
           <div className="button-row">
             {responseOptions.map((option) => (
               <button
-                key={option}
+                key={option.value}
                 type="button"
-                className={selectedResponse === option ? 'selected' : ''}
-                onClick={() => setSelectedResponse(option)}
+                className={selectedResponse === option.value ? 'selected' : ''}
+                onClick={() => setSelectedResponse(option.value)}
               >
-                {formatResponseOption(option, t as unknown as (key: string) => string)}
+                {option.label}
               </button>
             ))}
           </div>
         ) : (
           <p role="alert">Unable to render response options for this trial. Please contact the researcher.</p>
         )}
+      </section>
 
-        {hasRenderableResponseOptions && selectedResponse && (
-          <>
-            <fieldset className="confidence-fieldset" aria-label={t('trial.selfConfidence')}>
-              <legend>{t('trial.selfConfidence')}</legend>
-              <div className="confidence-grid">
-                {[1, 2, 3, 4].map((value) => (
-                  <label key={value} className={`confidence-option ${selfConfidence === value ? 'selected' : ''}`}>
-                    <input
-                      type="radio"
-                      name="self_confidence"
-                      value={value}
-                      checked={selfConfidence === value}
-                      onChange={() => setSelfConfidence(value)}
-                    />
-                    <span className="confidence-value">{value}</span>
-                    <span className="confidence-text">{t(`trial.confidence.option${value}` as never)}</span>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-          </>
+      <section className="card confidence-card">
+        <p className="section-kicker">4. {t('trial.selfConfidence')}</p>
+        {hasRenderableResponseOptions && (
+          <fieldset className="confidence-fieldset" aria-label={t('trial.selfConfidence')}>
+            <legend>{t('trial.selfConfidence')}</legend>
+            <div className="confidence-grid">
+              {[1, 2, 3, 4].map((value) => (
+                <label key={value} className={`confidence-option ${selfConfidence === value ? 'selected' : ''}`}>
+                  <input
+                    type="radio"
+                    name="self_confidence"
+                    value={value}
+                    checked={selfConfidence === value}
+                    onChange={() => setSelfConfidence(value)}
+                  />
+                  <span className="confidence-value">{value}</span>
+                  <span className="confidence-text">{t(`trial.confidence.option${value}` as never)}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
         )}
+      </section>
 
+      <footer className="trial-submit-bar">
+        <div>
+          <p className="muted submit-hint">5. {t('trial.submitHelp')}</p>
+          {savedFeedback ? <p className="muted submit-state">{t('common.progressSaved')}</p> : null}
+        </div>
         <button
           type="button"
+          className="primary-submit"
           disabled={!canSubmit || loading}
           onClick={() =>
             onSubmit({
@@ -159,11 +159,9 @@ export function TrialPage({ trial, loading, savedFeedback, onSubmit }: Props) {
             })
           }
         >
-          {t('trial.submit')}
+          {loading ? `${t('trial.submit')}...` : t('trial.submit')}
         </button>
-        <p className="muted submit-hint">{t('trial.submitHelp')}</p>
-        {savedFeedback ? <p className="muted">{t('common.progressSaved')}</p> : null}
-      </section>
+      </footer>
     </section>
   );
 }
