@@ -71,15 +71,18 @@ def test_run_states_expose_launchability_consistently(tmp_path) -> None:
     assert draft.json()["run_status"] == "draft"
     assert draft.json()["launchable"] is False
     assert draft.json()["launchability_state"] == "not_launchable"
+    assert draft.json()["launchability_reason"] == "run is draft; activate to accept new participant sessions"
 
     active = client.post(f"/admin/api/v1/runs/{run_id}/activate")
     assert active.status_code == 200
     assert active.json()["run_status"] == "active"
     assert active.json()["launchable"] is True
     assert active.json()["launchability_state"] == "launchable"
+    assert active.json()["launchability_reason"] == "run is active and accepts participant sessions"
 
     paused = client.post(f"/admin/api/v1/runs/{run_id}/pause")
     assert paused.status_code == 200
     assert paused.json()["run_status"] == "paused"
     assert paused.json()["launchable"] is False
     assert paused.json()["launchability_state"] == "not_launchable"
+    assert paused.json()["launchability_reason"] == "run is paused; activate to accept new participant sessions"

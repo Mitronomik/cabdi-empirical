@@ -70,3 +70,7 @@ def test_run_statuses_render_consistently_in_researcher_ui_contract(tmp_path) ->
             assert body["launchable"] is launchable
             assert body["launchability_state"] == launchability_state
             assert body["invite_url"].endswith("/join/status-visibility-run")
+
+    closed_detail = client.get(f"/admin/api/v1/runs/{run_id}")
+    assert closed_detail.status_code == 200
+    assert closed_detail.json()["launchability_reason"] == "run is closed and does not accept new participant sessions"
