@@ -109,6 +109,107 @@ def test_start_session_sets_practice_stage_when_practice_trials_materialize(tmp_
     assert str(session_row["current_stage"]) == "practice"
 
 
+def test_update_progress_sets_trial_stage_when_snapshot_has_no_practice_trials(tmp_path) -> None:
+    db_path = str(tmp_path / "run-session-update-progress-no-practice.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    participant = TestClient(create_app(db_path))
+    _login(researcher)
+
+    main_set_id = _upload_set(researcher, name="main-bank", n_items=4)
+    _, run_slug = _create_and_activate_run(researcher, main_set_ids=[main_set_id], practice_set_id=None, practice_trials=0)
+    session_id = _start_session(participant, run_slug=run_slug)
+
+    participant.app.state.store.execute(
+        "UPDATE session_trials SET status = 'served', completed_at = NULL WHERE session_id = ?",
+        (session_id,),
+    )
+    participant.app.state.session_service.update_progress(session_id)
+
+    session_row = participant.app.state.store.fetchone(
+        "SELECT current_stage, current_block_index, current_trial_index FROM participant_sessions WHERE session_id = ?",
+        (session_id,),
+    )
+    assert session_row is not None
+    assert str(session_row["current_stage"]) == "trial"
+    assert int(session_row["current_block_index"]) == -1
+    assert int(session_row["current_trial_index"]) == 0
+
+
+def test_update_progress_sets_practice_stage_when_snapshot_has_practice_trials(tmp_path) -> None:
+    db_path = str(tmp_path / "run-session-update-progress-with-practice.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    participant = TestClient(create_app(db_path))
+    _login(researcher)
+
+    main_set_id = _upload_set(researcher, name="main-bank", n_items=4)
+    practice_set_id = _upload_set(researcher, name="practice-bank", n_items=2)
+    _, run_slug = _create_and_activate_run(
+        researcher,
+        main_set_ids=[main_set_id],
+        practice_set_id=practice_set_id,
+        practice_trials=2,
+    )
+    session_id = _start_session(participant, run_slug=run_slug)
+
+    participant.app.state.store.execute(
+        "UPDATE session_trials SET status = 'served', completed_at = NULL WHERE session_id = ?",
+        (session_id,),
+    )
+    participant.app.state.session_service.update_progress(session_id)
+
+    session_row = participant.app.state.store.fetchone(
+        "SELECT current_stage, current_block_index, current_trial_index FROM participant_sessions WHERE session_id = ?",
+        (session_id,),
+    )
+    assert session_row is not None
+    assert str(session_row["current_stage"]) == "practice"
+    assert int(session_row["current_block_index"]) == -1
+    assert int(session_row["current_trial_index"]) == 0
+
+
+def test_update_progress_with_completed_practice_trial_keeps_trial_transition_semantics(tmp_path) -> None:
+    db_path = str(tmp_path / "run-session-update-progress-completed-practice.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    participant = TestClient(create_app(db_path))
+    _login(researcher)
+
+    main_set_id = _upload_set(researcher, name="main-bank", n_items=4)
+    practice_set_id = _upload_set(researcher, name="practice-bank", n_items=2)
+    _, run_slug = _create_and_activate_run(
+        researcher,
+        main_set_ids=[main_set_id],
+        practice_set_id=practice_set_id,
+        practice_trials=2,
+    )
+    session_id = _start_session(participant, run_slug=run_slug)
+
+    participant.app.state.store.execute(
+        """
+        UPDATE session_trials
+        SET status = 'completed', completed_at = '2026-01-01T00:00:00+00:00'
+        WHERE session_id = ? AND is_practice = 1
+          AND trial_id = (
+            SELECT trial_id
+            FROM session_trials
+            WHERE session_id = ? AND is_practice = 1
+            ORDER BY trial_index
+            LIMIT 1
+          )
+        """,
+        (session_id, session_id),
+    )
+    participant.app.state.session_service.update_progress(session_id)
+
+    session_row = participant.app.state.store.fetchone(
+        "SELECT current_stage, current_block_index, current_trial_index FROM participant_sessions WHERE session_id = ?",
+        (session_id,),
+    )
+    assert session_row is not None
+    assert str(session_row["current_stage"]) == "practice"
+    assert int(session_row["current_block_index"]) == -1
+    assert int(session_row["current_trial_index"]) == 1
+
+
 def test_start_session_restart_preserves_truthful_stage_and_indices_with_practice_snapshot(tmp_path) -> None:
     db_path = str(tmp_path / "run-session-restart-preserve-practice.sqlite3")
     researcher = TestClient(create_researcher_app(db_path))

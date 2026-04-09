@@ -459,6 +459,13 @@ class SessionService:
             out[idx] += 1
         return out
 
+    def _session_has_practice_trials(self, session_id: str) -> bool:
+        practice_trial_count = self.store.fetchone(
+            "SELECT COUNT(*) AS n FROM session_trials WHERE session_id = ? AND is_practice = 1",
+            (session_id,),
+        )
+        return int(practice_trial_count["n"]) > 0
+
     def start_session(self, session_id: str) -> dict[str, Any]:
         session = self.get_session(session_id)
         if not str(session.get("run_id") or "").strip():
@@ -487,11 +494,7 @@ class SessionService:
             return {"session_id": session_id, "status": session["status"]}
         now_iso = _now_iso()
         if runtime_status == SESSION_STATUS_CREATED:
-            practice_trial_count = self.store.fetchone(
-                "SELECT COUNT(*) AS n FROM session_trials WHERE session_id = ? AND is_practice = 1",
-                (session_id,),
-            )
-            initial_stage = SESSION_STAGE_PRACTICE if int(practice_trial_count["n"]) > 0 else SESSION_STAGE_TRIAL
+            initial_stage = SESSION_STAGE_PRACTICE if self._session_has_practice_trials(session_id) else SESSION_STAGE_TRIAL
             self.store.execute(
                 """
                 UPDATE participant_sessions
@@ -529,13 +532,14 @@ class SessionService:
             (session_id,),
         )
         if not completed:
+            initial_stage = SESSION_STAGE_PRACTICE if self._session_has_practice_trials(session_id) else SESSION_STAGE_TRIAL
             self.store.execute(
                 """
                 UPDATE participant_sessions
                 SET current_block_index = ?, current_trial_index = ?, current_stage = ?, last_activity_at = ?
                 WHERE session_id = ?
                 """,
-                (-1, 0, SESSION_STAGE_PRACTICE, _now_iso(), session_id),
+                (-1, 0, initial_stage, _now_iso(), session_id),
             )
             return
 
