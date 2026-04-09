@@ -23,14 +23,28 @@ const pageStepKey: Record<PageKey, 'nav.step1' | 'nav.step2' | 'nav.step3' | 'na
 export function Nav({ page, setPage }: { page: PageKey; setPage: (p: PageKey) => void }) {
   const pages: PageKey[] = ['upload', 'run', 'sessions', 'diagnostics', 'exports'];
   const { t } = useLocale();
+  const shortLabel: Record<PageKey, string> = {
+    upload: 'Stimuli',
+    run: 'Run setup',
+    sessions: 'Sessions',
+    diagnostics: 'Diagnostics',
+    exports: 'Exports',
+  };
 
   return (
-    <nav aria-label={t('nav.workflow')} className="panel">
-      <p>{t('nav.workflow')}</p>
-      <div className="nav-steps">
+    <nav aria-label={t('nav.workflow')} className="panel workflow-nav">
+      <p className="workflow-nav__title">{t('nav.workflow')}</p>
+      <div className="workflow-nav__rail">
         {pages.map((p) => (
-          <button key={p} onClick={() => setPage(p)} disabled={p === page} className={p === page ? 'primary-btn' : 'secondary-btn'}>
-            {t(pageStepKey[p])}: {t(pageKey[p])}
+          <button
+            key={p}
+            onClick={() => setPage(p)}
+            disabled={p === page}
+            aria-label={`${t(pageStepKey[p])}: ${t(pageKey[p])}`}
+            className={p === page ? 'workflow-nav__item workflow-nav__item--active' : 'workflow-nav__item'}
+          >
+            <span className="workflow-nav__step">{t(pageStepKey[p])}</span>
+            <span className="workflow-nav__label">{shortLabel[p]}</span>
           </button>
         ))}
       </div>

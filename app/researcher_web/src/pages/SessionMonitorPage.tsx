@@ -59,6 +59,19 @@ export function SessionMonitorPage() {
   const sessions = (data?.sessions as Array<Record<string, unknown>> | undefined) ?? [];
   const counts = (data?.counts as Record<string, number> | undefined) ?? {};
   const selectedRun = useMemo(() => runs.find((run) => run.run_id === runId), [runId, runs]);
+  const staleSessionLikelyCount = useMemo(() => {
+    const thresholdMs = 30 * 60 * 1000;
+    const now = Date.now();
+    return sessions.filter((session) => {
+      const status = String(session.status ?? '');
+      if (status === 'completed' || status === 'finalized') return false;
+      const raw = session.last_activity_at ?? session.started_at;
+      if (!raw) return false;
+      const ts = Date.parse(String(raw));
+      if (Number.isNaN(ts)) return false;
+      return now - ts > thresholdMs;
+    }).length;
+  }, [sessions]);
 
   return (
     <section>
@@ -97,9 +110,18 @@ export function SessionMonitorPage() {
             <div className="summary-grid">
               <SummaryCard label={t('sessions.runStatus')} value={localizeStatus(t, data.run_status ?? 'unknown')} tone="info" />
               <SummaryCard label={t('sessions.summaryTotal')} value={String(sessions.length)} tone="info" />
-              <SummaryCard label={t('sessions.summaryInProgress')} value={String(counts.in_progress ?? 0)} tone="warn" />
+              <SummaryCard label="Active sessions" value={String(counts.in_progress ?? 0)} tone="warn" />
+              <SummaryCard label="Paused sessions" value={String(counts.paused ?? 0)} tone="warn" />
+              <SummaryCard label="Awaiting final submit" value={String(counts.awaiting_final_submit ?? 0)} tone="warn" />
+              <SummaryCard label="Finalized sessions" value={String(counts.finalized ?? 0)} tone="good" />
               <SummaryCard label={t('sessions.summaryCompleted')} value={String((counts.completed ?? 0) + (counts.finalized ?? 0))} tone="good" />
+              <SummaryCard label="Likely stale sessions" value={String(staleSessionLikelyCount)} tone={staleSessionLikelyCount > 0 ? 'bad' : 'good'} />
             </div>
+            <p className="muted">
+              {staleSessionLikelyCount > 0
+                ? `Potential stale sessions detected (${staleSessionLikelyCount}). Review sessions with old last activity timestamps.`
+                : 'No stale session signal detected based on last activity timestamps.'}
+            </p>
           </section>
 
           <section className="panel">
