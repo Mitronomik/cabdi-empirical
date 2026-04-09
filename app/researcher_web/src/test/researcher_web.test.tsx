@@ -482,7 +482,7 @@ describe('researcher auth shell', () => {
     render(<App />);
     await screen.findByText('Logged in as: admin');
     await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
-    await user.selectOptions(screen.getByDisplayValue('Practice bank (optional)'), 'stim_practice');
+    await user.selectOptions(screen.getByDisplayValue('Practice bank (optional supplementary)'), 'stim_practice');
 
     const draftSummarySection = (await screen.findByText('Run summary before activation')).closest('section');
     expect(draftSummarySection).not.toBeNull();
@@ -656,7 +656,7 @@ describe('researcher auth shell', () => {
     await screen.findByText('Logged in as: admin');
     await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
 
-    const practiceSelect = screen.getByDisplayValue('Practice bank (optional)');
+    const practiceSelect = screen.getByDisplayValue('Practice bank (optional supplementary)');
     expect(within(practiceSelect).queryByRole('option', { name: /Main A/ })).not.toBeInTheDocument();
     expect(within(practiceSelect).getByRole('option', { name: /Practice A/ })).toBeInTheDocument();
   });
@@ -691,7 +691,7 @@ describe('researcher auth shell', () => {
     render(<App />);
     await screen.findByText('Logged in as: admin');
     await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
-    await user.selectOptions(screen.getByDisplayValue('Practice bank (optional)'), 'stim_practice');
+    await user.selectOptions(screen.getByDisplayValue('Practice bank (optional supplementary)'), 'stim_practice');
 
     expect(screen.queryByRole('option', { name: /Practice A • scam_detection • 6 • Valid/ })).not.toBeInTheDocument();
 
@@ -926,7 +926,99 @@ describe('researcher auth shell', () => {
     expect(screen.getByLabelText('task family')).toHaveValue('no main bank selected');
     expect(screen.getByText('Main bank(s): none')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Create Run' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Select at least one main bank before creating a run. Practice bank is optional and supplementary only.',
+    );
     expect(createSpy).not.toHaveBeenCalled();
+  });
+
+  it('blocks submit when only a practice bank is selected and no main bank is selected', async () => {
+    const user = userEvent.setup();
+    const createSpy = vi.fn();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('/auth/me')) {
+          return new Response(JSON.stringify({ authenticated: true, user: { user_id: 'u1', username: 'admin', is_admin: true } }), { status: 200 });
+        }
+        if (url.endsWith('/runs/defaults')) {
+          return new Response(JSON.stringify({ experiment_id: 'exp_1', task_family: 'default_family', config_preset_options: [] }), { status: 200 });
+        }
+        if (url.endsWith('/stimuli')) {
+          return new Response(
+            JSON.stringify([
+              { stimulus_set_id: 'stim_main', name: 'Main A', task_family: 'scam_detection', validation_status: 'valid', n_items: 10 },
+              { stimulus_set_id: 'stim_practice', name: 'Practice A', task_family: 'scam_detection', validation_status: 'valid', n_items: 6 },
+            ]),
+            { status: 200 },
+          );
+        }
+        if (url.endsWith('/runs') && init?.method === 'POST') {
+          createSpy();
+          return new Response(JSON.stringify({ run_id: 'run_new' }), { status: 200 });
+        }
+        if (url.endsWith('/runs')) return new Response(JSON.stringify([]), { status: 200 });
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText('Logged in as: admin');
+    await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
+
+    await user.selectOptions(screen.getByDisplayValue('Practice bank (optional supplementary)'), 'stim_practice');
+    await user.click(screen.getByLabelText('Aggregation mode'));
+    await user.deselectOptions(screen.getByLabelText('Main banks'), ['stim_main']);
+    await user.click(screen.getByRole('button', { name: 'Create Run' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Select at least one main bank before creating a run. Practice bank is optional and supplementary only.',
+    );
+    expect(createSpy).not.toHaveBeenCalled();
+  });
+
+  it('allows submit when a main bank is selected and practice bank remains optional supplementary', async () => {
+    const user = userEvent.setup();
+    let createPayload: Record<string, unknown> | null = null;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('/auth/me')) {
+          return new Response(JSON.stringify({ authenticated: true, user: { user_id: 'u1', username: 'admin', is_admin: true } }), { status: 200 });
+        }
+        if (url.endsWith('/runs/defaults')) {
+          return new Response(JSON.stringify({ experiment_id: 'exp_1', task_family: 'default_family', config_preset_options: [] }), { status: 200 });
+        }
+        if (url.endsWith('/stimuli')) {
+          return new Response(
+            JSON.stringify([
+              { stimulus_set_id: 'stim_main', name: 'Main A', task_family: 'scam_detection', validation_status: 'valid', n_items: 10 },
+              { stimulus_set_id: 'stim_practice', name: 'Practice A', task_family: 'scam_detection', validation_status: 'valid', n_items: 6 },
+            ]),
+            { status: 200 },
+          );
+        }
+        if (url.endsWith('/runs') && init?.method === 'POST') {
+          createPayload = JSON.parse(String(init.body ?? '{}')) as Record<string, unknown>;
+          return new Response(JSON.stringify({ run_id: 'run_new', run_name: 'run-new', public_slug: 'run-new', status: 'draft' }), { status: 200 });
+        }
+        if (url.endsWith('/runs')) return new Response(JSON.stringify([]), { status: 200 });
+        if (url.endsWith('/runs/run_new')) return new Response(JSON.stringify({ run_id: 'run_new', run_name: 'run-new', status: 'draft' }), { status: 200 });
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText('Logged in as: admin');
+    await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
+    await user.selectOptions(screen.getByDisplayValue('Practice bank (optional supplementary)'), 'stim_practice');
+    await user.click(screen.getByRole('button', { name: 'Create Run' }));
+
+    await waitFor(() => expect(createPayload).not.toBeNull());
+    expect(createPayload?.stimulus_set_ids).toEqual(['stim_main']);
+    expect(createPayload?.practice_stimulus_set_id).toBe('stim_practice');
   });
 
   it('keeps one authoritative main-bank selection when switching between single and multi modes', async () => {

@@ -191,7 +191,7 @@ class RunService:
             raise ValueError(f"aggregation_mode must be one of: {sorted(_ALLOWED_AGGREGATION_MODES)}")
         main_stimulus_set_ids = [set_id for set_id in stimulus_set_ids if str(set_id).strip()]
         if not main_stimulus_set_ids:
-            raise ValueError("at least one main stimulus_set_id is required")
+            raise ValueError("at least one main stimulus_set_id is required; practice_stimulus_set_id is optional and supplementary only")
         if aggregation_mode == AGGREGATION_MODE_SINGLE and len(main_stimulus_set_ids) != 1:
             raise ValueError("single aggregation_mode requires exactly one main stimulus_set_id")
         if aggregation_mode == AGGREGATION_MODE_MULTI and len(main_stimulus_set_ids) < 2:

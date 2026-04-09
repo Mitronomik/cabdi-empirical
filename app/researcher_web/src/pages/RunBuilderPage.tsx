@@ -298,6 +298,11 @@ export function RunBuilderPage() {
             <input value={taskFamilyFieldValue} readOnly aria-label={t('run.taskFamily')} />
           </div>
           <div className="form-row" style={{ marginTop: 8 }}>
+            <p className="muted" style={{ margin: 0 }}>
+              Main bank(s) are required. Practice bank is optional and supplementary only.
+            </p>
+          </div>
+          <div className="form-row" style={{ marginTop: 8 }}>
             {!aggregationEnabled ? (
               <select
                 aria-label="Main bank"
@@ -350,7 +355,7 @@ export function RunBuilderPage() {
           </div>
           <div className="form-row" style={{ marginTop: 8 }}>
             <select value={selectedPracticeStimulusSetId} onChange={(e) => setSelectedPracticeStimulusSetId(e.target.value)}>
-              <option value="">Practice bank (optional)</option>
+              <option value="">Practice bank (optional supplementary)</option>
               {availablePracticeStimulusSets.map((item) => (
                 <option key={`practice-${item.stimulus_set_id}`} value={item.stimulus_set_id}>
                   {item.name} • {item.n_items}

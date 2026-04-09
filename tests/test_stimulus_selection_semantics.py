@@ -103,3 +103,27 @@ def test_create_run_rejects_practice_main_stimulus_overlap(tmp_path) -> None:
     )
     assert create.status_code == 400
     assert "practice_stimulus_set_id must not overlap with main stimulus_set_ids" in create.json()["detail"]
+
+
+def test_create_run_requires_main_bank_even_when_practice_bank_selected(tmp_path) -> None:
+    client = TestClient(create_app(str(tmp_path / "semantics.sqlite3")))
+    _login(client)
+    practice_set = _upload_set(client, name="practice_bank", n_items=6)
+
+    create = client.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "practice-only-invalid",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"mode": "test"},
+            "stimulus_set_ids": [],
+            "practice_stimulus_set_id": practice_set,
+            "aggregation_mode": "single",
+        },
+    )
+    assert create.status_code == 400
+    assert (
+        "at least one main stimulus_set_id is required; practice_stimulus_set_id is optional and supplementary only"
+        in create.json()["detail"]
+    )
