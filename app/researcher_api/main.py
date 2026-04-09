@@ -91,9 +91,10 @@ def create_app(db_path: str | None = None) -> FastAPI:
         redoc_url=None,
         openapi_url=None,
     )
+    allowed_origins = _resolve_allowed_origins()
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=_resolve_allowed_origins(),
+        allow_origins=allowed_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -124,6 +125,8 @@ def create_app(db_path: str | None = None) -> FastAPI:
     app.state.auth_service = AuthService(store)
     app.state.researcher_session_secret = session_secret
     app.state.researcher_cookie_secure = _resolve_cookie_security()
+    app.state.researcher_cookie_samesite = "strict" if env_mode in PRODUCTION_LIKE_ENVS else "lax"
+    app.state.researcher_allowed_origins = tuple(allowed_origins)
     app.state.auth_service.bootstrap_initial_user()
 
     app.include_router(auth.router)

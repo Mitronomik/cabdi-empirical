@@ -84,6 +84,15 @@ Runtime behavior:
 - In `PILOT_ENV=staging|production`, APIs fail fast if required deployment configuration is missing.
 - In production-like mode, `PILOT_DB_URL` must be Postgres.
 - Researcher session cookie must be explicitly configured and secure (`PILOT_RESEARCHER_COOKIE_SECURE=true`) in production-like mode.
+- Researcher bootstrap password must be explicitly set and strong in production-like mode; weak/default-like values are rejected at startup.
+- Researcher auth cookie is emitted with `SameSite=Strict` in production-like mode.
+
+Researcher auth request-safety posture:
+
+- Keep researcher web/API on the private bind (`127.0.0.1:8081`) or equivalent private network segment.
+- Configure an explicit `PILOT_RESEARCHER_CORS_ORIGINS` allow-list.
+- Auth endpoints reject cross-origin `Origin` values outside the configured researcher allow-list.
+- This is a minimal cookie-session posture, not enterprise IAM/SSO.
 
 ## 6) Bring-up checks (packaged posture)
 

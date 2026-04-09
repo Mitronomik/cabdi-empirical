@@ -44,14 +44,22 @@ pilot-restore:
 	$(VENV_PY) scripts/pilot_restore.py --backup artifacts/pilot_ops/backups/pilot_backup.json --confirm-destructive
 
 pilot-prelaunch-gate:
+	@if [ -z "$${PILOT_RESEARCHER_PASSWORD}" ]; then \
+		echo "PILOT_RESEARCHER_PASSWORD is required (no default is allowed for prelaunch gate)."; \
+		exit 1; \
+	fi
 	$(VENV_PY) scripts/pilot_prelaunch_gate.py \
 		--db-target "$${PILOT_DB_URL:-$${PILOT_DB_PATH:-pilot/sessions/pilot_sessions.sqlite3}}" \
 		--run-slug "$${PILOT_RUN_SLUG}" \
 		--output-dir "$${PILOT_GATE_OUTPUT_DIR:-artifacts/pilot_ops/prelaunch_gate}" \
 		--researcher-username "$${PILOT_RESEARCHER_USERNAME:-admin}" \
-		--researcher-password "$${PILOT_RESEARCHER_PASSWORD:-admin1234}"
+		--researcher-password "$${PILOT_RESEARCHER_PASSWORD}"
 
 pilot-prelaunch-gate-blackbox:
+	@if [ -z "$${PILOT_RESEARCHER_PASSWORD}" ]; then \
+		echo "PILOT_RESEARCHER_PASSWORD is required (no default is allowed for prelaunch gate)."; \
+		exit 1; \
+	fi
 	$(VENV_PY) scripts/pilot_prelaunch_gate.py \
 		--db-target "$${PILOT_DB_URL:-$${PILOT_DB_PATH:-pilot/sessions/pilot_sessions.sqlite3}}" \
 		--run-slug "$${PILOT_RUN_SLUG}" \
@@ -59,4 +67,4 @@ pilot-prelaunch-gate-blackbox:
 		--researcher-base-url "$${PILOT_RESEARCHER_BASE_URL:-http://127.0.0.1:8081}" \
 		--output-dir "$${PILOT_GATE_OUTPUT_DIR:-artifacts/pilot_ops/prelaunch_gate}" \
 		--researcher-username "$${PILOT_RESEARCHER_USERNAME:-admin}" \
-		--researcher-password "$${PILOT_RESEARCHER_PASSWORD:-admin1234}"
+		--researcher-password "$${PILOT_RESEARCHER_PASSWORD}"

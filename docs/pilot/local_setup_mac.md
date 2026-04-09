@@ -79,6 +79,12 @@ Frontend API base variables (optional overrides):
 - participant web: `VITE_API_BASE_URL` (default `http://localhost:8000`)
 - researcher web: `VITE_RESEARCHER_API_BASE` (default `http://localhost:8001`)
 
+Researcher auth bootstrap behavior:
+
+- In local mode (`PILOT_ENV` unset or `local`), first researcher user bootstraps with default credentials only when `PILOT_RESEARCHER_PASSWORD` is not provided.
+- For any staging/production-like mode, `PILOT_RESEARCHER_PASSWORD` must be explicitly set and weak/default-like values are rejected during startup.
+- Non-local startup also requires `PILOT_RESEARCHER_SESSION_SECRET` and `PILOT_RESEARCHER_COOKIE_SECURE=true`.
+
 ## 6) Local service ports and URLs
 
 Suggested local defaults:
