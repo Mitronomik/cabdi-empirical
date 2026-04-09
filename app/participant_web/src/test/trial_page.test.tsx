@@ -45,10 +45,10 @@ function makeTrial(overrides: Partial<TrialPayload> = {}): TrialPayload {
   };
 }
 
-function renderTrial(trial: TrialPayload) {
+function renderTrial(trial: TrialPayload, onSubmit = vi.fn()) {
   render(
     <LocaleProvider>
-      <TrialPage trial={trial} loading={false} onSubmit={vi.fn()} />
+      <TrialPage trial={trial} loading={false} onSubmit={onSubmit} />
     </LocaleProvider>,
   );
 }
@@ -75,7 +75,27 @@ test('trial page prefers payload response_options over legacy defaults', () => {
   expect(screen.queryByRole('button', { name: /scam/i })).not.toBeInTheDocument();
 });
 
-test('trial page keeps legacy family defaults when response_options are absent', () => {
+test('trial page supports payload response_options with explicit labels', () => {
+  const trial = makeTrial({
+    stimulus: {
+      ...makeTrial().stimulus,
+      payload: {
+        title: 'Case',
+        body: 'Body',
+        response_options: [
+          { value: 'allow', label: 'Allow transfer' },
+          { value: 'block', label: 'Block transfer' },
+        ],
+      },
+    },
+  });
+  renderTrial(trial);
+
+  expect(screen.getByRole('button', { name: 'Allow transfer' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Block transfer' })).toBeInTheDocument();
+});
+
+test('trial page keeps family defaults when response_options are absent', () => {
   const trial = makeTrial();
   renderTrial(trial);
 
@@ -111,4 +131,28 @@ test('confidence UI no longer shows obsolete low/high slider labels', async () =
   expect(screen.queryByText(/high confidence/i)).not.toBeInTheDocument();
   expect(screen.getByText(/not confident at all/i)).toBeInTheDocument();
   expect(screen.getByText(/very confident/i)).toBeInTheDocument();
+});
+
+test('forced second look must be completed before submit is enabled', async () => {
+  const onSubmit = vi.fn();
+  const trial = makeTrial({
+    policy_decision: {
+      ...makeTrial().policy_decision,
+      verification_mode: 'forced_second_look',
+    },
+  });
+  renderTrial(trial, onSubmit);
+
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: 'Scam' }));
+  await user.click(screen.getByLabelText(/very confident/i));
+
+  const submit = screen.getByRole('button', { name: /submit response/i });
+  expect(submit).toBeDisabled();
+
+  await user.click(screen.getByRole('button', { name: /i completed a second look/i }));
+  expect(submit).toBeEnabled();
+
+  await user.click(submit);
+  expect(onSubmit).toHaveBeenCalledTimes(1);
 });

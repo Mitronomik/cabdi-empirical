@@ -41,7 +41,7 @@ body {
 .panel {
   background: #fff;
   border: 1px solid #d6dde8;
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 16px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
 }
@@ -57,6 +57,15 @@ body {
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: #3730a3;
+  font-weight: 700;
+}
+
+.section-kicker {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #334155;
   font-weight: 700;
 }
 
@@ -91,24 +100,19 @@ body {
   background: #4f46e5;
 }
 
-.trial-grid {
-  display: grid;
-  grid-template-columns: 1fr minmax(260px, 320px);
-  gap: 12px;
+.assistance-card {
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
 }
 
-@media (max-width: 860px) {
-  .trial-grid {
-    grid-template-columns: 1fr;
-  }
+.assistance-card .section-kicker {
+  margin: 0 0 8px;
+}
 
-  .app-shell {
-    padding-top: 44px;
-  }
-
-  .language-switcher {
-    right: 12px;
-  }
+.assistance-card .assistance-salient {
+  margin: 0;
 }
 
 .button-row {
@@ -116,13 +120,6 @@ body {
   gap: 8px;
   flex-wrap: wrap;
   margin-bottom: 12px;
-}
-
-.range-labels {
-  display: flex;
-  justify-content: space-between;
-  margin: 4px 0 12px;
-  font-size: 0.9rem;
 }
 
 .confidence-fieldset {
@@ -172,8 +169,32 @@ body {
   color: #334155;
 }
 
-.submit-hint {
-  margin-top: 8px;
+.trial-submit-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background: #ffffffee;
+  border: 1px solid #d6dde8;
+  border-radius: 12px;
+  padding: 12px;
+  backdrop-filter: blur(4px);
+}
+
+.primary-submit {
+  min-width: 160px;
+}
+
+.submit-hint,
+.submit-state {
+  margin: 0;
+}
+
+.submit-state {
+  font-size: 0.9rem;
+  margin-top: 4px;
 }
 
 button {
@@ -219,6 +240,40 @@ li {
   border-radius: 4px;
 }
 
+.verification-block {
+  margin-top: 10px;
+}
+
+.verification-check {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
 .muted {
   color: #475569;
+}
+
+@media (max-width: 860px) {
+  .app-shell {
+    padding-top: 44px;
+    padding-bottom: 56px;
+  }
+
+  .language-switcher {
+    right: 12px;
+  }
+
+  .trial-submit-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .primary-submit {
+    width: 100%;
+  }
+
+  .confidence-grid {
+    grid-template-columns: 1fr;
+  }
 }
