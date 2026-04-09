@@ -5,6 +5,7 @@ import { Nav, type PageKey } from './components/Nav';
 import { localizeOperatorError } from './i18n/uiText';
 import { LocaleProvider, useLocale } from './i18n/useLocale';
 import { getCurrentUser, login, logout } from './lib/api';
+import { DashboardPage } from './pages/DashboardPage';
 import { DiagnosticsPage } from './pages/DiagnosticsPage';
 import { ExportsPage } from './pages/ExportsPage';
 import { RunBuilderPage } from './pages/RunBuilderPage';
@@ -14,7 +15,7 @@ import { StimulusUploadPage } from './pages/StimulusUploadPage';
 type AuthState = 'loading' | 'authenticated' | 'unauthenticated';
 
 function AppBody() {
-  const [page, setPage] = useState<PageKey>('upload');
+  const [page, setPage] = useState<PageKey>('dashboard');
   const [authState, setAuthState] = useState<AuthState>('loading');
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('');
@@ -117,6 +118,7 @@ function AppBody() {
         </button>
       </section>
       <Nav page={page} setPage={setPage} />
+      {page === 'dashboard' && <DashboardPage onNavigate={setPage} />}
       {page === 'upload' && <StimulusUploadPage />}
       {page === 'run' && <RunBuilderPage />}
       {page === 'sessions' && <SessionMonitorPage />}

@@ -2,9 +2,13 @@ import React from 'react';
 
 import { useLocale } from '../i18n/useLocale';
 
-export type PageKey = 'upload' | 'run' | 'sessions' | 'diagnostics' | 'exports';
+export type PageKey = 'dashboard' | 'upload' | 'run' | 'sessions' | 'diagnostics' | 'exports';
 
-const pageKey: Record<PageKey, 'nav.upload' | 'nav.run' | 'nav.sessions' | 'nav.diagnostics' | 'nav.exports'> = {
+const pageKey: Record<
+  PageKey,
+  'nav.dashboard' | 'nav.upload' | 'nav.run' | 'nav.sessions' | 'nav.diagnostics' | 'nav.exports'
+> = {
+  dashboard: 'nav.dashboard',
   upload: 'nav.upload',
   run: 'nav.run',
   sessions: 'nav.sessions',
@@ -12,7 +16,8 @@ const pageKey: Record<PageKey, 'nav.upload' | 'nav.run' | 'nav.sessions' | 'nav.
   exports: 'nav.exports',
 };
 
-const pageStepKey: Record<PageKey, 'nav.step1' | 'nav.step2' | 'nav.step3' | 'nav.step4' | 'nav.step5'> = {
+const pageStepKey: Record<PageKey, 'nav.step0' | 'nav.step1' | 'nav.step2' | 'nav.step3' | 'nav.step4' | 'nav.step5'> = {
+  dashboard: 'nav.step0',
   upload: 'nav.step1',
   run: 'nav.step2',
   sessions: 'nav.step3',
@@ -21,9 +26,10 @@ const pageStepKey: Record<PageKey, 'nav.step1' | 'nav.step2' | 'nav.step3' | 'na
 };
 
 export function Nav({ page, setPage }: { page: PageKey; setPage: (p: PageKey) => void }) {
-  const pages: PageKey[] = ['upload', 'run', 'sessions', 'diagnostics', 'exports'];
+  const pages: PageKey[] = ['dashboard', 'upload', 'run', 'sessions', 'diagnostics', 'exports'];
   const { t } = useLocale();
   const shortLabel: Record<PageKey, string> = {
+    dashboard: 'Dashboard',
     upload: 'Stimuli',
     run: 'Run setup',
     sessions: 'Sessions',
