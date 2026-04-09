@@ -52,6 +52,32 @@ export function DiagnosticsPage() {
 
   const selectedRun = useMemo(() => runs.find((run) => run.run_id === runId), [runId, runs]);
   const warnings = Array.isArray(data?.warnings) ? data?.warnings : [];
+  const sessionCounts = ((data?.session_counts as Record<string, unknown> | undefined) ?? {}) as Record<string, unknown>;
+  const conditionCounts = ((data?.completed_trials_per_condition as Record<string, unknown> | undefined) ?? {}) as Record<string, unknown>;
+  const modelWrongShare = ((data?.model_wrong_share as Record<string, unknown> | undefined) ?? {}) as Record<string, unknown>;
+  const groupedWarnings = useMemo(() => {
+    const groups: Record<string, string[]> = {
+      budget: [],
+      data: [],
+      verification: [],
+      other: [],
+    };
+    warnings.forEach((warning) => {
+      const text = String(warning);
+      const lowered = text.toLowerCase();
+      if (lowered.includes('budget')) groups.budget.push(text);
+      else if (lowered.includes('missing') || lowered.includes('schema') || lowered.includes('field')) groups.data.push(text);
+      else if (lowered.includes('verify') || lowered.includes('verification')) groups.verification.push(text);
+      else groups.other.push(text);
+    });
+    return groups;
+  }, [warnings]);
+  const warningGroupMeta: Array<{ key: keyof typeof groupedWarnings; label: string }> = [
+    { key: 'budget', label: 'Budget matching warnings' },
+    { key: 'data', label: 'Data quality warnings' },
+    { key: 'verification', label: 'Verification usage warnings' },
+    { key: 'other', label: 'Other warnings' },
+  ];
 
   return (
     <section>
@@ -95,18 +121,57 @@ export function DiagnosticsPage() {
             <h3>{t('diagnostics.warnings')}</h3>
             {warnings.length === 0 ? <StatusBadge label={t('diagnostics.noWarnings')} tone="good" /> : null}
             {warnings.length > 0 ? (
-              <ul>
-                {warnings.map((warning, index) => (
-                  <li key={`${warning}-${index}`}>{String(warning)}</li>
-                ))}
-              </ul>
+              <div className="stack-grid">
+                {warningGroupMeta
+                  .filter((group) => groupedWarnings[group.key].length > 0)
+                  .map((group) => (
+                    <article key={group.key} className="info-card info-card--warn">
+                      <h4>{group.label}</h4>
+                      <ul>
+                        {groupedWarnings[group.key].map((warning, index) => (
+                          <li key={`${group.key}-${index}`}>{warning}</li>
+                        ))}
+                      </ul>
+                    </article>
+                  ))}
+              </div>
             ) : null}
           </section>
           <section className="panel">
-            <h3>{t('diagnostics.detailsTitle')}</h3>
-            <p>{t('diagnostics.sessionCounts')}: {JSON.stringify(data.session_counts ?? {}, null, 2)}</p>
-            <p>{t('diagnostics.completedTrialsPerCondition')}: {JSON.stringify(data.completed_trials_per_condition ?? {}, null, 2)}</p>
-            <p>{t('diagnostics.modelWrongShare')}: {JSON.stringify(data.model_wrong_share ?? {}, null, 2)}</p>
+            <h3>Operator view</h3>
+            <div className="stack-grid">
+              <article className="info-card">
+                <h4>{t('diagnostics.sessionCounts')}</h4>
+                {Object.keys(sessionCounts).length === 0 ? <p className="muted">{t('common.na')}</p> : null}
+                {Object.entries(sessionCounts).map(([key, value]) => (
+                  <p key={key}>
+                    <StatusBadge label={localizeStatus(t, key)} tone="info" />: {String(value)}
+                  </p>
+                ))}
+              </article>
+              <article className="info-card">
+                <h4>{t('diagnostics.completedTrialsPerCondition')}</h4>
+                {Object.keys(conditionCounts).length === 0 ? <p className="muted">{t('common.na')}</p> : null}
+                {Object.entries(conditionCounts).map(([key, value]) => (
+                  <p key={key}>
+                    <KbdMono>{key}</KbdMono>: {String(value)}
+                  </p>
+                ))}
+              </article>
+              <article className="info-card">
+                <h4>{t('diagnostics.modelWrongShare')}</h4>
+                {Object.keys(modelWrongShare).length === 0 ? <p className="muted">{t('common.na')}</p> : null}
+                {Object.entries(modelWrongShare).map(([key, value]) => (
+                  <p key={key}>
+                    <KbdMono>{key}</KbdMono>: {String(value)}
+                  </p>
+                ))}
+              </article>
+            </div>
+            <details className="details-panel">
+              <summary>{t('diagnostics.detailsTitle')}</summary>
+              <pre>{JSON.stringify(data, null, 2)}</pre>
+            </details>
           </section>
         </>
       ) : (

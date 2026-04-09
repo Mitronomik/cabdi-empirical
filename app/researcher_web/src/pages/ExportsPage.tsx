@@ -63,6 +63,7 @@ export function ExportsPage() {
   const artifacts = Array.isArray(data?.artifacts) ? (data?.artifacts as Array<Record<string, unknown>>) : [];
   const availableCount = artifacts.filter((item) => Boolean(item.available)).length;
   const selectedRun = useMemo(() => runs.find((run) => run.run_id === runId), [runId, runs]);
+  const exportState = String(data?.export_state ?? 'unknown');
 
   async function downloadArtifact(artifactType: string, filename: string) {
     if (!runId) return;
@@ -115,8 +116,14 @@ export function ExportsPage() {
               <SummaryCard label={t('exports.generatedAt')} value={String(data.generated_at ?? t('common.na'))} />
             </div>
             <p>{String(data.message ?? '')}</p>
-            {String(data.export_state) === 'empty' ? <p>{t('exports.empty')}</p> : null}
-            {String(data.export_state) === 'available' && artifacts.length === 0 ? <p>{t('exports.noArtifacts')}</p> : null}
+            {exportState === 'empty' ? <p className="state-banner state-banner--empty">{t('exports.empty')}</p> : null}
+            {exportState === 'available' && artifacts.length === 0 ? <p className="state-banner state-banner--warn">{t('exports.noArtifacts')}</p> : null}
+            {exportState === 'available' && artifacts.length > 0 ? (
+              <p className="state-banner state-banner--good">Exports are generated and available for download below.</p>
+            ) : null}
+            {exportState !== 'available' && exportState !== 'empty' ? (
+              <p className="state-banner state-banner--warn">Exports are not generated yet for this run.</p>
+            ) : null}
           </section>
 
           {artifacts.length > 0 ? (

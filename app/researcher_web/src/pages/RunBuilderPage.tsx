@@ -291,83 +291,100 @@ export function RunBuilderPage() {
       <section className="panel">
         <h3>{t('run.createPanelTitle')}</h3>
         <form onSubmit={onSubmit}>
-          <div className="form-row">
-            <input name="run_name" value={runName} onChange={(e) => setRunName(e.target.value)} placeholder={t('run.name')} required />
-            <input name="public_slug" value={publicSlug} onChange={(e) => setPublicSlug(e.target.value)} placeholder={t('run.slug')} />
-            <input value={String(defaults?.experiment_id ?? '')} readOnly aria-label={t('run.experimentId')} />
-            <input value={taskFamilyFieldValue} readOnly aria-label={t('run.taskFamily')} />
-          </div>
-          <div className="form-row" style={{ marginTop: 8 }}>
+          <section className="subsection">
+            <h4>Run basics</h4>
+            <div className="form-row">
+              <input name="run_name" value={runName} onChange={(e) => setRunName(e.target.value)} placeholder={t('run.name')} required />
+              <input name="public_slug" value={publicSlug} onChange={(e) => setPublicSlug(e.target.value)} placeholder={t('run.slug')} />
+              <input name="notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t('run.notes')} />
+              <input value={String(defaults?.experiment_id ?? '')} readOnly aria-label={t('run.experimentId')} />
+              <input value={taskFamilyFieldValue} readOnly aria-label={t('run.taskFamily')} />
+            </div>
+          </section>
+          <section className="subsection">
+            <h4>Main and practice bank selection</h4>
             <p className="muted" style={{ margin: 0 }}>
               Main bank(s) are required. Practice bank is optional and supplementary only.
             </p>
-          </div>
-          <div className="form-row" style={{ marginTop: 8 }}>
-            {!aggregationEnabled ? (
-              <select
-                aria-label="Main bank"
-                value={selectedSingleMainSetId}
-                onChange={(e) => setSelectedMainStimulusSetIds(e.target.value ? [e.target.value] : [])}
-                required
-              >
-                <option value="">{t('run.selectStimulus')}</option>
-                {availableMainStimulusSets.map((item) => (
-                  <option key={item.stimulus_set_id} value={item.stimulus_set_id}>
-                    {item.name} • {item.task_family} • {item.n_items} • {localizeStatus(t, item.validation_status)}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <select
-                aria-label="Main banks"
-                multiple
-                value={selectedMainStimulusSetIds}
-                onChange={(e) => setSelectedMainStimulusSetIds(Array.from(e.target.selectedOptions).map((o) => o.value))}
-              >
-                {availableMainStimulusSets.map((item) => (
-                  <option key={`main-${item.stimulus_set_id}`} value={item.stimulus_set_id}>
+            <div className="form-row" style={{ marginTop: 8 }}>
+              {!aggregationEnabled ? (
+                <select
+                  aria-label="Main bank"
+                  value={selectedSingleMainSetId}
+                  onChange={(e) => setSelectedMainStimulusSetIds(e.target.value ? [e.target.value] : [])}
+                  required
+                >
+                  <option value="">{t('run.selectStimulus')}</option>
+                  {availableMainStimulusSets.map((item) => (
+                    <option key={item.stimulus_set_id} value={item.stimulus_set_id}>
+                      {item.name} • {item.task_family} • {item.n_items} • {localizeStatus(t, item.validation_status)}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <select
+                  aria-label="Main banks"
+                  multiple
+                  value={selectedMainStimulusSetIds}
+                  onChange={(e) => setSelectedMainStimulusSetIds(Array.from(e.target.selectedOptions).map((o) => o.value))}
+                >
+                  {availableMainStimulusSets.map((item) => (
+                    <option key={`main-${item.stimulus_set_id}`} value={item.stimulus_set_id}>
+                      {item.name} • {item.n_items}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input type="checkbox" checked={aggregationEnabled} onChange={(e) => {
+                  const next = e.target.checked;
+                  setAggregationEnabled(next);
+                  if (!next) {
+                    setSelectedMainStimulusSetIds((prev) => {
+                      const availableIds = new Set(availableMainStimulusSets.map((item) => String(item.stimulus_set_id)));
+                      const firstStillAvailable = prev.find((id) => availableIds.has(id));
+                      return firstStillAvailable ? [firstStillAvailable] : [];
+                    });
+                  }
+                }} />
+                Aggregation mode
+              </label>
+              <select value={selectedPracticeStimulusSetId} onChange={(e) => setSelectedPracticeStimulusSetId(e.target.value)}>
+                <option value="">Practice bank (optional supplementary)</option>
+                {availablePracticeStimulusSets.map((item) => (
+                  <option key={`practice-${item.stimulus_set_id}`} value={item.stimulus_set_id}>
                     {item.name} • {item.n_items}
                   </option>
                 ))}
               </select>
-            )}
-            <input name="notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t('run.notes')} />
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <input type="checkbox" checked={aggregationEnabled} onChange={(e) => {
-                const next = e.target.checked;
-                setAggregationEnabled(next);
-                if (!next) {
-                  setSelectedMainStimulusSetIds((prev) => {
-                    const availableIds = new Set(availableMainStimulusSets.map((item) => String(item.stimulus_set_id)));
-                    const firstStillAvailable = prev.find((id) => availableIds.has(id));
-                    return firstStillAvailable ? [firstStillAvailable] : [];
-                  });
-                }
-              }} />
-              Aggregation mode
-            </label>
-            <button className="primary-btn" type="submit" disabled={isCreating || validStimulusSets.length === 0}>
-              {isCreating ? t('run.creating') : t('run.submit')}
-            </button>
-            <button className="secondary-btn" type="button" onClick={loadDependencies} disabled={loading}>
-              {t('run.loadRecent')}
-            </button>
-          </div>
+            </div>
+          </section>
+          <section className="subsection">
+            <h4>Prelaunch summary</h4>
+            <div className="summary-grid">
+              <SummaryCard label="Practice bank items" value={String(preActivationCounts.practiceItemCount)} tone="info" />
+              <SummaryCard label="Main bank items" value={String(preActivationCounts.mainItemCount)} tone="info" />
+              <SummaryCard label="Expected total trials" value={String(preActivationCounts.expectedTrialCount)} tone="warn" />
+              <SummaryCard label="Aggregation mode" value={aggregationEnabled ? 'multi-bank' : 'single-bank'} tone={aggregationEnabled ? 'warn' : 'good'} />
+            </div>
+            <p>Selected practice bank: {selectedPracticeStimulus ? `${selectedPracticeStimulus.name} (${practiceItemCount})` : 'none'}</p>
+            <p>Selected main banks: {selectedMainSummary}</p>
+            <div className="toolbar">
+              <button className="primary-btn" type="submit" disabled={isCreating || validStimulusSets.length === 0}>
+                {isCreating ? t('run.creating') : t('run.submit')}
+              </button>
+              <button className="secondary-btn" type="button" onClick={loadDependencies} disabled={loading}>
+                {t('run.loadRecent')}
+              </button>
+            </div>
+          </section>
           <div className="form-row" style={{ marginTop: 8 }}>
-            <select value={selectedPracticeStimulusSetId} onChange={(e) => setSelectedPracticeStimulusSetId(e.target.value)}>
-              <option value="">Practice bank (optional supplementary)</option>
-              {availablePracticeStimulusSets.map((item) => (
-                <option key={`practice-${item.stimulus_set_id}`} value={item.stimulus_set_id}>
-                  {item.name} • {item.n_items}
-                </option>
-              ))}
-            </select>
+            {mainTaskFamilyMixed ? (
+              <p role="alert" className="alert-error">
+                Selected main banks have mixed task families. Choose banks with one shared task family before creating a run.
+              </p>
+            ) : null}
           </div>
-          {mainTaskFamilyMixed ? (
-            <p role="alert" className="alert-error">
-              Selected main banks have mixed task families. Choose banks with one shared task family before creating a run.
-            </p>
-          ) : null}
         </form>
       </section>
 
@@ -464,7 +481,7 @@ export function RunBuilderPage() {
       ) : null}
 
       <section className="panel">
-        <h3>{t('run.recentTitle')}</h3>
+        <h3>Recent runs and run details</h3>
         <p className="muted">{t('run.recentHint')}</p>
         {recentRuns.length === 0 ? <p>{t('run.emptyNoRuns')}</p> : null}
         {recentRuns.length > 0 ? (
