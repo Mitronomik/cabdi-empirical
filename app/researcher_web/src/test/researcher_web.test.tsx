@@ -926,8 +926,62 @@ describe('researcher auth shell', () => {
     expect(screen.getByLabelText('task family')).toHaveValue('no main bank selected');
     expect(screen.getByText('Main bank(s): none')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Create Run' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Select a validated stimulus set before creating a run.');
     expect(createSpy).not.toHaveBeenCalled();
+  });
+
+  it('keeps one authoritative main-bank selection when switching between single and multi modes', async () => {
+    const user = userEvent.setup();
+    let createPayload: Record<string, unknown> | null = null;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('/auth/me')) {
+          return new Response(JSON.stringify({ authenticated: true, user: { user_id: 'u1', username: 'admin', is_admin: true } }), { status: 200 });
+        }
+        if (url.endsWith('/runs/defaults')) {
+          return new Response(JSON.stringify({ experiment_id: 'exp_1', task_family: 'default_family', config_preset_options: [] }), { status: 200 });
+        }
+        if (url.endsWith('/stimuli')) {
+          return new Response(
+            JSON.stringify([
+              { stimulus_set_id: 'stim_one', name: 'Main One', task_family: 'scam_detection', validation_status: 'valid', n_items: 10 },
+              { stimulus_set_id: 'stim_two', name: 'Main Two', task_family: 'scam_detection', validation_status: 'valid', n_items: 8 },
+              { stimulus_set_id: 'stim_three', name: 'Main Three', task_family: 'scam_detection', validation_status: 'valid', n_items: 6 },
+            ]),
+            { status: 200 },
+          );
+        }
+        if (url.endsWith('/runs') && init?.method === 'POST') {
+          createPayload = JSON.parse(String(init.body ?? '{}')) as Record<string, unknown>;
+          return new Response(JSON.stringify({ run_id: 'run_new', run_name: 'run-new', public_slug: 'run-new', status: 'draft' }), { status: 200 });
+        }
+        if (url.endsWith('/runs')) return new Response(JSON.stringify([]), { status: 200 });
+        if (url.endsWith('/runs/run_new')) return new Response(JSON.stringify({ run_id: 'run_new', run_name: 'run-new', status: 'draft' }), { status: 200 });
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText('Logged in as: admin');
+    await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
+
+    await user.click(screen.getByLabelText('Aggregation mode'));
+    const multiSelect = screen.getByRole('listbox');
+    await user.selectOptions(multiSelect, ['stim_two', 'stim_three']);
+    expect(screen.getByText('Main bank(s): Main One (10), Main Two (8), Main Three (6)')).toBeInTheDocument();
+
+    await user.click(screen.getByLabelText('Aggregation mode'));
+
+    const [singleSelect] = screen.getAllByRole('combobox');
+    expect(singleSelect).toHaveValue('stim_one');
+    expect(screen.getByText('Main bank(s): Main One (10)')).toBeInTheDocument();
+    expect(screen.getByLabelText('task family')).toHaveValue('scam_detection');
+    expect(screen.getByText(/Selected stimulus set: Main One/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Create Run' }));
+    await waitFor(() => expect(createPayload).not.toBeNull());
+    expect(createPayload?.stimulus_set_ids).toEqual(['stim_one']);
   });
 
 });

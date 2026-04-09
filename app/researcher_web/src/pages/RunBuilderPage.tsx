@@ -28,7 +28,6 @@ export function RunBuilderPage() {
   const [runDetailsLoading, setRunDetailsLoading] = useState(false);
   const [runDetailsLoadingRunId, setRunDetailsLoadingRunId] = useState('');
   const [copySuccess, setCopySuccess] = useState('');
-  const [selectedStimulusSetId, setSelectedStimulusSetId] = useState('');
   const [selectedMainStimulusSetIds, setSelectedMainStimulusSetIds] = useState<string[]>([]);
   const [selectedPracticeStimulusSetId, setSelectedPracticeStimulusSetId] = useState('');
   const [aggregationEnabled, setAggregationEnabled] = useState(false);
@@ -98,10 +97,8 @@ export function RunBuilderPage() {
       const firstValid = safeStimuli.find((item) => ['valid', 'warning_only'].includes(String(item.validation_status ?? '')));
       if (firstValid) {
         const defaultSetId = String(firstValid.stimulus_set_id);
-        setSelectedStimulusSetId((prev) => prev || defaultSetId);
         setSelectedMainStimulusSetIds((prev) => (prev.length > 0 ? prev : [defaultSetId]));
       } else {
-        setSelectedStimulusSetId('');
         setSelectedMainStimulusSetIds([]);
       }
 
@@ -227,12 +224,14 @@ export function RunBuilderPage() {
     () => validStimulusSets.filter((item) => String(item.stimulus_set_id) !== selectedPracticeStimulusSetId),
     [selectedPracticeStimulusSetId, validStimulusSets],
   );
+  const selectedSingleMainSetId = selectedMainStimulusSetIds[0] ?? '';
   const selectedMainSetIds = useMemo(
-    () =>
-      aggregationEnabled
-        ? selectedMainStimulusSetIds.filter((id, idx, arr) => id && arr.indexOf(id) === idx)
-        : [selectedStimulusSetId].filter(Boolean),
-    [aggregationEnabled, selectedMainStimulusSetIds, selectedStimulusSetId],
+    () => {
+      const availableIds = new Set(availableMainStimulusSets.map((item) => String(item.stimulus_set_id)));
+      const deduped = selectedMainStimulusSetIds.filter((id, idx, arr) => id && arr.indexOf(id) === idx && availableIds.has(id));
+      return aggregationEnabled ? deduped : deduped.slice(0, 1);
+    },
+    [aggregationEnabled, availableMainStimulusSets, selectedMainStimulusSetIds],
   );
   const selectedMainBanks = useMemo(
     () => validStimulusSets.filter((item) => selectedMainSetIds.includes(String(item.stimulus_set_id))),
@@ -265,10 +264,10 @@ export function RunBuilderPage() {
 
   useEffect(() => {
     if (aggregationEnabled) return;
-    if (selectedStimulusSetId) return;
+    if (selectedSingleMainSetId) return;
     const firstAvailable = availableMainStimulusSets[0];
-    if (firstAvailable) setSelectedStimulusSetId(String(firstAvailable.stimulus_set_id));
-  }, [aggregationEnabled, availableMainStimulusSets, selectedStimulusSetId]);
+    if (firstAvailable) setSelectedMainStimulusSetIds([String(firstAvailable.stimulus_set_id)]);
+  }, [aggregationEnabled, availableMainStimulusSets, selectedSingleMainSetId]);
 
   return (
     <section>
@@ -299,10 +298,7 @@ export function RunBuilderPage() {
             <input value={taskFamilyFieldValue} readOnly aria-label={t('run.taskFamily')} />
           </div>
           <div className="form-row" style={{ marginTop: 8 }}>
-            <select value={selectedStimulusSetId} onChange={(e) => {
-              setSelectedStimulusSetId(e.target.value);
-              if (!aggregationEnabled) setSelectedMainStimulusSetIds(e.target.value ? [e.target.value] : []);
-            }} required>
+            <select value={selectedSingleMainSetId} onChange={(e) => setSelectedMainStimulusSetIds(e.target.value ? [e.target.value] : [])} required>
               <option value="">{t('run.selectStimulus')}</option>
               {availableMainStimulusSets.map((item) => (
                 <option key={item.stimulus_set_id} value={item.stimulus_set_id}>
@@ -316,7 +312,11 @@ export function RunBuilderPage() {
                 const next = e.target.checked;
                 setAggregationEnabled(next);
                 if (!next) {
-                  setSelectedMainStimulusSetIds(selectedStimulusSetId ? [selectedStimulusSetId] : []);
+                  setSelectedMainStimulusSetIds((prev) => {
+                    const availableIds = new Set(availableMainStimulusSets.map((item) => String(item.stimulus_set_id)));
+                    const firstStillAvailable = prev.find((id) => availableIds.has(id));
+                    return firstStillAvailable ? [firstStillAvailable] : [];
+                  });
                 }
               }} />
               Aggregation mode
