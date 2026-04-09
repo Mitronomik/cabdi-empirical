@@ -3,14 +3,22 @@ import React from 'react';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
 import { Nav, type PageKey } from './components/Nav';
 import { LocaleProvider, useLocale } from './i18n/useLocale';
+import { useResearcherShell } from './hooks/useResearcherShell';
+import { DashboardPage } from './pages/DashboardPage';
 import { DiagnosticsPage } from './pages/DiagnosticsPage';
 import { ExportsPage } from './pages/ExportsPage';
 import { RunBuilderPage } from './pages/RunBuilderPage';
 import { SessionMonitorPage } from './pages/SessionMonitorPage';
 import { StimulusUploadPage } from './pages/StimulusUploadPage';
-import { useResearcherShell } from './hooks/useResearcherShell';
 
-function ResearcherPageContent({ page }: { page: PageKey }) {
+function ResearcherPageContent({
+  page,
+  onNavigate,
+}: {
+  page: PageKey;
+  onNavigate: (page: PageKey) => void;
+}) {
+  if (page === 'dashboard') return <DashboardPage onNavigate={onNavigate} />;
   if (page === 'upload') return <StimulusUploadPage />;
   if (page === 'run') return <RunBuilderPage />;
   if (page === 'sessions') return <SessionMonitorPage />;
@@ -47,11 +55,18 @@ function AppBody() {
           <form className="form-row" onSubmit={shell.submitLogin}>
             <label>
               {t('auth.username')}
-              <input value={shell.username} onChange={(event) => shell.setUsername(event.target.value)} />
+              <input
+                value={shell.username}
+                onChange={(event) => shell.setUsername(event.target.value)}
+              />
             </label>
             <label>
               {t('auth.password')}
-              <input type="password" value={shell.password} onChange={(event) => shell.setPassword(event.target.value)} />
+              <input
+                type="password"
+                value={shell.password}
+                onChange={(event) => shell.setPassword(event.target.value)}
+              />
             </label>
             <button className="primary-btn" type="submit">
               {t('auth.login')}
@@ -83,7 +98,7 @@ function AppBody() {
         </button>
       </section>
       <Nav page={shell.page} setPage={shell.setPage} />
-      <ResearcherPageContent page={shell.page} />
+      <ResearcherPageContent page={shell.page} onNavigate={shell.setPage} />
     </main>
   );
 }

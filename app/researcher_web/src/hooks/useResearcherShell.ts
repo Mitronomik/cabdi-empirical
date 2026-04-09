@@ -8,7 +8,7 @@ import type { PageKey } from '../components/Nav';
 export type AuthState = 'loading' | 'authenticated' | 'unauthenticated';
 
 export function useResearcherShell(t: ReturnType<typeof useLocale>['t']) {
-  const [page, setPage] = useState<PageKey>('upload');
+  const [page, setPage] = useState<PageKey>('dashboard');
   const [authState, setAuthState] = useState<AuthState>('loading');
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('');

@@ -139,6 +139,10 @@ thead th { background: #f8fafc; font-size: 12px; text-transform: uppercase; lett
   border-color: #fcd34d;
   background: #fffbeb;
 }
+.info-card--bad {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
 .info-card h4 {
   margin: 0 0 8px;
   font-size: 14px;

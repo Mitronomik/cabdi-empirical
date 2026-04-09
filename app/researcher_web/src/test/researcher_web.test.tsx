@@ -1152,4 +1152,61 @@ describe('researcher auth shell', () => {
     expect(screen.getByText('Main bank(s): Main A (10), Main B (8), Main C (6)')).toBeInTheDocument();
   });
 
+  it('renders dashboard launch blockers and routes next actions to workflow pages', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith('/auth/me')) {
+          return new Response(JSON.stringify({ authenticated: true, user: { user_id: 'u1', username: 'admin', is_admin: true } }), { status: 200 });
+        }
+        if (url.endsWith('/runs')) {
+          return new Response(
+            JSON.stringify([
+              {
+                run_id: 'run_blocked',
+                run_name: 'blocked-run',
+                public_slug: 'blocked-run',
+                status: 'draft',
+                task_family: 'scam_detection',
+                linked_stimulus_set_ids: ['stim_1'],
+                launchable: false,
+                launchability_state: 'not_launchable',
+                launchability_reason: 'main bank required before activation',
+              },
+            ]),
+            { status: 200 },
+          );
+        }
+        if (url.endsWith('/runs/run_blocked/sessions')) {
+          return new Response(JSON.stringify({ counts: { in_progress: 1, awaiting_final_submit: 1, finalized: 0 }, sessions: [] }), { status: 200 });
+        }
+        if (url.endsWith('/runs/run_blocked/diagnostics')) {
+          return new Response(JSON.stringify({ warnings: ['Budget tolerance warning'] }), { status: 200 });
+        }
+        if (url.endsWith('/runs/run_blocked/exports')) {
+          return new Response(JSON.stringify({ export_state: 'empty', artifacts: [] }), { status: 200 });
+        }
+        if (url.endsWith('/runs/defaults')) {
+          return new Response(JSON.stringify({ experiment_id: 'exp_1', task_family: 'scam_detection', config_preset_options: [] }), { status: 200 });
+        }
+        if (url.endsWith('/stimuli')) {
+          return new Response(JSON.stringify([]), { status: 200 });
+        }
+        return new Response(JSON.stringify([]), { status: 200 });
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText('Logged in as: admin');
+
+    expect(await screen.findByText('Prelaunch Readiness Center')).toBeInTheDocument();
+    expect((await screen.findAllByText('Launch blockers')).length).toBeGreaterThan(0);
+    expect(screen.getByText('main bank required before activation')).toBeInTheDocument();
+
+    await user.click(screen.getAllByRole('button', { name: 'Inspect run' })[0]);
+    expect(await screen.findByText('Run Operations')).toBeInTheDocument();
+  });
+
 });
