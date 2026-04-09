@@ -132,6 +132,26 @@ class RunService:
     def _launchability_state(launchable: bool) -> str:
         return "launchable" if launchable else "not_launchable"
 
+    def _compute_launchability_fields(self, run: dict[str, Any]) -> tuple[bool, str, str]:
+        status = str(run.get("status") or RUN_STATUS_DRAFT)
+        if status == RUN_STATUS_ACTIVE:
+            launchable = True
+            reason = "run is active and accepts participant sessions"
+            return launchable, self._launchability_state(launchable), reason
+        if status == RUN_STATUS_CLOSED:
+            launchable = False
+            reason = "run is closed and does not accept new participant sessions"
+            return launchable, self._launchability_state(launchable), reason
+
+        validation_errors = self._validate_launchability(run)
+        reason = (
+            validation_errors[0]
+            if validation_errors
+            else f"run is {status}; activate to accept new participant sessions"
+        )
+        launchable = False
+        return launchable, self._launchability_state(launchable), reason
+
     @staticmethod
     def _slugify(value: str) -> str:
         normalized = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
@@ -275,12 +295,8 @@ class RunService:
             practice_stimulus_set_id=row["practice_stimulus_set_id"],
             aggregation_mode=row["aggregation_mode"],
         )
-        row["launchable"] = row["status"] == RUN_STATUS_ACTIVE
-        row["launchability_state"] = self._launchability_state(row["launchable"])
-        row["launchability_reason"] = (
-            "run is active and accepts participant sessions"
-            if row["status"] == RUN_STATUS_ACTIVE
-            else f"run is {row['status']}; activate to accept new participant sessions"
+        row["launchable"], row["launchability_state"], row["launchability_reason"] = self._compute_launchability_fields(
+            row
         )
         row["run_status"] = row["status"]
         row["invite_url"] = self._invite_url(str(row["public_slug"]))
@@ -290,6 +306,7 @@ class RunService:
         rows = self.store.fetchall(
             """
             SELECT run_id, run_name, public_slug, status, experiment_id, task_family, notes, created_at, stimulus_set_ids_json
+                   , config_json
                    , aggregation_mode, practice_stimulus_set_id
             FROM researcher_runs
             ORDER BY created_at DESC
@@ -298,6 +315,7 @@ class RunService:
         )
         for row in rows:
             row["linked_stimulus_set_ids"] = loads(row.pop("stimulus_set_ids_json"))
+            row["config"] = loads(row.pop("config_json"))
             aggregation_mode = AGGREGATION_MODE_MULTI if int(row.get("aggregation_mode") or 0) == 1 else AGGREGATION_MODE_SINGLE
             row["aggregation_mode"] = aggregation_mode
             row["practice_stimulus_set_id"] = row.get("practice_stimulus_set_id")
@@ -306,13 +324,11 @@ class RunService:
                 practice_stimulus_set_id=row["practice_stimulus_set_id"],
                 aggregation_mode=aggregation_mode,
             )
-            row["launchable"] = row["status"] == RUN_STATUS_ACTIVE
-            row["launchability_state"] = self._launchability_state(row["launchable"])
-            row["launchability_reason"] = (
-                "run is active and accepts participant sessions"
-                if row["status"] == RUN_STATUS_ACTIVE
-                else f"run is {row['status']}; activate to accept new participant sessions"
+            row["stimulus_set_ids"] = row["linked_stimulus_set_ids"]
+            row["launchable"], row["launchability_state"], row["launchability_reason"] = self._compute_launchability_fields(
+                row
             )
+            row.pop("stimulus_set_ids", None)
             row["run_status"] = row["status"]
             row["invite_url"] = self._invite_url(str(row["public_slug"]))
         return rows

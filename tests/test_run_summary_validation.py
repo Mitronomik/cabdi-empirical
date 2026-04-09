@@ -249,6 +249,60 @@ def test_activation_rejects_run_that_would_create_empty_main_blocks(tmp_path) ->
     assert "main_item_count=2, n_blocks=3" in activate.json()["detail"]
 
 
+def test_draft_run_details_and_list_surface_canonical_launchability_error_before_activation(tmp_path) -> None:
+    client = TestClient(create_app(str(tmp_path / "summary.sqlite3")))
+    _login(client)
+    main_set = _upload_set(client, name="main-too-small-reporting", n_items=2)
+
+    create = client.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "empty-main-blocks-preflight-visible",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"execution": {"n_blocks": 3, "trials_per_block": 2, "practice_trials": 0}},
+            "stimulus_set_ids": [main_set],
+            "aggregation_mode": "single",
+        },
+    )
+    assert create.status_code == 200
+    run_id = create.json()["run_id"]
+
+    details = client.get(f"/admin/api/v1/runs/{run_id}")
+    assert details.status_code == 200
+    assert "run has insufficient main items for configured block design" in details.json()["launchability_reason"]
+    assert "main_item_count=2, n_blocks=3" in details.json()["launchability_reason"]
+
+    listed = client.get("/admin/api/v1/runs")
+    assert listed.status_code == 200
+    listed_row = next(item for item in listed.json() if item["run_id"] == run_id)
+    assert listed_row["launchability_reason"] == details.json()["launchability_reason"]
+
+
+def test_valid_draft_run_reason_requires_activation_without_fabricated_validation_error(tmp_path) -> None:
+    client = TestClient(create_app(str(tmp_path / "summary.sqlite3")))
+    _login(client)
+    main_set = _upload_set(client, name="main-valid-draft", n_items=3)
+
+    create = client.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "valid-draft-reason",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"execution": {"n_blocks": 3, "trials_per_block": 2, "practice_trials": 0}},
+            "stimulus_set_ids": [main_set],
+            "aggregation_mode": "single",
+        },
+    )
+    assert create.status_code == 200
+    run_id = create.json()["run_id"]
+
+    details = client.get(f"/admin/api/v1/runs/{run_id}")
+    assert details.status_code == 200
+    assert details.json()["launchability_reason"] == "run is draft; activate to accept new participant sessions"
+
+
 def test_activation_allows_exactly_one_main_trial_per_block_boundary(tmp_path) -> None:
     client = TestClient(create_app(str(tmp_path / "summary.sqlite3")))
     _login(client)
