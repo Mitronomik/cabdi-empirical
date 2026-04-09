@@ -34,6 +34,9 @@ class AuthService:
         "password",
         "password123",
         "researcher",
+        "strong-pass",
+        "letmein",
+        "qwerty123",
     }
 
     def __init__(self, store: PilotStore) -> None:
@@ -57,7 +60,7 @@ class AuthService:
         elif env_mode in {"prod", "production", "staging"} and self._is_weak_bootstrap_password(password):
             raise RuntimeError(
                 "PILOT_RESEARCHER_PASSWORD is too weak for production-like mode. "
-                "Set a non-default bootstrap password with at least 10 characters."
+                "Set a non-default bootstrap password with at least 12 characters and no placeholder text."
             )
 
         self._store.execute(
@@ -75,9 +78,12 @@ class AuthService:
 
     def _is_weak_bootstrap_password(self, password: str) -> bool:
         normalized = password.strip().lower()
-        if len(password) < 10:
+        if len(password) < 12:
             return True
-        return normalized in self.WEAK_BOOTSTRAP_PASSWORDS
+        if normalized in self.WEAK_BOOTSTRAP_PASSWORDS:
+            return True
+        weak_markers = ("change", "changeme", "password", "admin", "default", "example", "test")
+        return any(marker in normalized for marker in weak_markers)
 
     def authenticate(self, username: str, password: str) -> AuthenticatedUser | None:
         row = self._store.fetchone(
