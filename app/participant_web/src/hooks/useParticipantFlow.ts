@@ -15,13 +15,14 @@ import {
 import { detectLocale } from '../i18n/locale';
 import { messages, type Locale } from '../i18n/messages';
 import type { QuestionnairePayload, TrialPayload } from '../lib/types';
-
-type Stage = 'consent' | 'instructions' | 'resume_prompt' | 'trial' | 'questionnaire' | 'awaiting_final_submit' | 'completion';
-type ResumeBannerKey =
-  | 'entry.resumeResumed'
-  | 'entry.resumeInvalid'
-  | 'entry.resumeFinalized'
-  | 'entry.resumeNotResumable';
+import {
+  type ParticipantProgress,
+  type ParticipantStage,
+  type ResumeBannerKey,
+  getResumeBannerKey,
+  stageFromNextTrialResponse,
+  stageFromSessionProgress,
+} from './participantFlowState';
 
 interface PublicRunInfo {
   run_slug: string;
@@ -94,11 +95,11 @@ function sessionStorageKey(runSlug: string): string {
 }
 
 export function useParticipantFlow() {
-  const [stage, setStage] = useState<Stage>('consent');
+  const [stage, setStage] = useState<ParticipantStage>('consent');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [currentTrial, setCurrentTrial] = useState<TrialPayload | null>(null);
   const [questionnaireBlockId, setQuestionnaireBlockId] = useState<string | null>(null);
-  const [progress, setProgress] = useState({ completedTrials: 0, totalTrials: 0, currentOrdinal: 0 });
+  const [progress, setProgress] = useState<ParticipantProgress>({ completedTrials: 0, totalTrials: 0, currentOrdinal: 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [completionCode, setCompletionCode] = useState<string | null>(null);
@@ -112,7 +113,7 @@ export function useParticipantFlow() {
 
   const onboardingReady = useMemo(() => Boolean(runSlug.trim()), [runSlug]);
 
-  function setProgressFromResponse(next: TrialPayload | { progress?: { completed_trials: number; total_trials: number; current_ordinal: number } }) {
+  function updateProgressFromResponse(next: TrialPayload | { progress?: { completed_trials: number; total_trials: number; current_ordinal: number } }) {
     if (!('progress' in next) || !next.progress) return;
     setProgress({
       completedTrials: Number(next.progress.completed_trials ?? 0),
@@ -121,32 +122,45 @@ export function useParticipantFlow() {
     });
   }
 
+  function setCompletionState(activeSessionId: string) {
+    setStage('completion');
+    setCurrentTrial(null);
+    setQuestionnaireBlockId(null);
+    setCompletionCode(activeSessionId.slice(0, 8).toUpperCase());
+  }
+
+  function setQuestionnaireState(blockId: string) {
+    setQuestionnaireBlockId(blockId);
+    setCurrentTrial(null);
+    setStage('questionnaire');
+  }
+
   async function loadNextTrial(activeSessionId: string) {
     setLoading(true);
     setError(null);
     try {
       const next = await fetchNextTrial(activeSessionId);
-      setProgressFromResponse(next);
-      if ('status' in next && next.status === 'awaiting_final_submit') {
+      updateProgressFromResponse(next);
+
+      const nextStage = stageFromNextTrialResponse(next);
+      if (nextStage === 'awaiting_final_submit') {
         setStage('awaiting_final_submit');
         setCurrentTrial(null);
         return;
       }
-      if ('status' in next && ['completed', 'finalized'].includes(next.status)) {
-        setStage('completion');
-        setCurrentTrial(null);
-        setCompletionCode(activeSessionId.slice(0, 8).toUpperCase());
+      if (nextStage === 'completion') {
+        setCompletionState(activeSessionId);
         return;
       }
+
       setCurrentTrial(next);
+      setQuestionnaireBlockId(null);
       setStage('trial');
       trialStartMsRef.current = performance.now();
     } catch (err: unknown) {
       const e = err as { status?: number; detail?: unknown };
       if (e.status === 409 && typeof e.detail === 'object' && e.detail && 'block_id' in e.detail) {
-        setQuestionnaireBlockId(String((e.detail as { block_id: string }).block_id));
-        setStage('questionnaire');
-        setCurrentTrial(null);
+        setQuestionnaireState(String((e.detail as { block_id: string }).block_id));
       } else {
         setError(localizedError('error.loadNextTrial'));
       }
@@ -176,23 +190,30 @@ export function useParticipantFlow() {
     if (!runSlug.trim()) return;
     const savedResumeToken = window.localStorage.getItem(resumeStorageKey(runSlug));
     if (!savedResumeToken) return;
+
     try {
       const resumeInfo = await fetchResumeInfo(runSlug, savedResumeToken);
+      const bannerKey = getResumeBannerKey(resumeInfo.resume_status);
+      if (bannerKey) {
+        setResumeBannerKey(bannerKey);
+      }
+
       if (resumeInfo.resume_status === 'resumable') {
-        setResumeBannerKey('entry.resumeResumed');
         setResumeCandidate({ token: savedResumeToken, sessionId: resumeInfo.session_id });
         setStage('resume_prompt');
-      } else if (resumeInfo.resume_status === 'finalized') {
-        setResumeBannerKey('entry.resumeFinalized');
+        return;
+      }
+      if (resumeInfo.resume_status === 'finalized') {
         window.localStorage.removeItem(resumeStorageKey(runSlug));
-      } else if (resumeInfo.resume_status === 'invalid') {
-        setResumeBannerKey('entry.resumeInvalid');
-      } else if (resumeInfo.resume_status === 'not_resumable') {
-        setResumeBannerKey('entry.resumeNotResumable');
       }
     } catch {
       // Keep entry flow resilient; run launchability still gates start.
     }
+  }
+
+  async function bootstrapPublicRunEntry() {
+    if (!runSlug.trim()) return;
+    await Promise.all([loadPublicRunInfo(), loadResumeSurfaceHint()]);
   }
 
   async function beginSession() {
@@ -210,26 +231,24 @@ export function useParticipantFlow() {
         setLoading(false);
         return;
       }
+
       const savedResumeToken = window.localStorage.getItem(resumeStorageKey(runSlug));
       let resumeTokenForCreate: string | null = null;
       setResumeBannerKey(null);
       if (savedResumeToken) {
         const resumeInfo = await fetchResumeInfo(runSlug, savedResumeToken);
+        const bannerKey = getResumeBannerKey(resumeInfo.resume_status);
+        if (bannerKey) {
+          setResumeBannerKey(bannerKey);
+        }
         if (resumeInfo.resume_status === 'resumable') {
           resumeTokenForCreate = savedResumeToken;
-          setResumeBannerKey('entry.resumeResumed');
         }
         if (resumeInfo.resume_status === 'finalized') {
           window.localStorage.removeItem(resumeStorageKey(runSlug));
-          setResumeBannerKey('entry.resumeFinalized');
-        }
-        if (resumeInfo.resume_status === 'invalid') {
-          setResumeBannerKey('entry.resumeInvalid');
-        }
-        if (resumeInfo.resume_status === 'not_resumable') {
-          setResumeBannerKey('entry.resumeNotResumable');
         }
       }
+
       const created = await createSession(runSlug, detectLocale(), resumeTokenForCreate);
       setSessionId(created.session_id);
       window.localStorage.setItem(resumeStorageKey(runSlug), created.resume_token);
@@ -244,9 +263,7 @@ export function useParticipantFlow() {
   }
 
   useEffect(() => {
-    if (!runSlug.trim()) return;
-    void loadPublicRunInfo();
-    void loadResumeSurfaceHint();
+    void bootstrapPublicRunEntry();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runSlug]);
 
@@ -317,8 +334,7 @@ export function useParticipantFlow() {
     try {
       const res = await finalSubmitSession(sessionId);
       if (res.status === 'finalized') {
-        setStage('completion');
-        setCompletionCode(sessionId.slice(0, 8).toUpperCase());
+        setCompletionState(sessionId);
         if (runSlug.trim()) {
           window.localStorage.removeItem(resumeStorageKey(runSlug.trim()));
           window.localStorage.removeItem(sessionStorageKey(runSlug.trim()));
@@ -341,29 +357,29 @@ export function useParticipantFlow() {
         setLoading(false);
         return;
       }
+
       setSessionId(resumed.session_id);
       window.localStorage.setItem(resumeStorageKey(runSlug), resumeCandidate.token);
       window.localStorage.setItem(sessionStorageKey(runSlug), resumed.session_id);
 
-      const progress = await fetchSessionProgress(resumed.session_id);
-      if (progress.current_stage === 'completion' || progress.status === 'finalized') {
-        setCompletionCode(resumed.session_id.slice(0, 8).toUpperCase());
-        setStage('completion');
+      const sessionProgress = await fetchSessionProgress(resumed.session_id);
+      const resolved = stageFromSessionProgress(sessionProgress);
+      if (resolved.stage === 'completion') {
+        setCompletionState(resumed.session_id);
         setLoading(false);
         return;
       }
-      if (progress.current_stage === 'awaiting_final_submit' || progress.status === 'awaiting_final_submit') {
+      if (resolved.stage === 'awaiting_final_submit') {
         setStage('awaiting_final_submit');
         setLoading(false);
         return;
       }
-      if (progress.current_stage === 'questionnaire') {
-        const blockNumber = Number(progress.current_block_index) + 1;
-        setQuestionnaireBlockId(`block_${Math.max(1, blockNumber)}`);
-        setStage('questionnaire');
+      if (resolved.stage === 'questionnaire' && resolved.questionnaireBlockId) {
+        setQuestionnaireState(resolved.questionnaireBlockId);
         setLoading(false);
         return;
       }
+
       await startSession(resumed.session_id);
       await loadNextTrial(resumed.session_id);
     } catch {

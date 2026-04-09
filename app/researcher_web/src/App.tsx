@@ -1,41 +1,28 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 
 import { LanguageSwitcher } from './components/LanguageSwitcher';
 import { Nav, type PageKey } from './components/Nav';
-import { localizeOperatorError } from './i18n/uiText';
 import { LocaleProvider, useLocale } from './i18n/useLocale';
-import { getCurrentUser, login, logout } from './lib/api';
 import { DiagnosticsPage } from './pages/DiagnosticsPage';
 import { ExportsPage } from './pages/ExportsPage';
 import { RunBuilderPage } from './pages/RunBuilderPage';
 import { SessionMonitorPage } from './pages/SessionMonitorPage';
 import { StimulusUploadPage } from './pages/StimulusUploadPage';
+import { useResearcherShell } from './hooks/useResearcherShell';
 
-type AuthState = 'loading' | 'authenticated' | 'unauthenticated';
+function ResearcherPageContent({ page }: { page: PageKey }) {
+  if (page === 'upload') return <StimulusUploadPage />;
+  if (page === 'run') return <RunBuilderPage />;
+  if (page === 'sessions') return <SessionMonitorPage />;
+  if (page === 'diagnostics') return <DiagnosticsPage />;
+  return <ExportsPage />;
+}
 
 function AppBody() {
-  const [page, setPage] = useState<PageKey>('upload');
-  const [authState, setAuthState] = useState<AuthState>('loading');
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('');
-  const [authError, setAuthError] = useState<string | null>(null);
-  const [authedUsername, setAuthedUsername] = useState<string>('');
   const { t } = useLocale();
+  const shell = useResearcherShell(t);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const me = await getCurrentUser();
-        setAuthedUsername(me.user.username);
-        setAuthState('authenticated');
-      } catch {
-        setAuthState('unauthenticated');
-      }
-    };
-    void load();
-  }, []);
-
-  if (authState === 'loading') {
+  if (shell.authState === 'loading') {
     return (
       <main>
         <div className="toolbar">
@@ -47,7 +34,7 @@ function AppBody() {
     );
   }
 
-  if (authState === 'unauthenticated') {
+  if (!shell.canRenderCabinet) {
     return (
       <main>
         <div className="toolbar">
@@ -57,36 +44,22 @@ function AppBody() {
         <section className="panel">
           <h2>{t('auth.loginTitle')}</h2>
           <p className="muted">{t('auth.loginHint')}</p>
-          <form
-            className="form-row"
-            onSubmit={async (event) => {
-              event.preventDefault();
-              setAuthError(null);
-              try {
-                const response = await login(username, password);
-                setAuthedUsername(response.user.username);
-                setPassword('');
-                setAuthState('authenticated');
-              } catch (error) {
-                setAuthError(localizeOperatorError(t, error));
-              }
-            }}
-          >
+          <form className="form-row" onSubmit={shell.submitLogin}>
             <label>
               {t('auth.username')}
-              <input value={username} onChange={(event) => setUsername(event.target.value)} />
+              <input value={shell.username} onChange={(event) => shell.setUsername(event.target.value)} />
             </label>
             <label>
               {t('auth.password')}
-              <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+              <input type="password" value={shell.password} onChange={(event) => shell.setPassword(event.target.value)} />
             </label>
             <button className="primary-btn" type="submit">
               {t('auth.login')}
             </button>
           </form>
-          {authError && (
+          {shell.authError && (
             <p role="alert" className="alert-error">
-              {authError}
+              {shell.authError}
             </p>
           )}
         </section>
@@ -103,25 +76,14 @@ function AppBody() {
       <p>{t('app.subtitle')}</p>
       <section className="panel toolbar" aria-label={t('app.operatorSession')}>
         <p>
-          {t('auth.loggedInAs')}: {authedUsername}
+          {t('auth.loggedInAs')}: {shell.authedUsername}
         </p>
-        <button
-          className="secondary-btn"
-          onClick={async () => {
-            await logout();
-            setAuthedUsername('');
-            setAuthState('unauthenticated');
-          }}
-        >
+        <button className="secondary-btn" onClick={shell.submitLogout}>
           {t('auth.logout')}
         </button>
       </section>
-      <Nav page={page} setPage={setPage} />
-      {page === 'upload' && <StimulusUploadPage />}
-      {page === 'run' && <RunBuilderPage />}
-      {page === 'sessions' && <SessionMonitorPage />}
-      {page === 'diagnostics' && <DiagnosticsPage />}
-      {page === 'exports' && <ExportsPage />}
+      <Nav page={shell.page} setPage={shell.setPage} />
+      <ResearcherPageContent page={shell.page} />
     </main>
   );
 }

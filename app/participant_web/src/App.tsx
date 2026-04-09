@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { LanguageSwitcher } from './components/LanguageSwitcher';
 import { useParticipantFlow } from './hooks/useParticipantFlow';
+import type { ParticipantStage } from './hooks/participantFlowState';
 import { LocaleProvider, useLocale } from './i18n/useLocale';
 import { BlockQuestionnairePage } from './pages/BlockQuestionnairePage';
 import { CompletionPage } from './pages/CompletionPage';
@@ -12,117 +13,110 @@ import { TrialPage } from './pages/TrialPage';
 
 import './styles.css';
 
+function ResumePromptCard({
+  loading,
+  onContinue,
+  onRestart,
+}: {
+  loading: boolean;
+  onContinue: () => void;
+  onRestart: () => void;
+}) {
+  const { t } = useLocale();
+
+  return (
+    <section className="card">
+      <h1>{t('instructions.title')}</h1>
+      <p>{t('entry.resumeResumed')}</p>
+      <div className="button-row">
+        <button type="button" disabled={loading} onClick={onContinue}>
+          {t('common.continue')}
+        </button>
+        <button type="button" disabled={loading} onClick={onRestart}>
+          {t('instructions.startPractice')}
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function AppBody() {
   const [consentChecked, setConsentChecked] = useState(false);
   const { t } = useLocale();
 
-  const {
-    stage,
-    currentTrial,
-    questionnaireBlockId,
-    progress,
-    loading,
-    error,
-    completionCode,
-    runSlug,
-    publicRun,
-    onboardingReady,
-    resumeBannerKey,
-    savedFeedback,
-    setStage,
-    beginSession,
-    continueResumedSession,
-    submitCurrentTrial,
-    submitQuestionnaire,
-    submitFinalSession,
-    retryCurrent,
-  } = useParticipantFlow();
+  const flow = useParticipantFlow();
 
+  const stageContentByKey: Partial<Record<ParticipantStage, JSX.Element | null>> = {
+    consent: (
+      <ConsentPage
+        consentChecked={consentChecked}
+        setConsentChecked={setConsentChecked}
+        onContinue={() => flow.setStage('instructions')}
+      />
+    ),
+    instructions: !flow.onboardingReady ? (
+      <section className="card">
+        <h1>{t('entry.title')}</h1>
+        <p>{t('entry.missingRun')}</p>
+        <p className="muted">{t('entry.contactCoordinator')}</p>
+      </section>
+    ) : (
+      <InstructionsPage
+        runTitle={flow.publicRun?.public_title ?? t('instructions.defaultRunTitle')}
+        runDescription={flow.publicRun?.public_description}
+        resumeNotice={flow.resumeBannerKey ? t(flow.resumeBannerKey) : null}
+        loading={flow.loading}
+        runReady={Boolean(flow.runSlug) && Boolean(flow.publicRun?.launchable)}
+        onStart={flow.beginSession}
+      />
+    ),
+    resume_prompt: (
+      <ResumePromptCard
+        loading={flow.loading}
+        onContinue={flow.continueResumedSession}
+        onRestart={() => flow.setStage('consent')}
+      />
+    ),
+    trial: flow.currentTrial ? (
+      <TrialPage
+        trial={flow.currentTrial}
+        loading={flow.loading}
+        savedFeedback={flow.savedFeedback}
+        onSubmit={flow.submitCurrentTrial}
+      />
+    ) : null,
+    questionnaire: flow.questionnaireBlockId ? (
+      <BlockQuestionnairePage
+        blockId={flow.questionnaireBlockId}
+        loading={flow.loading}
+        savedFeedback={flow.savedFeedback}
+        onSubmit={flow.submitQuestionnaire}
+      />
+    ) : null,
+    awaiting_final_submit: (
+      <FinalSubmitPage
+        loading={flow.loading}
+        onSubmit={flow.submitFinalSession}
+        completedTrials={flow.progress.completedTrials}
+        totalTrials={flow.progress.totalTrials}
+      />
+    ),
+    completion: <CompletionPage completionCode={flow.completionCode} />,
+  };
 
   return (
     <main className="app-shell">
       <LanguageSwitcher />
-      {error && (
+      {flow.error && (
         <section className="card error">
-          <p>{error}</p>
-          <button type="button" onClick={retryCurrent}>
+          <p>{flow.error}</p>
+          <button type="button" onClick={flow.retryCurrent}>
             {t('error.retry')}
           </button>
         </section>
       )}
 
-      {stage === 'consent' && (
-        <ConsentPage
-          consentChecked={consentChecked}
-          setConsentChecked={setConsentChecked}
-          onContinue={() => setStage('instructions')}
-        />
-      )}
-
-      {stage === 'instructions' && (
-        <>
-          {!onboardingReady && (
-            <section className="card">
-              <h1>{t('entry.title')}</h1>
-              <p>{t('entry.missingRun')}</p>
-              <p className="muted">{t('entry.contactCoordinator')}</p>
-            </section>
-          )}
-          {onboardingReady && (
-            <InstructionsPage
-              runTitle={publicRun?.public_title ?? t('instructions.defaultRunTitle')}
-              runDescription={publicRun?.public_description}
-              resumeNotice={resumeBannerKey ? t(resumeBannerKey) : null}
-              loading={loading}
-              runReady={Boolean(runSlug) && Boolean(publicRun?.launchable)}
-              onStart={beginSession}
-            />
-          )}
-        </>
-      )}
-
-      {stage === 'resume_prompt' && (
-        <section className="card">
-          <h1>{t('instructions.title')}</h1>
-          <p>{t('entry.resumeResumed')}</p>
-          <div className="button-row">
-            <button type="button" disabled={loading} onClick={continueResumedSession}>
-              {t('common.continue')}
-            </button>
-            <button type="button" disabled={loading} onClick={() => setStage('consent')}>
-              {t('instructions.startPractice')}
-            </button>
-          </div>
-        </section>
-      )}
-
-      {stage === 'trial' && currentTrial && (
-        <TrialPage
-          trial={currentTrial}
-          loading={loading}
-          savedFeedback={savedFeedback}
-          onSubmit={submitCurrentTrial}
-        />
-      )}
-
-      {stage === 'questionnaire' && questionnaireBlockId && (
-        <BlockQuestionnairePage
-          blockId={questionnaireBlockId}
-          loading={loading}
-          savedFeedback={savedFeedback}
-          onSubmit={submitQuestionnaire}
-        />
-      )}
-
-      {stage === 'completion' && <CompletionPage completionCode={completionCode} />}
-      {stage === 'awaiting_final_submit' && (
-        <FinalSubmitPage
-          loading={loading}
-          onSubmit={submitFinalSession}
-          completedTrials={progress.completedTrials}
-          totalTrials={progress.totalTrials}
-        />
-      )}
+      {stageContentByKey[flow.stage] ?? null}
     </main>
   );
 }
