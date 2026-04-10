@@ -14,7 +14,7 @@ class CreateRunRequest(BaseModel):
     run_name: str
     public_slug: str | None = None
     experiment_id: str
-    task_family: str
+    task_family: str | None = None
     config: dict[str, Any]
     stimulus_set_ids: list[str]
     aggregation_mode: str = "single"
@@ -24,6 +24,33 @@ class CreateRunRequest(BaseModel):
 
 class CloseRunRequest(BaseModel):
     confirm_run_id: str
+
+
+class PreviewRunRequest(BaseModel):
+    run_name: str
+    public_slug: str | None = None
+    experiment_id: str
+    task_family: str | None = None
+    stimulus_set_ids: list[str]
+    aggregation_mode: str = "single"
+    practice_stimulus_set_id: str | None = None
+    config: dict[str, Any]
+    notes: str | None = None
+
+
+@router.post("/preview")
+def preview_run(req: PreviewRunRequest, request: Request) -> dict:
+    return request.app.state.run_service.preview_run(
+        run_name=req.run_name,
+        public_slug=req.public_slug,
+        experiment_id=req.experiment_id,
+        task_family=req.task_family,
+        stimulus_set_ids=req.stimulus_set_ids,
+        aggregation_mode=req.aggregation_mode,
+        practice_stimulus_set_id=req.practice_stimulus_set_id,
+        config=req.config,
+        notes=req.notes,
+    )
 
 
 @router.post("")

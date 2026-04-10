@@ -306,6 +306,19 @@ describe('researcher auth shell', () => {
             { status: 200 },
           );
         }
+        if (url.endsWith('/runs/preview')) {
+          return new Response(
+            JSON.stringify({
+              resolved_task_family: 'scam_detection',
+              validation_errors: [],
+              operator_warnings: [],
+              practice_item_count: 0,
+              main_item_count: 6,
+              expected_trial_count: 6,
+            }),
+            { status: 200 },
+          );
+        }
         if (url.endsWith('/runs')) {
           return new Response(
             JSON.stringify([
@@ -398,6 +411,19 @@ describe('researcher auth shell', () => {
             { status: 200 },
           );
         }
+        if (url.endsWith('/runs/preview')) {
+          return new Response(
+            JSON.stringify({
+              resolved_task_family: 'scam_detection',
+              validation_errors: [],
+              operator_warnings: [],
+              practice_item_count: 0,
+              main_item_count: 6,
+              expected_trial_count: 6,
+            }),
+            { status: 200 },
+          );
+        }
         return new Response(JSON.stringify({ ok: true }), { status: 200 });
       }),
     );
@@ -471,6 +497,19 @@ describe('researcher auth shell', () => {
                 main_item_count: 2,
                 expected_trial_count: 3,
               },
+            }),
+            { status: 200 },
+          );
+        }
+        if (url.endsWith('/runs/preview')) {
+          return new Response(
+            JSON.stringify({
+              resolved_task_family: 'scam_detection',
+              validation_errors: [],
+              operator_warnings: [],
+              practice_item_count: 6,
+              main_item_count: 48,
+              expected_trial_count: 54,
             }),
             { status: 200 },
           );
@@ -727,6 +766,19 @@ describe('researcher auth shell', () => {
           createPayload = JSON.parse(String(init.body ?? '{}')) as Record<string, unknown>;
           return new Response(JSON.stringify({ run_id: 'run_new', run_name: 'run-new', public_slug: 'run-new', status: 'draft' }), { status: 200 });
         }
+        if (url.endsWith('/runs/preview')) {
+          return new Response(
+            JSON.stringify({
+              resolved_task_family: 'claim_review',
+              validation_errors: [],
+              operator_warnings: [],
+              practice_item_count: 0,
+              main_item_count: 8,
+              expected_trial_count: 8,
+            }),
+            { status: 200 },
+          );
+        }
         if (url.endsWith('/runs')) return new Response(JSON.stringify([]), { status: 200 });
         if (url.endsWith('/runs/run_new')) return new Response(JSON.stringify({ run_id: 'run_new', run_name: 'run-new', status: 'draft' }), { status: 200 });
         return new Response(JSON.stringify({ ok: true }), { status: 200 });
@@ -774,6 +826,19 @@ describe('researcher auth shell', () => {
         if (url.endsWith('/runs') && init?.method === 'POST') {
           createPayload = JSON.parse(String(init.body ?? '{}')) as Record<string, unknown>;
           return new Response(JSON.stringify({ run_id: 'run_new', run_name: 'run-new', public_slug: 'run-new', status: 'draft' }), { status: 200 });
+        }
+        if (url.endsWith('/runs/preview')) {
+          return new Response(
+            JSON.stringify({
+              resolved_task_family: 'claim_review',
+              validation_errors: [],
+              operator_warnings: [],
+              practice_item_count: 0,
+              main_item_count: 15,
+              expected_trial_count: 15,
+            }),
+            { status: 200 },
+          );
         }
         if (url.endsWith('/runs')) return new Response(JSON.stringify([]), { status: 200 });
         if (url.endsWith('/runs/run_new')) return new Response(JSON.stringify({ run_id: 'run_new', run_name: 'run-new', status: 'draft' }), { status: 200 });
@@ -825,6 +890,19 @@ describe('researcher auth shell', () => {
           createSpy();
           return new Response(JSON.stringify({ run_id: 'run_new' }), { status: 200 });
         }
+        if (url.endsWith('/runs/preview')) {
+          return new Response(
+            JSON.stringify({
+              resolved_task_family: '',
+              validation_errors: ['Selected main banks have mixed task families. Choose banks with one shared task family.'],
+              operator_warnings: [],
+              practice_item_count: 0,
+              main_item_count: 18,
+              expected_trial_count: 18,
+            }),
+            { status: 200 },
+          );
+        }
         if (url.endsWith('/runs')) return new Response(JSON.stringify([]), { status: 200 });
         return new Response(JSON.stringify({ ok: true }), { status: 200 });
       }),
@@ -836,7 +914,7 @@ describe('researcher auth shell', () => {
     await user.click(screen.getByLabelText('Aggregation mode'));
     await user.selectOptions(screen.getByLabelText('Main banks'), ['stim_a', 'stim_b']);
 
-    expect(await screen.findByText(/Selected main banks have mixed task families/)).toBeInTheDocument();
+    expect((await screen.findAllByText(/Selected main banks have mixed task families/)).length).toBeGreaterThan(0);
     expect(screen.getByLabelText('task family')).toHaveValue('mixed task families (invalid)');
     await user.click(screen.getByRole('button', { name: 'Create Run' }));
     const alerts = await screen.findAllByRole('alert');
@@ -870,6 +948,19 @@ describe('researcher auth shell', () => {
           createSpy();
           return new Response(JSON.stringify({ run_id: 'run_new' }), { status: 200 });
         }
+        if (url.endsWith('/runs/preview')) {
+          return new Response(
+            JSON.stringify({
+              resolved_task_family: 'scam_detection',
+              validation_errors: ['multi aggregation_mode requires at least two main stimulus_set_ids'],
+              operator_warnings: [],
+              practice_item_count: 0,
+              main_item_count: 10,
+              expected_trial_count: 10,
+            }),
+            { status: 200 },
+          );
+        }
         if (url.endsWith('/runs')) return new Response(JSON.stringify([]), { status: 200 });
         return new Response(JSON.stringify({ ok: true }), { status: 200 });
       }),
@@ -882,7 +973,8 @@ describe('researcher auth shell', () => {
     await user.selectOptions(screen.getByLabelText('Main banks'), ['stim_a']);
     await user.click(screen.getByRole('button', { name: 'Create Run' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Aggregation mode requires selecting at least two main banks.');
+    const alerts = await screen.findAllByRole('alert');
+    expect(alerts.some((item) => item.textContent?.includes('multi aggregation_mode requires at least two main stimulus_set_ids'))).toBe(true);
     expect(createSpy).not.toHaveBeenCalled();
   });
 

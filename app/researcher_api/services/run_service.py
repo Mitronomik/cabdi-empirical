@@ -173,7 +173,7 @@ class RunService:
         *,
         run_name: str,
         experiment_id: str,
-        task_family: str,
+        task_family: str | None,
         config: dict[str, Any],
         stimulus_set_ids: list[str],
         notes: str | None,
@@ -181,53 +181,24 @@ class RunService:
         practice_stimulus_set_id: str | None = None,
         public_slug: str | None = None,
     ) -> dict[str, Any]:
-        if not run_name.strip():
-            raise ValueError("run_name must be non-empty")
-        if not experiment_id.strip():
-            raise ValueError("experiment_id must be non-empty")
-        if not task_family.strip():
-            raise ValueError("task_family must be non-empty")
-        if aggregation_mode not in _ALLOWED_AGGREGATION_MODES:
-            raise ValueError(f"aggregation_mode must be one of: {sorted(_ALLOWED_AGGREGATION_MODES)}")
-        main_stimulus_set_ids = [set_id for set_id in stimulus_set_ids if str(set_id).strip()]
-        if not main_stimulus_set_ids:
-            raise ValueError("at least one main stimulus_set_id is required; practice_stimulus_set_id is optional and supplementary only")
-        if aggregation_mode == AGGREGATION_MODE_SINGLE and len(main_stimulus_set_ids) != 1:
-            raise ValueError("single aggregation_mode requires exactly one main stimulus_set_id")
-        if aggregation_mode == AGGREGATION_MODE_MULTI and len(main_stimulus_set_ids) < 2:
-            raise ValueError("multi aggregation_mode requires at least two main stimulus_set_ids")
-
-        default_experiment = load_experiment_config("pilot/configs/default_experiment.yaml")
-        resolved_config = materialize_run_config_for_storage(
-            run_config=config,
-            default_experiment=default_experiment,
+        preview = self.preview_run(
+            run_name=run_name,
+            public_slug=public_slug,
             experiment_id=experiment_id,
             task_family=task_family,
-        )
-
-        self._validate_stimulus_sets_for_run(
-            task_family=task_family,
-            main_stimulus_set_ids=main_stimulus_set_ids,
-            practice_stimulus_set_id=practice_stimulus_set_id,
-        )
-
-        run_summary = self._compute_run_summary(
-            main_stimulus_set_ids=main_stimulus_set_ids,
-            practice_stimulus_set_id=practice_stimulus_set_id,
+            stimulus_set_ids=stimulus_set_ids,
             aggregation_mode=aggregation_mode,
+            practice_stimulus_set_id=practice_stimulus_set_id,
+            config=config,
+            notes=notes,
         )
-
-        for stimulus_set_id in main_stimulus_set_ids:
-            row = self.store.fetchone(
-                "SELECT stimulus_set_id, task_family, validation_status FROM researcher_stimulus_sets WHERE stimulus_set_id = ?",
-                (stimulus_set_id,),
-            )
-            if row is None:
-                raise ValueError(f"Unknown stimulus_set_id: {stimulus_set_id}")
-            if row["task_family"] != task_family:
-                raise ValueError("All selected stimulus sets must match run task_family")
-            if row.get("validation_status") not in {"valid", "warning_only"}:
-                raise ValueError(f"Stimulus set is not run-compatible: {stimulus_set_id}")
+        validation_errors = [str(item) for item in preview.get("validation_errors", [])]
+        if validation_errors:
+            raise ValueError("; ".join(validation_errors))
+        main_stimulus_set_ids = [str(item) for item in preview.get("selected_main_bank_ids", [])]
+        resolved_task_family = str(preview.get("resolved_task_family") or "")
+        resolved_config = dict(preview.get("resolved_config") or {})
+        run_summary = dict(preview.get("run_summary") or {})
 
         run_id = f"run_{uuid4().hex[:10]}"
         resolved_public_slug = self._build_unique_public_slug(run_name, public_slug)
@@ -244,7 +215,7 @@ class RunService:
                 resolved_public_slug,
                 RUN_STATUS_DRAFT,
                 experiment_id,
-                task_family,
+                resolved_task_family,
                 dumps(resolved_config),
                 dumps(main_stimulus_set_ids),
                 notes,
@@ -273,6 +244,142 @@ class RunService:
             "notes": created["notes"],
             "created_at": created["created_at"],
             "validation_errors": [],
+        }
+
+    def preview_run(
+        self,
+        *,
+        run_name: str,
+        public_slug: str | None,
+        experiment_id: str,
+        task_family: str | None,
+        stimulus_set_ids: list[str],
+        aggregation_mode: str,
+        practice_stimulus_set_id: str | None,
+        config: dict[str, Any],
+        notes: str | None,
+    ) -> dict[str, Any]:
+        del public_slug, notes
+        validation_errors: list[str] = []
+        operator_warnings: list[str] = []
+        if not run_name.strip():
+            validation_errors.append("run_name must be non-empty")
+        if not experiment_id.strip():
+            validation_errors.append("experiment_id must be non-empty")
+        if aggregation_mode not in _ALLOWED_AGGREGATION_MODES:
+            validation_errors.append(f"aggregation_mode must be one of: {sorted(_ALLOWED_AGGREGATION_MODES)}")
+
+        main_stimulus_set_ids = [str(set_id).strip() for set_id in stimulus_set_ids if str(set_id).strip()]
+        if not main_stimulus_set_ids:
+            validation_errors.append(
+                "at least one main stimulus_set_id is required; practice_stimulus_set_id is optional and supplementary only"
+            )
+        if aggregation_mode == AGGREGATION_MODE_SINGLE and len(main_stimulus_set_ids) != 1:
+            validation_errors.append("single aggregation_mode requires exactly one main stimulus_set_id")
+        if aggregation_mode == AGGREGATION_MODE_MULTI and len(main_stimulus_set_ids) < 2:
+            validation_errors.append("multi aggregation_mode requires at least two main stimulus_set_ids")
+        self._collect_no_stimulus_overlap_error(
+            validation_errors=validation_errors,
+            main_stimulus_set_ids=main_stimulus_set_ids,
+            practice_stimulus_set_id=practice_stimulus_set_id,
+        )
+
+        selected_banks, resolved_task_family, payload_schema_versions = self._resolve_selected_banks(
+            main_stimulus_set_ids=main_stimulus_set_ids,
+            practice_stimulus_set_id=practice_stimulus_set_id,
+            requested_task_family=task_family,
+            validation_errors=validation_errors,
+            operator_warnings=operator_warnings,
+        )
+
+        default_experiment = load_experiment_config("pilot/configs/default_experiment.yaml")
+        resolved_config: dict[str, Any] = {}
+        execution_config = None
+        if isinstance(config, dict):
+            try:
+                resolved_config = materialize_run_config_for_storage(
+                    run_config=config,
+                    default_experiment=default_experiment,
+                    experiment_id=experiment_id,
+                    task_family=resolved_task_family or str(task_family or ""),
+                )
+                execution_config = resolve_execution_config_from_run(
+                    run_config=resolved_config,
+                    run_experiment_id=experiment_id,
+                    run_task_family=resolved_task_family or str(task_family or ""),
+                )
+            except ValueError as exc:
+                validation_errors.append(str(exc))
+        else:
+            validation_errors.append("run.config must be a non-empty object")
+
+        run_summary = self._compute_run_summary(
+            main_stimulus_set_ids=main_stimulus_set_ids,
+            practice_stimulus_set_id=practice_stimulus_set_id,
+            aggregation_mode=aggregation_mode if aggregation_mode in _ALLOWED_AGGREGATION_MODES else AGGREGATION_MODE_SINGLE,
+        )
+        block_shape_warnings: list[str] = []
+        if execution_config is not None:
+            non_empty_blocks_error = validate_non_empty_main_blocks(
+                main_item_count=int(run_summary.get("main_item_count", 0)),
+                n_blocks=int(execution_config.n_blocks),
+            )
+            if non_empty_blocks_error:
+                block_shape_warnings.append(non_empty_blocks_error)
+            elif int(run_summary.get("main_item_count", 0)) % int(execution_config.n_blocks) != 0:
+                block_shape_warnings.append(
+                    "main_item_count does not divide evenly across n_blocks; block sizes will be uneven"
+                )
+
+        if payload_schema_versions:
+            payload_compatibility = {
+                "compatible": len(payload_schema_versions) == 1,
+                "selected_versions": sorted(payload_schema_versions),
+            }
+            if len(payload_schema_versions) > 1:
+                validation_errors.append("Selected stimulus sets have incompatible payload_schema_version values")
+        else:
+            payload_compatibility = {"compatible": True, "selected_versions": []}
+
+        launchability_validation_errors = self._validate_launchability(
+            {
+                "experiment_id": experiment_id,
+                "task_family": resolved_task_family,
+                "config": resolved_config,
+                "stimulus_set_ids": main_stimulus_set_ids,
+                "aggregation_mode": aggregation_mode,
+                "practice_stimulus_set_id": practice_stimulus_set_id,
+                "run_summary": run_summary,
+            }
+        )
+        launchability_preview = {
+            "launchable": len(launchability_validation_errors) == 0 and len(validation_errors) == 0,
+            "launchability_state": self._launchability_state(
+                len(launchability_validation_errors) == 0 and len(validation_errors) == 0
+            ),
+            "launchability_reason": (
+                "run can be activated once created"
+                if len(launchability_validation_errors) == 0 and len(validation_errors) == 0
+                else (launchability_validation_errors[0] if launchability_validation_errors else validation_errors[0])
+            ),
+            "validation_errors": launchability_validation_errors,
+        }
+
+        return {
+            "resolved_task_family": resolved_task_family,
+            "validation_errors": validation_errors,
+            "operator_warnings": operator_warnings,
+            "selected_banks": selected_banks,
+            "selected_main_bank_ids": main_stimulus_set_ids,
+            "selected_practice_bank_id": practice_stimulus_set_id,
+            "practice_item_count": int(run_summary.get("practice_item_count", 0)),
+            "main_item_count": int(run_summary.get("main_item_count", 0)),
+            "expected_trial_count": int(run_summary.get("expected_trial_count", 0)),
+            "launchability_preview": launchability_preview,
+            "payload_schema_compatibility": payload_compatibility,
+            "block_shape_warnings": block_shape_warnings,
+            "run_summary": run_summary,
+            "resolved_config": resolved_config,
         }
 
     def get_run(self, run_id: str) -> dict[str, Any]:
@@ -570,6 +677,90 @@ class RunService:
     def _validate_no_stimulus_overlap(*, main_stimulus_set_ids: list[str], practice_stimulus_set_id: str | None) -> None:
         if practice_stimulus_set_id and practice_stimulus_set_id in main_stimulus_set_ids:
             raise ValueError("practice_stimulus_set_id must not overlap with main stimulus_set_ids")
+
+    @staticmethod
+    def _collect_no_stimulus_overlap_error(
+        *,
+        validation_errors: list[str],
+        main_stimulus_set_ids: list[str],
+        practice_stimulus_set_id: str | None,
+    ) -> None:
+        try:
+            RunService._validate_no_stimulus_overlap(
+                main_stimulus_set_ids=main_stimulus_set_ids,
+                practice_stimulus_set_id=practice_stimulus_set_id,
+            )
+        except ValueError as exc:
+            validation_errors.append(str(exc))
+
+    def _resolve_selected_banks(
+        self,
+        *,
+        main_stimulus_set_ids: list[str],
+        practice_stimulus_set_id: str | None,
+        requested_task_family: str | None,
+        validation_errors: list[str],
+        operator_warnings: list[str],
+    ) -> tuple[list[dict[str, Any]], str, set[str]]:
+        selected_banks: list[dict[str, Any]] = []
+        payload_versions: set[str] = set()
+        task_families: set[str] = set()
+        all_set_ids = list(main_stimulus_set_ids)
+        if practice_stimulus_set_id:
+            all_set_ids.append(practice_stimulus_set_id)
+        for stimulus_set_id in all_set_ids:
+            row = self.store.fetchone(
+                """
+                SELECT stimulus_set_id, name, task_family, validation_status, n_items, payload_schema_version
+                FROM researcher_stimulus_sets
+                WHERE stimulus_set_id = ?
+                """,
+                (stimulus_set_id,),
+            )
+            role = "practice" if practice_stimulus_set_id and stimulus_set_id == practice_stimulus_set_id else "main"
+            if row is None:
+                validation_errors.append(f"Unknown stimulus_set_id: {stimulus_set_id}")
+                continue
+            resolved_task_family = str(row.get("task_family") or "")
+            if resolved_task_family:
+                task_families.add(resolved_task_family)
+            payload_versions.add(str(row.get("payload_schema_version") or "stimulus_payload.v1"))
+            if row.get("validation_status") not in {"valid", "warning_only"}:
+                validation_errors.append(f"Stimulus set is not run-compatible: {stimulus_set_id}")
+            if row.get("validation_status") == "warning_only":
+                operator_warnings.append(
+                    f"Stimulus set has warning_only validation status: {stimulus_set_id}"
+                )
+            selected_banks.append(
+                {
+                    "stimulus_set_id": row["stimulus_set_id"],
+                    "name": row["name"],
+                    "n_items": int(row.get("n_items") or 0),
+                    "task_family": resolved_task_family,
+                    "validation_status": row.get("validation_status"),
+                    "payload_schema_version": str(row.get("payload_schema_version") or "stimulus_payload.v1"),
+                    "role": role,
+                }
+            )
+
+        requested_family = str(requested_task_family or "").strip()
+        if requested_family:
+            if any(family != requested_family for family in task_families):
+                validation_errors.append("All selected stimulus sets must match run task_family")
+            resolved_family = requested_family
+        else:
+            if len(task_families) > 1:
+                validation_errors.append(
+                    "Selected main banks have mixed task families. Choose banks with one shared task family."
+                )
+                resolved_family = ""
+            elif len(task_families) == 1:
+                resolved_family = next(iter(task_families))
+            else:
+                resolved_family = ""
+        if not resolved_family:
+            validation_errors.append("task_family must be non-empty")
+        return selected_banks, resolved_family, payload_versions
 
     def _compute_run_summary(
         self,

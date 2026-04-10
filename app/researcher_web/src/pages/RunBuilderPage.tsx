@@ -3,8 +3,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { KbdMono, StatusBadge, SummaryCard } from '../components/OperatorPrimitives';
 import { localizeOperatorError, localizeStatus } from '../i18n/uiText';
 import { useLocale } from '../i18n/useLocale';
-import { activateRun, closeRun, createRun, getRun, getRunBuilderDefaults, listRuns, listStimuli, pauseRun } from '../lib/api';
-import { parseRunSummary, parseStimulusSetSummary, resolveRunSummaryCounts } from '../lib/researcherUi';
+import { activateRun, closeRun, createRun, getRun, getRunBuilderDefaults, listRuns, listStimuli, pauseRun, previewRun } from '../lib/api';
+import { parseRunSummary, parseStimulusSetSummary } from '../lib/researcherUi';
 
 function runTone(status: string): 'good' | 'warn' | 'bad' | 'neutral' {
   if (status === 'active') return 'good';
@@ -34,8 +34,10 @@ export function RunBuilderPage() {
   const [runName, setRunName] = useState(`run-${new Date().toISOString().slice(0, 16).replace('T', '-')}`);
   const [publicSlug, setPublicSlug] = useState('');
   const [notes, setNotes] = useState('');
+  const [preview, setPreview] = useState<Record<string, unknown> | null>(null);
   const { t } = useLocale();
   const latestRunDetailsRequest = useRef(0);
+  const latestPreviewRequest = useRef(0);
 
   const validStimulusSets = useMemo(
     () => stimulusSets.filter((item) => ['valid', 'warning_only'].includes(String(item.validation_status ?? ''))),
@@ -137,23 +139,14 @@ export function RunBuilderPage() {
       setError(t('run.errorMissingStimulus'));
       return;
     }
-    if (aggregationEnabled && mainSetIds.length < 2) {
-      setError('Aggregation mode requires selecting at least two main banks.');
-      return;
-    }
-    if (mainTaskFamilyMixed) {
-      setError('Selected main banks have mixed task families. Choose banks with one shared task family.');
-      return;
-    }
-    if (selectedPracticeStimulusSetId && mainSetIds.includes(selectedPracticeStimulusSetId)) {
-      setError('practice_stimulus_set_id must not overlap with main stimulus_set_ids');
+    if (previewValidationErrors.length > 0) {
+      setError(previewValidationErrors[0]);
       return;
     }
     try {
       setIsCreating(true);
       const experimentId = String(defaults?.experiment_id ?? '').trim();
-      const taskFamily = String(derivedMainTaskFamily).trim();
-      if (!experimentId || !taskFamily) {
+      if (!experimentId) {
         setError(t('run.errorMissingDefaults'));
         return;
       }
@@ -161,7 +154,7 @@ export function RunBuilderPage() {
         run_name: runName.trim(),
         public_slug: publicSlug.trim() || null,
         experiment_id: experimentId,
-        task_family: taskFamily,
+        task_family: preview?.resolved_task_family ? String(preview.resolved_task_family) : null,
         stimulus_set_ids: mainSetIds,
         aggregation_mode: aggregationEnabled ? 'multi' : 'single',
         practice_stimulus_set_id: selectedPracticeStimulusSetId || null,
@@ -254,13 +247,37 @@ export function RunBuilderPage() {
       : (derivedMainTaskFamily || 'no main bank selected');
   const selectedMainSummary = selectedMainBanks.map((bank) => `${bank.name} (${bank.n_items})`).join(', ') || 'none';
   const selectedSingleMainBank = !aggregationEnabled && selectedMainBanks.length === 1 ? selectedMainBanks[0] : null;
-  const mainItemCount = selectedMainBanks.reduce((acc, item) => acc + Number(item.n_items || 0), 0);
-  const practiceItemCount = Number(selectedPracticeStimulus?.n_items || 0);
-  const preActivationCounts = resolveRunSummaryCounts(undefined, {
-    practiceItemCount,
-    mainItemCount,
-    expectedTrialCount: mainItemCount + practiceItemCount,
-  });
+  const practiceItemCount = Number(preview?.practice_item_count ?? 0);
+  const mainItemCount = Number(preview?.main_item_count ?? 0);
+  const expectedTrialCount = Number(preview?.expected_trial_count ?? 0);
+  const previewValidationErrors = Array.isArray(preview?.validation_errors) ? preview.validation_errors.map((item) => String(item)) : [];
+  const previewWarnings = Array.isArray(preview?.operator_warnings) ? preview.operator_warnings.map((item) => String(item)) : [];
+  const previewBlockWarnings = Array.isArray(preview?.block_shape_warnings) ? preview.block_shape_warnings.map((item) => String(item)) : [];
+
+  async function refreshPreview() {
+    const experimentId = String(defaults?.experiment_id ?? '').trim();
+    if (!experimentId) return;
+    const requestId = latestPreviewRequest.current + 1;
+    latestPreviewRequest.current = requestId;
+    try {
+      const nextPreview = await previewRun({
+        run_name: runName.trim(),
+        public_slug: publicSlug.trim() || null,
+        experiment_id: experimentId,
+        task_family: derivedMainTaskFamily || null,
+        stimulus_set_ids: selectedMainSetIds,
+        aggregation_mode: aggregationEnabled ? 'multi' : 'single',
+        practice_stimulus_set_id: selectedPracticeStimulusSetId || null,
+        config: (selectedPreset?.config as Record<string, unknown>) ?? {},
+        notes: notes.trim() || null,
+      });
+      if (latestPreviewRequest.current === requestId) {
+        setPreview(nextPreview);
+      }
+    } catch {
+      // preview errors are surfaced from response payload; network failures are non-fatal for builder inputs
+    }
+  }
 
   useEffect(() => {
     if (aggregationEnabled) return;
@@ -268,6 +285,10 @@ export function RunBuilderPage() {
     const firstAvailable = availableMainStimulusSets[0];
     if (firstAvailable) setSelectedMainStimulusSetIds([String(firstAvailable.stimulus_set_id)]);
   }, [aggregationEnabled, availableMainStimulusSets, selectedSingleMainSetId]);
+
+  useEffect(() => {
+    void refreshPreview();
+  }, [defaults, runName, publicSlug, selectedMainSetIds.join(','), aggregationEnabled, selectedPracticeStimulusSetId, notes]);
 
   return (
     <section>
@@ -362,13 +383,18 @@ export function RunBuilderPage() {
           <section className="subsection">
             <h4>Prelaunch summary</h4>
             <div className="summary-grid">
-              <SummaryCard label="Practice bank items" value={String(preActivationCounts.practiceItemCount)} tone="info" />
-              <SummaryCard label="Main bank items" value={String(preActivationCounts.mainItemCount)} tone="info" />
-              <SummaryCard label="Expected total trials" value={String(preActivationCounts.expectedTrialCount)} tone="warn" />
+              <SummaryCard label="Practice bank items" value={String(practiceItemCount)} tone="info" />
+              <SummaryCard label="Main bank items" value={String(mainItemCount)} tone="info" />
+              <SummaryCard label="Expected total trials" value={String(expectedTrialCount)} tone="warn" />
               <SummaryCard label="Aggregation mode" value={aggregationEnabled ? 'multi-bank' : 'single-bank'} tone={aggregationEnabled ? 'warn' : 'good'} />
             </div>
             <p>Selected practice bank: {selectedPracticeStimulus ? `${selectedPracticeStimulus.name} (${practiceItemCount})` : 'none'}</p>
             <p>Selected main banks: {selectedMainSummary}</p>
+            {previewValidationErrors.length > 0 ? (
+              <p role="alert" className="alert-error">{previewValidationErrors[0]}</p>
+            ) : null}
+            {previewWarnings.length > 0 ? <p className="muted">Operator warning: {previewWarnings.join('; ')}</p> : null}
+            {previewBlockWarnings.length > 0 ? <p className="muted">Block warning: {previewBlockWarnings.join('; ')}</p> : null}
             <div className="toolbar">
               <button className="primary-btn" type="submit" disabled={isCreating || validStimulusSets.length === 0}>
                 {isCreating ? t('run.creating') : t('run.submit')}
@@ -399,9 +425,9 @@ export function RunBuilderPage() {
         <p>Practice bank: {selectedPracticeStimulus ? `${selectedPracticeStimulus.name} (${practiceItemCount})` : 'none'}</p>
         <p>Main bank(s): {selectedMainSummary}</p>
         <p>Aggregation: {aggregationEnabled ? 'enabled (explicit)' : 'disabled (single-select)'}</p>
-        <p>Total practice items: {preActivationCounts.practiceItemCount}</p>
-        <p>Total main items: {preActivationCounts.mainItemCount}</p>
-        <p>Expected trial count: {preActivationCounts.expectedTrialCount}</p>
+        <p>Total practice items: {practiceItemCount}</p>
+        <p>Total main items: {mainItemCount}</p>
+        <p>Expected trial count: {expectedTrialCount}</p>
       </section>
       {error ? (
         <p role="alert" className="alert-error">
