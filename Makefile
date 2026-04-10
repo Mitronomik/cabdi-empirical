@@ -4,6 +4,7 @@ PYTHON ?= python3
 VENV_DIR ?= .venv
 VENV_PY = $(VENV_DIR)/bin/python
 VENV_PIP = $(VENV_DIR)/bin/pip
+PYTHON_RUN = $(if $(wildcard $(VENV_PY)),$(VENV_PY),$(PYTHON))
 NPM ?= npm
 PY_QUALITY_PATHS = app/participant_api/main.py app/participant_api/routes/health.py app/participant_api/routes/public_runs.py app/participant_api/services/policy_service.py app/researcher_api/main.py app/researcher_api/routes/health.py app/researcher_api/routes/auth.py app/researcher_api/services/auth_service.py
 PY_GATE_TESTS = tests/test_health_readiness.py tests/test_researcher_auth.py tests/test_run_status_visibility.py
@@ -17,13 +18,13 @@ setup:
 	cd app/researcher_web && $(NPM) install
 
 lint:
-	$(VENV_PY) -m ruff check $(PY_QUALITY_PATHS)
+	$(PYTHON_RUN) -m ruff check $(PY_QUALITY_PATHS)
 
 format-check:
-	$(VENV_PY) -m ruff format --check $(PY_QUALITY_PATHS)
+	$(PYTHON_RUN) -m ruff format --check $(PY_QUALITY_PATHS)
 
 typecheck:
-	$(VENV_PY) -m mypy
+	$(PYTHON_RUN) -m mypy
 
 test:
 	$(VENV_PY) -m pytest -q
@@ -31,7 +32,7 @@ test:
 	cd app/researcher_web && $(NPM) run test
 
 gate-python: lint format-check typecheck
-	$(VENV_PY) -m pytest -q $(PY_GATE_TESTS)
+	$(PYTHON_RUN) -m pytest -q $(PY_GATE_TESTS)
 
 validate:
 	$(VENV_PY) experiments/run_minimal_validation.py
