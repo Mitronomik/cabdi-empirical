@@ -23,6 +23,7 @@
 - `pilot/stimuli/scam_not_scam_demo.jsonl`
 - `deploy/compose.staging.yml`
 - `deploy/env/.env.staging.example`
+- `docs/pilot/vps_deploy_playbook.md`
 
 ## Notes on synthetic-only vs pilot services
 
