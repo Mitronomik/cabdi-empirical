@@ -8,6 +8,7 @@ export interface BudgetFlag {
   observed?: number;
   reference?: number;
   cap?: number;
+  metric_label?: string;
 }
 
 export interface DiagnosticIssue {
@@ -74,11 +75,19 @@ function formatBudgetFlagMessage(flag: BudgetFlag): string {
   const condition = flag.condition ? `Condition ${flag.condition}: ` : '';
   const observed = toNumber(flag.observed);
   const reference = toNumber(flag.reference);
-  if (flag.kind === 'text_tolerance_exceeded' || flag.kind === 'display_tolerance_exceeded' || flag.kind === 'interaction_tolerance_exceeded') {
+  if (
+    flag.kind === 'text_tolerance_exceeded' ||
+    flag.kind === 'display_tolerance_exceeded' ||
+    flag.kind === 'interaction_tolerance_exceeded' ||
+    flag.kind === 'display_load_tolerance_exceeded' ||
+    flag.kind === 'interaction_load_tolerance_exceeded' ||
+    flag.kind === 'provenance_tolerance_exceeded'
+  ) {
+    const metric = flag.metric_label ? `${flag.metric_label} ` : '';
     if (observed !== null && reference !== null) {
-      return `${condition}Observed ${observed.toFixed(2)} differs from contract expectation ${reference.toFixed(2)} beyond tolerance.`;
+      return `${condition}Observed ${metric}${observed.toFixed(2)} differs from contract expectation ${reference.toFixed(2)} beyond tolerance.`;
     }
-    return `${condition}Observed budget differs from the contract expectation beyond tolerance.`;
+    return `${condition}Observed ${metric}budget differs from the contract expectation beyond tolerance.`;
   }
   if (flag.kind === 'hard_cap_exceeded') {
     const cap = toNumber(flag.cap);
@@ -126,4 +135,3 @@ export function groupOrder(group: DiagnosticGroupKey): number {
   if (group === 'budgetContract') return 3;
   return 4;
 }
-

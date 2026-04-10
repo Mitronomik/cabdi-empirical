@@ -3,6 +3,7 @@ from __future__ import annotations
 from packages.shared_types.pilot_types import RiskBucket, StimulusItem, TrialContext
 from policies.pilot_rules import (
     build_policy_decision,
+    expected_budget_signature,
     get_or_assign_trial_risk_state,
 )
 
@@ -152,3 +153,11 @@ def test_policy_decision_is_reproducible_and_config_driven_ui_levels():
     assert d1.to_dict() == d2.to_dict()
     assert d1.ui_help_level == "regime_aware_non_monotone"
     assert d1.ui_verification_level == "targeted_extreme"
+
+
+def test_budget_signature_v2_includes_interpretable_load_units():
+    signature = expected_budget_signature("cabdi_lite", RiskBucket.EXTREME)
+    assert signature["shown_components_count"] >= 1
+    assert signature["display_load_units"] >= signature["shown_components_count"]
+    assert signature["interaction_load_units"] >= signature["max_extra_steps"]
+    assert signature["provenance_cue_units"] >= 1

@@ -66,6 +66,9 @@ class BudgetTrace:
     risk_bucket: RiskBucket
     shown_components_count: int
     shown_text_tokens: int
+    display_load_units: int
+    interaction_load_units: int
+    provenance_cue_units: int
     evidence_available: int
     max_extra_steps: int
     realized_extra_steps: int

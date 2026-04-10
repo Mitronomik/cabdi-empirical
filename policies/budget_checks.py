@@ -25,6 +25,9 @@ def summarize_budgets_by_condition(traces: list[BudgetTrace]) -> dict[str, dict[
             "trials": float(len(rows)),
             "mean_shown_components_count": mean(r.shown_components_count for r in rows),
             "mean_text_tokens_shown": mean(r.shown_text_tokens for r in rows),
+            "mean_display_load_units": mean(r.display_load_units for r in rows),
+            "mean_interaction_load_units": mean(r.interaction_load_units for r in rows),
+            "mean_provenance_cue_units": mean(r.provenance_cue_units for r in rows),
             "evidence_availability_count": float(sum(r.evidence_available for r in rows)),
             "max_extra_steps_per_trial": float(max(r.max_extra_steps for r in rows)),
             "mean_realized_extra_steps": mean(r.realized_extra_steps for r in rows),
@@ -61,6 +64,13 @@ def compare_budget_to_reference(
     flags: list[dict[str, Any]] = []
     tol_text = text_budget_tolerance_pct / 100.0
     tol_interaction = interaction_budget_tolerance_pct / 100.0
+    metric_specs = [
+        ("mean_text_tokens_shown", tol_text, "text_tolerance_exceeded", "text token footprint"),
+        ("mean_shown_components_count", tol_text, "display_tolerance_exceeded", "visible component footprint"),
+        ("mean_display_load_units", tol_text, "display_load_tolerance_exceeded", "display load units"),
+        ("mean_interaction_load_units", tol_interaction, "interaction_load_tolerance_exceeded", "interaction load units"),
+        ("mean_provenance_cue_units", tol_text, "provenance_tolerance_exceeded", "provenance cue units"),
+    ]
 
     for condition, obs in observed.items():
         ref = reference.get(condition)
@@ -75,31 +85,21 @@ def compare_budget_to_reference(
             )
             continue
 
-        text_obs = float(obs.get("mean_text_tokens_shown", 0.0))
-        text_ref = float(ref.get("mean_text_tokens_shown", 0.0))
-        if text_ref > 0 and abs(text_obs - text_ref) / text_ref > tol_text:
-            flags.append(
-                {
-                    "condition": condition,
-                    "severity": "warning",
-                    "kind": "text_tolerance_exceeded",
-                    "observed": text_obs,
-                    "reference": text_ref,
-                }
-            )
-
-        comp_obs = float(obs.get("mean_shown_components_count", 0.0))
-        comp_ref = float(ref.get("mean_shown_components_count", 0.0))
-        if comp_ref > 0 and abs(comp_obs - comp_ref) / comp_ref > tol_text:
-            flags.append(
-                {
-                    "condition": condition,
-                    "severity": "warning",
-                    "kind": "display_tolerance_exceeded",
-                    "observed": comp_obs,
-                    "reference": comp_ref,
-                }
-            )
+        for metric_key, tolerance, kind, metric_label in metric_specs:
+            metric_obs = float(obs.get(metric_key, 0.0))
+            metric_ref = float(ref.get(metric_key, 0.0))
+            if metric_ref > 0 and abs(metric_obs - metric_ref) / metric_ref > tolerance:
+                flags.append(
+                    {
+                        "condition": condition,
+                        "severity": "warning",
+                        "kind": kind,
+                        "observed": metric_obs,
+                        "reference": metric_ref,
+                        "metric_key": metric_key,
+                        "metric_label": metric_label,
+                    }
+                )
 
         step_obs = float(obs.get("mean_realized_extra_steps", 0.0))
         step_ref = float(ref.get("mean_realized_extra_steps", 0.0))
@@ -146,6 +146,19 @@ def budget_trace_from_decision(
         risk_bucket=RiskBucket(risk_bucket),
         shown_components_count=int(budget_signature["shown_components_count"]),
         shown_text_tokens=int(budget_signature["text_tokens_shown"]),
+        display_load_units=int(budget_signature.get("display_load_units", budget_signature["shown_components_count"])),
+        interaction_load_units=int(
+            budget_signature.get(
+                "interaction_load_units",
+                budget_signature["max_extra_steps"],
+            )
+        ),
+        provenance_cue_units=int(
+            budget_signature.get(
+                "provenance_cue_units",
+                int(budget_signature["evidence_available_count"]) + int(budget_signature["shown_components_count"] > 1),
+            )
+        ),
         evidence_available=int(budget_signature["evidence_available_count"]),
         max_extra_steps=int(budget_signature["max_extra_steps"]),
         realized_extra_steps=int(realized_extra_steps),

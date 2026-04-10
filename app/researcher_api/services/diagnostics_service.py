@@ -195,6 +195,25 @@ class DiagnosticsService:
                     risk_bucket=RiskBucket(decision["risk_bucket"]),
                     shown_components_count=int(decision["budget_signature"].get("shown_components_count", 0)),
                     shown_text_tokens=int(decision["budget_signature"].get("text_tokens_shown", 0)),
+                    display_load_units=int(
+                        decision["budget_signature"].get(
+                            "display_load_units",
+                            decision["budget_signature"].get("shown_components_count", 0),
+                        )
+                    ),
+                    interaction_load_units=int(
+                        decision["budget_signature"].get(
+                            "interaction_load_units",
+                            decision["budget_signature"].get("max_extra_steps", 0),
+                        )
+                    ),
+                    provenance_cue_units=int(
+                        decision["budget_signature"].get(
+                            "provenance_cue_units",
+                            int(decision["budget_signature"].get("evidence_available_count", 0))
+                            + int(decision["budget_signature"].get("shown_components_count", 0) > 1),
+                        )
+                    ),
                     evidence_available=int(decision["budget_signature"].get("evidence_available_count", 0)),
                     max_extra_steps=int(decision["budget_signature"].get("max_extra_steps", 0)),
                     realized_extra_steps=realized_extra_steps + verification_actions,
@@ -211,6 +230,14 @@ class DiagnosticsService:
                         risk_bucket=risk_bucket,
                         shown_components_count=int(ref_signature["shown_components_count"]),
                         shown_text_tokens=int(ref_signature["text_tokens_shown"]),
+                        display_load_units=int(ref_signature.get("display_load_units", ref_signature["shown_components_count"])),
+                        interaction_load_units=int(ref_signature.get("interaction_load_units", ref_signature["max_extra_steps"])),
+                        provenance_cue_units=int(
+                            ref_signature.get(
+                                "provenance_cue_units",
+                                int(ref_signature["evidence_available_count"]) + int(ref_signature["shown_components_count"] > 1),
+                            )
+                        ),
                         evidence_available=int(ref_signature["evidence_available_count"]),
                         max_extra_steps=int(ref_signature["max_extra_steps"]),
                         realized_extra_steps=int(ref_signature["max_extra_steps"]),
