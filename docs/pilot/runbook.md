@@ -146,23 +146,32 @@ python experiments/run_pilot_analysis.py \
 - Researcher protection remains minimal auth + private routing posture; enterprise IAM is out of scope.
 - Scientific interpretation remains bounded to synthetic/dry-run claims as documented in repository guidance.
 
-## 10) Backup discipline (repository-owned)
+## 10) Backup discipline (repository-owned, VPS posture)
 
 Primary source of truth for pilot runtime state is the pilot database (Postgres in staging/VPS-like mode).
 
-Repository-owned backup command:
+Backup strategy for simple VPS deployment:
+
+- Run a timestamped logical backup from the Postgres target on a fixed schedule (for example, every 6 hours from cron/systemd timer).
+- Keep backups in a host-mounted directory outside container layers (for example `/var/backups/cabdi-pilot`), optionally mirrored to off-host storage.
+- Use repository naming convention: `pilot_backup_YYYYMMDDTHHMMSSZ.json`.
+- Apply count-based retention by deleting the oldest artifacts after each successful run (`retain_count`, default `14`).
+
+Repository-owned rotation command:
 
 ```bash
-python scripts/pilot_backup.py \
+python scripts/pilot_backup_rotate.py \
   --db-target "postgresql://<user>:<pass>@<host>:5432/<db>" \
-  --output artifacts/pilot_ops/backups/pilot_backup_$(date -u +%Y%m%dT%H%M%SZ).json
+  --backup-dir /var/backups/cabdi-pilot \
+  --timestamp-utc "$(date -u +%Y%m%dT%H%M%SZ)" \
+  --retain-count 14
 ```
 
 Notes:
 
-- Backup artifact is a JSON snapshot over critical pilot tables (runs, stimulus sets, sessions, trials, events, summaries, questionnaires, researcher auth table, migrations).
+- Backup artifact remains a repository-owned JSON snapshot over critical pilot tables (runs, stimulus sets, sessions, trials, events, summaries, questionnaires, researcher auth table, migrations).
 - `schema_version` is embedded in the backup and checked on restore.
-- Keep backup artifacts outside ephemeral container filesystems.
+- The `make pilot-backup-rotate` target wraps this flow with project defaults.
 
 ## 11) Restore discipline (repository-owned, destructive)
 
@@ -180,6 +189,30 @@ Safety behavior:
 - Restore is blocked unless `--confirm-destructive` is provided.
 - Restore fails clearly if backup format or schema version is incompatible.
 - Restore replaces current pilot table contents with backup contents; do not run against an unknown/untrusted backup artifact.
+
+### Restore drill automation (recommended before launch windows)
+
+Run the destructive verification drill against staging data:
+
+```bash
+python scripts/pilot_restore_drill.py \
+  --db-target "postgresql://<user>:<pass>@<host>:5432/<db>" \
+  --backup-dir /var/backups/cabdi-pilot \
+  --timestamp-utc "$(date -u +%Y%m%dT%H%M%SZ)" \
+  --report-out artifacts/pilot_ops/prelaunch_gate/restore_drill_report.json
+```
+
+Expected drill outcome:
+
+- command exits `0`;
+- `verification_ok=true` in `restore_drill_report.json`;
+- `baseline_row_counts` and `restored_counts` match.
+
+Equivalent Make target:
+
+```bash
+make pilot-restore-drill
+```
 
 ## 12) Destructive researcher operations safety
 
@@ -233,6 +266,7 @@ Gate semantics:
 - **Blockers** (`severity=blocker`) fail launch readiness immediately.
 - **Warnings** require explicit operator acknowledgement before launch.
 - The gate includes one consolidated readiness chain: Postgres posture, black-box launch realism boundary, packaged service smoke (`/health` + `/ready` on both participant and researcher surfaces), active run + public slug readiness, participant progression/resume/final-submit (EN + RU path), researcher auth + protected boundary + cabinet route reachability, diagnostics/export + analysis-ready outputs, concurrent smoke, and backup/restore discipline.
+- Backup/restore discipline for launch now means: successful rotated backup job + successful destructive restore drill report in the same staging cycle.
 - The markdown checklist is the operator-facing **go/no-go artifact**. It includes execution timestamps/id, full check results, and explicit blocker/warning sections.
 
 Notes:
