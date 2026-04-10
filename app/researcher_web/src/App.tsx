@@ -43,6 +43,29 @@ function AppBody() {
   }
 
   if (!shell.canRenderCabinet) {
+    if (shell.authState === 'service_unavailable') {
+      return (
+        <main>
+          <div className="toolbar">
+            <LanguageSwitcher />
+          </div>
+          <h1>{t('app.title')}</h1>
+          <section className="panel">
+            <h2>{t('auth.serviceUnavailableTitle')}</h2>
+            <p className="muted">{t('auth.serviceUnavailableHint')}</p>
+            {shell.authError && (
+              <p role="alert" className="alert-error">
+                {shell.authError}
+              </p>
+            )}
+            <button className="secondary-btn" onClick={() => window.location.reload()}>
+              {t('auth.retry')}
+            </button>
+          </section>
+        </main>
+      );
+    }
+
     return (
       <main>
         <div className="toolbar">

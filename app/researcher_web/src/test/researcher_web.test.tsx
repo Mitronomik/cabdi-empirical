@@ -20,6 +20,26 @@ describe('researcher auth shell', () => {
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
   });
 
+  it('shows infrastructure error state when auth check has transport failure', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValueOnce(new TypeError('Failed to fetch')));
+
+    render(<App />);
+
+    expect(await screen.findByText('Researcher service unavailable')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Researcher service is unavailable.');
+    expect(screen.queryByText('Researcher Login')).not.toBeInTheDocument();
+  });
+
+  it('shows infrastructure error state when auth check returns backend failure', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ detail: 'backend unavailable' }), { status: 503 })));
+
+    render(<App />);
+
+    expect(await screen.findByText('Researcher service unavailable')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('backend unavailable');
+    expect(screen.queryByText('Researcher Login')).not.toBeInTheDocument();
+  });
+
   it('supports login success and shows cabinet', async () => {
     const user = userEvent.setup();
     const fetchMock = vi

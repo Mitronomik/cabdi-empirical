@@ -1,5 +1,22 @@
 const BASE = import.meta.env.VITE_RESEARCHER_API_BASE ?? ''
 
+export class ApiHttpError extends Error {
+  readonly status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = 'ApiHttpError'
+    this.status = status
+  }
+}
+
+export class ApiTransportError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ApiTransportError'
+  }
+}
+
 async function parseError(res: Response): Promise<string> {
   const text = await res.text()
   if (!text) return `HTTP ${res.status}`
@@ -12,49 +29,77 @@ async function parseError(res: Response): Promise<string> {
   return text
 }
 
+function normalizeTransportError(error: unknown): never {
+  if (error instanceof ApiHttpError || error instanceof ApiTransportError) {
+    throw error
+  }
+  const message = error instanceof Error ? error.message : 'Transport error'
+  throw new ApiTransportError(message)
+}
+
 export async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, { credentials: 'include' })
-  if (!res.ok) throw new Error(await parseError(res))
-  return res.json()
+  try {
+    const res = await fetch(`${BASE}${path}`, { credentials: 'include' })
+    if (!res.ok) throw new ApiHttpError(res.status, await parseError(res))
+    return res.json()
+  } catch (error) {
+    normalizeTransportError(error)
+  }
 }
 
 export async function createRun(payload: Record<string, unknown>) {
-  const res = await fetch(`${BASE}/admin/api/v1/runs`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  if (!res.ok) throw new Error(await parseError(res))
-  return res.json()
+  try {
+    const res = await fetch(`${BASE}/admin/api/v1/runs`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) throw new ApiHttpError(res.status, await parseError(res))
+    return res.json()
+  } catch (error) {
+    normalizeTransportError(error)
+  }
 }
 
 export async function previewRun(payload: Record<string, unknown>) {
-  const res = await fetch(`${BASE}/admin/api/v1/runs/preview`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  if (!res.ok) throw new Error(await parseError(res))
-  return res.json()
+  try {
+    const res = await fetch(`${BASE}/admin/api/v1/runs/preview`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) throw new ApiHttpError(res.status, await parseError(res))
+    return res.json()
+  } catch (error) {
+    normalizeTransportError(error)
+  }
 }
 
 export async function apiPost<T>(path: string, payload?: Record<string, unknown>): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: payload ? JSON.stringify(payload) : undefined,
-  })
-  if (!res.ok) throw new Error(await parseError(res))
-  return res.json()
+  try {
+    const res = await fetch(`${BASE}${path}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload ? JSON.stringify(payload) : undefined,
+    })
+    if (!res.ok) throw new ApiHttpError(res.status, await parseError(res))
+    return res.json()
+  } catch (error) {
+    normalizeTransportError(error)
+  }
 }
 
 export async function uploadStimuli(form: FormData) {
-  const res = await fetch(`${BASE}/admin/api/v1/stimuli/upload`, { method: 'POST', credentials: 'include', body: form })
-  if (!res.ok) throw new Error(await parseError(res))
-  return res.json()
+  try {
+    const res = await fetch(`${BASE}/admin/api/v1/stimuli/upload`, { method: 'POST', credentials: 'include', body: form })
+    if (!res.ok) throw new ApiHttpError(res.status, await parseError(res))
+    return res.json()
+  } catch (error) {
+    normalizeTransportError(error)
+  }
 }
 
 export function login(username: string, password: string) {
@@ -120,9 +165,13 @@ export function getRunExports(runId: string) {
 }
 
 export async function downloadRunExportArtifact(runId: string, artifactType: string): Promise<Blob> {
-  const res = await fetch(`${BASE}/admin/api/v1/runs/${runId}/exports/artifacts/${artifactType}`, {
-    credentials: 'include',
-  })
-  if (!res.ok) throw new Error(await parseError(res))
-  return res.blob()
+  try {
+    const res = await fetch(`${BASE}/admin/api/v1/runs/${runId}/exports/artifacts/${artifactType}`, {
+      credentials: 'include',
+    })
+    if (!res.ok) throw new ApiHttpError(res.status, await parseError(res))
+    return res.blob()
+  } catch (error) {
+    normalizeTransportError(error)
+  }
 }
