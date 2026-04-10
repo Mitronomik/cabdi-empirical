@@ -17,6 +17,9 @@ def _sample_traces() -> list[BudgetTrace]:
             risk_bucket=RiskBucket.LOW,
             shown_components_count=2,
             shown_text_tokens=40,
+            display_load_units=3,
+            interaction_load_units=0,
+            provenance_cue_units=2,
             evidence_available=0,
             max_extra_steps=0,
             realized_extra_steps=0,
@@ -28,6 +31,9 @@ def _sample_traces() -> list[BudgetTrace]:
             risk_bucket=RiskBucket.MODERATE,
             shown_components_count=2,
             shown_text_tokens=40,
+            display_load_units=3,
+            interaction_load_units=0,
+            provenance_cue_units=2,
             evidence_available=0,
             max_extra_steps=0,
             realized_extra_steps=0,
@@ -39,6 +45,9 @@ def _sample_traces() -> list[BudgetTrace]:
             risk_bucket=RiskBucket.EXTREME,
             shown_components_count=3,
             shown_text_tokens=60,
+            display_load_units=4,
+            interaction_load_units=3,
+            provenance_cue_units=2,
             evidence_available=0,
             max_extra_steps=1,
             realized_extra_steps=1,
@@ -55,6 +64,7 @@ def test_budget_summaries_are_produced():
 
     assert set(by_condition.keys()) == {"static_help", "cabdi_lite"}
     assert by_condition["static_help"]["mean_text_tokens_shown"] == 40
+    assert by_condition["cabdi_lite"]["mean_display_load_units"] == 4
     assert by_condition["cabdi_lite"]["max_extra_steps_per_trial"] == 1
 
     assert set(by_block.keys()) == {"b1"}

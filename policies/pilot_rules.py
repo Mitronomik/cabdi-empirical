@@ -175,11 +175,44 @@ def expected_budget_signature(condition: str, risk_bucket: RiskBucket) -> dict[s
             decision_kwargs["show_evidence"],
         ]
     )
+    rationale_load_units = 0
+    if decision_kwargs["show_rationale"] == "inline":
+        rationale_load_units = 2
+    elif decision_kwargs["show_rationale"] == "on_click":
+        rationale_load_units = 1
+    verification_load_units = {
+        "none": 0,
+        "soft_prompt": 1,
+        "forced_checkbox": 2,
+        "forced_second_look": 3,
+    }[decision_kwargs["verification_mode"]]
+    compression_factor = {"none": 1.0, "medium": 0.85, "high": 0.7}[decision_kwargs["compression_mode"]]
+    display_load_units = int(
+        round(
+            (
+                (2 if decision_kwargs["show_prediction"] else 0)
+                + (1 if decision_kwargs["show_confidence"] else 0)
+                + rationale_load_units
+                + (2 if decision_kwargs["show_evidence"] else 0)
+            )
+            * compression_factor
+        )
+    )
+    interaction_load_units = decision_kwargs["max_extra_steps"] + verification_load_units
     return {
         "shown_components_count": shown_components_count,
         "text_tokens_shown": int(20 * shown_components_count),
         "evidence_available_count": int(decision_kwargs["show_evidence"]),
         "max_extra_steps": int(decision_kwargs["max_extra_steps"]),
+        # v2 semantics: keep legacy keys above while adding interpretable units.
+        "display_load_units": int(display_load_units),
+        "interaction_load_units": int(interaction_load_units),
+        "verification_load_units": int(verification_load_units),
+        "provenance_cue_units": int(
+            int(decision_kwargs["show_confidence"])
+            + int(decision_kwargs["show_rationale"] != "none")
+            + int(decision_kwargs["show_evidence"])
+        ),
     }
 
 
