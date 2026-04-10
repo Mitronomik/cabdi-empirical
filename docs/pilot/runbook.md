@@ -1,6 +1,7 @@
 # CABDI Pilot runbook
 
 This runbook now includes both local development and staging/VPS-like deployment posture for PR-14.
+For operator-facing bounded production procedures (HTTPS posture, restart/rollback, logging, backups), see `docs/pilot/vps_deploy_playbook.md`.
 
 ## Scope and mode boundary
 
@@ -68,6 +69,7 @@ docker compose --env-file deploy/.env -f deploy/compose.staging.yml up --build -
 - **Database**: Postgres internal-only service (`postgres:5432`) used by both APIs.
 
 TLS is expected to terminate at an outer reverse proxy boundary (for example host-level Nginx/Caddy/ALB). The application stack is launched with proxy-header support.
+For explicit VPS operator steps, use `docs/pilot/vps_deploy_playbook.md`.
 
 ## 5) Deployment configuration requirements
 
