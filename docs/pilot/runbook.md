@@ -60,10 +60,11 @@ docker compose --env-file deploy/.env -f deploy/compose.staging.yml up --build -
 - **Public participant surface**: `edge_proxy` listener on `:80`
   - participant web (`/`)
   - participant API (`/api/*`)
-  - participant health (`/health`)
+  - participant liveness (`/health`) and readiness (`/ready`)
 - **Private/protected researcher surface**: `edge_proxy` listener on `127.0.0.1:8081`
   - researcher web (`/`)
   - researcher API (`/admin/api/*`)
+  - researcher liveness/readiness (`/health`, `/ready`) on private bind only
 - **Database**: Postgres internal-only service (`postgres:5432`) used by both APIs.
 
 TLS is expected to terminate at an outer reverse proxy boundary (for example host-level Nginx/Caddy/ALB). The application stack is launched with proxy-header support.
@@ -86,6 +87,7 @@ Runtime behavior:
 - Researcher session cookie must be explicitly configured and secure (`PILOT_RESEARCHER_COOKIE_SECURE=true`) in production-like mode.
 - Researcher bootstrap password must be explicitly set and strong in production-like mode; weak/default-like values are rejected at startup.
 - Researcher auth cookie is emitted with `SameSite=Strict` in production-like mode.
+- Readiness (`/ready`) is stricter than liveness (`/health`): readiness requires runtime checks plus DB connectivity.
 
 Researcher auth request-safety posture:
 
@@ -98,15 +100,20 @@ Researcher auth request-safety posture:
 
 ```bash
 curl -fsS http://127.0.0.1/health
+curl -fsS http://127.0.0.1/ready
 curl -I http://127.0.0.1/
 curl -I http://127.0.0.1:8081/
+curl -fsS http://127.0.0.1:8081/health
+curl -fsS http://127.0.0.1:8081/ready
 ```
 
 Expected:
 
-- participant health returns HTTP 200
+- participant `/health` returns HTTP 200 when process is alive
+- participant `/ready` returns HTTP 200 only when participant API is launch-ready (DB reachable + runtime ready), otherwise 503
 - participant web returns HTTP 200
 - researcher web is reachable only via private bind (`127.0.0.1:8081` by default)
+- researcher `/health` and `/ready` are private-surface operator probes (not public participant routes)
 
 ## 7) Recommended local dry-run flow
 
