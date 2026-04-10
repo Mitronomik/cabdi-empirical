@@ -1,4 +1,4 @@
-.PHONY: setup test validate lint format-check typecheck frontend-typecheck frontend-build gate-python gate-frontend gate run-participant-api run-researcher-api run-participant-web run-researcher-web dry-run pilot-backup pilot-restore pilot-prelaunch-gate pilot-prelaunch-gate-blackbox
+.PHONY: setup test validate lint format-check typecheck frontend-typecheck frontend-build gate-python gate-frontend gate run-participant-api run-researcher-api run-participant-web run-researcher-web dry-run pilot-backup pilot-restore pilot-prelaunch-gate pilot-prelaunch-gate-blackbox pilot-prelaunch-gate-vps
 
 PYTHON ?= python3
 VENV_DIR ?= .venv
@@ -95,3 +95,19 @@ pilot-prelaunch-gate-blackbox:
 		--output-dir "$${PILOT_GATE_OUTPUT_DIR:-artifacts/pilot_ops/prelaunch_gate}" \
 		--researcher-username "$${PILOT_RESEARCHER_USERNAME:-admin}" \
 		--researcher-password "$${PILOT_RESEARCHER_PASSWORD}"
+
+pilot-prelaunch-gate-vps:
+	@if [ -z "$${PILOT_RESEARCHER_PASSWORD}" ] || [ -z "$${PILOT_RUN_SLUG}" ]; then \
+		echo "PILOT_RESEARCHER_PASSWORD and PILOT_RUN_SLUG are required for VPS prelaunch gate."; \
+		exit 1; \
+	fi
+	$(VENV_PY) scripts/pilot_prelaunch_gate.py \
+		--db-target "$${PILOT_DB_URL}" \
+		--run-slug "$${PILOT_RUN_SLUG}" \
+		--participant-base-url "$${PILOT_PARTICIPANT_BASE_URL:-http://127.0.0.1}" \
+		--researcher-base-url "$${PILOT_RESEARCHER_BASE_URL:-http://127.0.0.1:8081}" \
+		--output-dir "$${PILOT_GATE_OUTPUT_DIR:-artifacts/pilot_ops/prelaunch_gate}" \
+		--researcher-username "$${PILOT_RESEARCHER_USERNAME:-admin}" \
+		--researcher-password "$${PILOT_RESEARCHER_PASSWORD}" \
+		--run-restore-drill \
+		--fail-on-warning

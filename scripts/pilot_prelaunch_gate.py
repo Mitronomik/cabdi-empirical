@@ -123,6 +123,30 @@ def _check_surface_boundary(
     return passed, detail, statuses
 
 
+def _check_packaged_service_smoke(
+    *,
+    participant_client: TestClient | httpx.Client,
+    researcher_client: TestClient | httpx.Client,
+) -> tuple[bool, str, dict[str, int]]:
+    participant_health = participant_client.get("/health").status_code
+    participant_ready = participant_client.get("/ready").status_code
+    researcher_health = researcher_client.get("/health").status_code
+    researcher_ready = researcher_client.get("/ready").status_code
+    statuses = {
+        "participant_health": participant_health,
+        "participant_ready": participant_ready,
+        "researcher_health": researcher_health,
+        "researcher_ready": researcher_ready,
+    }
+    passed = all(status == 200 for status in statuses.values())
+    detail = (
+        "packaged service smoke "
+        f"(participant health={participant_health}, participant ready={participant_ready}, "
+        f"researcher health={researcher_health}, researcher ready={researcher_ready})"
+    )
+    return passed, detail, statuses
+
+
 def _login_researcher_http(researcher_client: httpx.Client, username: str, password: str) -> tuple[bool, str, bool]:
     res = researcher_client.post("/admin/api/v1/auth/login", json={"username": username, "password": password})
     if res.status_code != 200:
@@ -544,6 +568,18 @@ def run_prelaunch_gate(
             passed=health.status_code == 200,
             detail=f"participant health status={health.status_code}",
             metadata={"response": health.json() if health.status_code == 200 else {}},
+        )
+        packaged_smoke_ok, packaged_smoke_detail, packaged_smoke_statuses = _check_packaged_service_smoke(
+            participant_client=participant_client,
+            researcher_client=researcher_client,
+        )
+        _record(
+            checks,
+            check_id="packaged_service_smoke",
+            severity="blocker",
+            passed=packaged_smoke_ok,
+            detail=packaged_smoke_detail,
+            metadata=packaged_smoke_statuses,
         )
 
         boundary_ok, boundary_detail, boundary_statuses = _check_surface_boundary(
