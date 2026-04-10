@@ -71,7 +71,11 @@ The root `Makefile` provides aligned shortcuts:
 
 ```bash
 make setup
-make test
+make lint
+make format-check
+make typecheck
+make gate-python  # scoped Python release gate (lint/format/type + critical backend tests)
+make test         # full Python + frontend test suite
 make validate
 make run-participant-api
 make run-researcher-api
