@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 
 import { localizeOperatorError } from '../i18n/uiText';
 import type { useLocale } from '../i18n/useLocale';
-import { getCurrentUser, login, logout } from '../lib/api';
+import { ApiHttpError, getCurrentUser, login, logout } from '../lib/api';
 import type { PageKey } from '../components/Nav';
 
-export type AuthState = 'loading' | 'authenticated' | 'unauthenticated';
+export type AuthState = 'loading' | 'authenticated' | 'unauthenticated' | 'service_unavailable';
 
 export function useResearcherShell(t: ReturnType<typeof useLocale>['t']) {
   const [page, setPage] = useState<PageKey>('dashboard');
@@ -21,8 +21,13 @@ export function useResearcherShell(t: ReturnType<typeof useLocale>['t']) {
         const me = await getCurrentUser();
         setAuthedUsername(me.user.username);
         setAuthState('authenticated');
-      } catch {
-        setAuthState('unauthenticated');
+      } catch (error) {
+        if (error instanceof ApiHttpError && error.status === 401) {
+          setAuthState('unauthenticated');
+          return;
+        }
+        setAuthError(localizeOperatorError(t, error));
+        setAuthState('service_unavailable');
       }
     };
     void loadAuth();

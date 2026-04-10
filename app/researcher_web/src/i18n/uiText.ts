@@ -35,6 +35,12 @@ export function localizeOperatorError(t: (key: MessageKey) => string, error: unk
     'not authenticated': 'common.error.authRequired',
     'run_slug is required': 'common.error.runSlugRequired',
     'confirm_run_id must match run_id': 'common.error.confirmRunIdMismatch',
+    'failed to fetch': 'common.error.serviceUnavailable',
+    'network error': 'common.error.serviceUnavailable',
+    'transport error': 'common.error.serviceUnavailable',
+    'http 503': 'common.error.serviceUnavailable',
+    'http 502': 'common.error.serviceUnavailable',
+    'http 504': 'common.error.serviceUnavailable',
   };
 
   if (mapped[normalized]) {

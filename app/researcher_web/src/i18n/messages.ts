@@ -29,6 +29,7 @@ export const messages = {
     'common.error.authRequired': 'Researcher authentication is required.',
     'common.error.notFound': 'Requested resource was not found.',
     'common.error.validation': 'Request validation failed. Check required fields.',
+    'common.error.serviceUnavailable': 'Researcher service is unavailable. Check network, CORS, proxy, and backend health.',
     'common.error.runSlugRequired': 'Public run slug is required.',
     'common.error.confirmRunIdMismatch': 'Run confirmation did not match the selected run.',
     'common.unknownError': 'Unknown error',
@@ -57,6 +58,10 @@ export const messages = {
     'auth.loggedInAs': 'Logged in as',
     'auth.checking': 'Checking researcher access...',
     'auth.loginHint': 'Use researcher credentials to open the protected cabinet.',
+    'auth.serviceUnavailableTitle': 'Researcher service unavailable',
+    'auth.serviceUnavailableHint':
+      'Researcher auth could not be checked because the service or network is unavailable. Fix infrastructure access and retry.',
+    'auth.retry': 'Retry',
     'upload.title': 'Stimulus Library',
     'upload.summaryTitle': 'Library summary',
     'upload.summaryTotal': 'Total sets',
@@ -214,6 +219,8 @@ export const messages = {
     'common.error.authRequired': 'Требуется аутентификация исследователя.',
     'common.error.notFound': 'Запрошенный ресурс не найден.',
     'common.error.validation': 'Ошибка валидации запроса. Проверьте обязательные поля.',
+    'common.error.serviceUnavailable':
+      'Сервис исследователя недоступен. Проверьте сеть, CORS, прокси и состояние backend.',
     'common.error.runSlugRequired': 'Требуется публичный slug запуска.',
     'common.error.confirmRunIdMismatch': 'Подтверждение запуска не совпало с выбранным запуском.',
     'common.unknownError': 'Неизвестная ошибка',
@@ -242,6 +249,10 @@ export const messages = {
     'auth.loggedInAs': 'Вход выполнен',
     'auth.checking': 'Проверка доступа исследователя...',
     'auth.loginHint': 'Используйте учетные данные исследователя для входа в защищенный кабинет.',
+    'auth.serviceUnavailableTitle': 'Сервис исследователя недоступен',
+    'auth.serviceUnavailableHint':
+      'Проверка аутентификации не выполнена из-за сбоя сервиса или сети. Проверьте инфраструктурный доступ и повторите попытку.',
+    'auth.retry': 'Повторить',
     'upload.title': 'Библиотека стимулов',
     'upload.summaryTitle': 'Сводка библиотеки',
     'upload.summaryTotal': 'Всего наборов',
