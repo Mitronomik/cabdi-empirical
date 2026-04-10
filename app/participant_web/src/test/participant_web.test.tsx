@@ -172,7 +172,7 @@ test('forced verification blocks submission until completed', async () => {
   await proceedToInstructionsAndStart(user);
 
   await screen.findByTestId('trial-layout');
-  await user.click(screen.getAllByRole('button', { name: /^scam$/i })[0]);
+  await user.click(screen.getAllByRole('radio', { name: /^scam$/i })[0]);
   await user.click(screen.getByLabelText(/very confident/i));
 
   const submit = screen.getByRole('button', { name: /submit response/i });
@@ -182,6 +182,7 @@ test('forced verification blocks submission until completed', async () => {
 
   await user.click(submit);
   await screen.findByRole('heading', { name: /final confirmation required/i });
+  await user.click(screen.getByLabelText(/ready to finalize/i));
   await user.click(screen.getByRole('button', { name: /final submit/i }));
   await screen.findByRole('heading', { name: /study complete/i });
 });
@@ -271,6 +272,7 @@ test('questionnaire and completion flow remains operational', async () => {
   await user.click(screen.getByRole('button', { name: /continue/i }));
   await screen.findByRole('heading', { name: /final confirmation required/i });
   expect(screen.getByText(/saved but not fully completed/i)).toBeInTheDocument();
+  await user.click(screen.getByLabelText(/ready to finalize/i));
   await user.click(screen.getByRole('button', { name: /final submit/i }));
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(7));
   await screen.findByRole('heading', { name: /study complete/i });

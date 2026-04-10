@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { AssistancePanel } from '../components/AssistancePanel';
 import { useLocale } from '../i18n/useLocale';
@@ -19,8 +19,21 @@ interface Props {
   }) => void;
 }
 
+interface TrialDraft {
+  selectedResponse: string;
+  selfConfidence: number | null;
+  reasonClicked: boolean;
+  evidenceOpened: boolean;
+  verificationCompleted: boolean;
+}
+
+function trialDraftStorageKey(trialId: string): string {
+  return `participant_web.trial_draft.${trialId}`;
+}
+
 export function TrialPage({ trial, loading, savedFeedback, onSubmit }: Props) {
   const { t } = useLocale();
+  const headingRef = useRef<HTMLHeadingElement | null>(null);
   const [selectedResponse, setSelectedResponse] = useState<string>('');
   const [selfConfidence, setSelfConfidence] = useState<number | null>(null);
   const [reasonClicked, setReasonClicked] = useState(false);
@@ -29,6 +42,41 @@ export function TrialPage({ trial, loading, savedFeedback, onSubmit }: Props) {
   const [panelExposure, setPanelExposure] = useState<{ panelVisibleOnFirstPaint: boolean; shownHelpComponents: string[] } | null>(
     null,
   );
+
+  useEffect(() => {
+    headingRef.current?.focus();
+    const raw = window.sessionStorage.getItem(trialDraftStorageKey(trial.trial_id));
+    if (!raw) {
+      setSelectedResponse('');
+      setSelfConfidence(null);
+      setReasonClicked(false);
+      setEvidenceOpened(false);
+      setVerificationCompleted(false);
+      return;
+    }
+
+    try {
+      const draft = JSON.parse(raw) as Partial<TrialDraft>;
+      setSelectedResponse(typeof draft.selectedResponse === 'string' ? draft.selectedResponse : '');
+      setSelfConfidence(typeof draft.selfConfidence === 'number' ? draft.selfConfidence : null);
+      setReasonClicked(Boolean(draft.reasonClicked));
+      setEvidenceOpened(Boolean(draft.evidenceOpened));
+      setVerificationCompleted(Boolean(draft.verificationCompleted));
+    } catch {
+      window.sessionStorage.removeItem(trialDraftStorageKey(trial.trial_id));
+    }
+  }, [trial.trial_id]);
+
+  useEffect(() => {
+    const draft: TrialDraft = {
+      selectedResponse,
+      selfConfidence,
+      reasonClicked,
+      evidenceOpened,
+      verificationCompleted,
+    };
+    window.sessionStorage.setItem(trialDraftStorageKey(trial.trial_id), JSON.stringify(draft));
+  }, [trial.trial_id, selectedResponse, selfConfidence, reasonClicked, evidenceOpened, verificationCompleted]);
 
   const responseOptions = useMemo(
     () => getRenderableResponseOptions(trial.stimulus.task_family, trial.stimulus.payload.response_options),
@@ -64,7 +112,7 @@ export function TrialPage({ trial, loading, savedFeedback, onSubmit }: Props) {
 
       <article className="card stimulus-card">
         <p className="section-kicker">1. {t('trial.caseTitle')}</p>
-        <h2>{stimulusTitle}</h2>
+        <h2 ref={headingRef} tabIndex={-1} className="focus-anchor">{stimulusTitle}</h2>
         <p>{stimulusBody}</p>
       </article>
 
@@ -87,18 +135,22 @@ export function TrialPage({ trial, loading, savedFeedback, onSubmit }: Props) {
         <p className="muted">{t('trial.decisionHelp')}</p>
 
         {hasRenderableResponseOptions ? (
-          <div className="button-row">
-            {responseOptions.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                className={selectedResponse === option.value ? 'selected' : ''}
-                onClick={() => setSelectedResponse(option.value)}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
+          <fieldset className="response-fieldset" aria-label={t('trial.answerLabel')}>
+            <div className="response-grid">
+              {responseOptions.map((option) => (
+                <label key={option.value} className={`response-option ${selectedResponse === option.value ? 'selected' : ''}`}>
+                  <input
+                    type="radio"
+                    name="human_response"
+                    value={option.value}
+                    checked={selectedResponse === option.value}
+                    onChange={() => setSelectedResponse(option.value)}
+                  />
+                  <span>{option.label}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
         ) : (
           <p role="alert">Unable to render response options for this trial. Please contact the researcher.</p>
         )}
@@ -129,15 +181,16 @@ export function TrialPage({ trial, loading, savedFeedback, onSubmit }: Props) {
       </section>
 
       <footer className="trial-submit-bar">
-        <div>
+        <div aria-live="polite">
           <p className="muted submit-hint">5. {t('trial.submitHelp')}</p>
           {savedFeedback ? <p className="muted submit-state">{t('common.progressSaved')}</p> : null}
+          {!savedFeedback && !loading ? <p className="muted submit-state">Changes are local until submitted.</p> : null}
         </div>
         <button
           type="button"
           className="primary-submit"
           disabled={!canSubmit || loading}
-          onClick={() =>
+          onClick={() => {
             onSubmit({
               humanResponse: selectedResponse,
               selfConfidence: selfConfidence as number,
@@ -156,8 +209,8 @@ export function TrialPage({ trial, loading, savedFeedback, onSubmit }: Props) {
                     },
                   ]
                 : undefined,
-            })
-          }
+            });
+          }}
         >
           {loading ? `${t('trial.submit')}...` : t('trial.submit')}
         </button>

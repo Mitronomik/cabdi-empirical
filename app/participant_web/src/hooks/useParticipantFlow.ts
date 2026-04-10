@@ -111,6 +111,11 @@ export function useParticipantFlow() {
 
   const trialStartMsRef = useRef<number>(0);
 
+  function signalSavedFeedback() {
+    setSavedFeedback(true);
+    window.setTimeout(() => setSavedFeedback(false), 2200);
+  }
+
   const onboardingReady = useMemo(() => Boolean(runSlug.trim()), [runSlug]);
 
   function updateProgressFromResponse(next: TrialPayload | { progress?: { completed_trials: number; total_trials: number; current_ordinal: number } }) {
@@ -138,6 +143,7 @@ export function useParticipantFlow() {
   async function loadNextTrial(activeSessionId: string) {
     setLoading(true);
     setError(null);
+    setSavedFeedback(false);
     try {
       const next = await fetchNextTrial(activeSessionId);
       updateProgressFromResponse(next);
@@ -294,7 +300,7 @@ export function useParticipantFlow() {
         event_trace: params.eventTrace,
       });
       if (res.saved_ack?.saved) {
-        setSavedFeedback(true);
+        signalSavedFeedback();
       }
       await loadNextTrial(sessionId);
     } catch {
@@ -314,7 +320,7 @@ export function useParticipantFlow() {
     try {
       const res = await submitBlockQuestionnaire(sessionId, questionnaireBlockId, payload);
       if (res.saved_ack?.saved) {
-        setSavedFeedback(true);
+        signalSavedFeedback();
       }
       setQuestionnaireBlockId(null);
       await loadNextTrial(sessionId);

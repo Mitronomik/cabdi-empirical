@@ -96,6 +96,8 @@ export function AssistancePanel({
         <div>
           <button
             type="button"
+            aria-expanded={rationaleRevealed}
+            aria-controls="rationale-content"
             onClick={() => {
               setRationaleRevealed(true);
               onReasonClick();
@@ -104,7 +106,7 @@ export function AssistancePanel({
             {t('assistance.showRationale')}
           </button>
           {rationaleRevealed && (
-            <p data-testid="rationale-on-click">
+            <p id="rationale-content" data-testid="rationale-on-click">
               <strong>{t('assistance.rationale')}:</strong> {rationaleText}
             </p>
           )}
@@ -115,6 +117,8 @@ export function AssistancePanel({
         <div>
           <button
             type="button"
+            aria-expanded={evidenceOpen}
+            aria-controls="evidence-content"
             onClick={() => {
               const next = !evidenceOpen;
               setEvidenceOpen(next);
@@ -125,7 +129,7 @@ export function AssistancePanel({
           >
             {evidenceOpen ? t('assistance.hideEvidence') : t('assistance.showEvidence')}
           </button>
-          {evidenceOpen && <p data-testid="evidence-content">{evidenceText}</p>}
+          {evidenceOpen && <p id="evidence-content" data-testid="evidence-content">{evidenceText}</p>}
         </div>
       )}
 

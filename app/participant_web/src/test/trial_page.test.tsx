@@ -70,9 +70,9 @@ test('trial page prefers payload response_options over legacy defaults', () => {
   });
   renderTrial(trial);
 
-  expect(screen.getByRole('button', { name: 'allow' })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'block' })).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: /scam/i })).not.toBeInTheDocument();
+  expect(screen.getByRole('radio', { name: 'allow' })).toBeInTheDocument();
+  expect(screen.getByRole('radio', { name: 'block' })).toBeInTheDocument();
+  expect(screen.queryByRole('radio', { name: /scam/i })).not.toBeInTheDocument();
 });
 
 test('trial page supports payload response_options with explicit labels', () => {
@@ -91,16 +91,16 @@ test('trial page supports payload response_options with explicit labels', () => 
   });
   renderTrial(trial);
 
-  expect(screen.getByRole('button', { name: 'Allow transfer' })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Block transfer' })).toBeInTheDocument();
+  expect(screen.getByRole('radio', { name: 'Allow transfer' })).toBeInTheDocument();
+  expect(screen.getByRole('radio', { name: 'Block transfer' })).toBeInTheDocument();
 });
 
 test('trial page keeps family defaults when response_options are absent', () => {
   const trial = makeTrial();
   renderTrial(trial);
 
-  expect(screen.getByRole('button', { name: 'Scam' })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Not a scam' })).toBeInTheDocument();
+  expect(screen.getByRole('radio', { name: 'Scam' })).toBeInTheDocument();
+  expect(screen.getByRole('radio', { name: 'Not a scam' })).toBeInTheDocument();
 });
 
 test('trial page shows explicit error when no payload or fallback response options exist', () => {
@@ -117,7 +117,7 @@ test('trial page shows explicit error when no payload or fallback response optio
   renderTrial(trial);
 
   expect(screen.getByRole('alert')).toHaveTextContent('Unable to render response options for this trial');
-  expect(screen.queryByRole('button', { name: 'Scam' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('radio', { name: 'Scam' })).not.toBeInTheDocument();
 });
 
 test('confidence UI no longer shows obsolete low/high slider labels', async () => {
@@ -125,7 +125,7 @@ test('confidence UI no longer shows obsolete low/high slider labels', async () =
   renderTrial(trial);
 
   const user = userEvent.setup();
-  await user.click(screen.getByRole('button', { name: 'Scam' }));
+  await user.click(screen.getByRole('radio', { name: 'Scam' }));
 
   expect(screen.queryByText(/low confidence/i)).not.toBeInTheDocument();
   expect(screen.queryByText(/high confidence/i)).not.toBeInTheDocument();
@@ -144,7 +144,7 @@ test('forced second look must be completed before submit is enabled', async () =
   renderTrial(trial, onSubmit);
 
   const user = userEvent.setup();
-  await user.click(screen.getByRole('button', { name: 'Scam' }));
+  await user.click(screen.getByRole('radio', { name: 'Scam' }));
   await user.click(screen.getByLabelText(/very confident/i));
 
   const submit = screen.getByRole('button', { name: /submit response/i });
