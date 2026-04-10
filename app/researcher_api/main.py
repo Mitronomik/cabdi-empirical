@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.participant_api.persistence.store_factory import create_store
-from app.researcher_api.routes import admin_runs, auth, dashboard, diagnostics, exports, stimuli
+from app.researcher_api.routes import admin_runs, auth, dashboard, diagnostics, exports, health, stimuli
 from app.researcher_api.services.auth_service import AuthService
 from app.researcher_api.services.dashboard_service import DashboardService
 from app.researcher_api.services.diagnostics_service import DiagnosticsService
@@ -135,6 +135,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
     app.state.researcher_allowed_origins = tuple(allowed_origins)
     app.state.auth_service.bootstrap_initial_user()
 
+    app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(stimuli.router)
     app.include_router(admin_runs.router)

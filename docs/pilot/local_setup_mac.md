@@ -125,12 +125,16 @@ npm run dev -- --host 127.0.0.1 --port 5174
 
 1. Open participant API health endpoint:
    - `GET http://localhost:8000/health` returns `{ "status": "ok" }`.
-2. Open participant web at `http://localhost:5173` and proceed through consent/instructions.
-3. Open researcher web at `http://localhost:5174`.
-4. In researcher web, upload demo stimulus and create a run.
-5. Create a participant session bound to that run (via UI or API).
-6. Submit several trials and a block questionnaire.
-7. Verify exports/diagnostics endpoint responses.
+   - `GET http://localhost:8000/ready` returns `{ "status": "ready", ... }` when DB/runtime checks pass.
+2. Open researcher API health/readiness endpoints:
+   - `GET http://localhost:8001/health` returns `{ "status": "ok" }`.
+   - `GET http://localhost:8001/ready` returns `{ "status": "ready", ... }` when DB/runtime checks pass.
+3. Open participant web at `http://localhost:5173` and proceed through consent/instructions.
+4. Open researcher web at `http://localhost:5174`.
+5. In researcher web, upload demo stimulus and create a run.
+6. Create a participant session bound to that run (via UI or API).
+7. Submit several trials and a block questionnaire.
+8. Verify exports/diagnostics endpoint responses.
 
 ## 9) What works now vs not implemented yet
 
