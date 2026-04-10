@@ -4,6 +4,7 @@ import { KbdMono, StatusBadge, SummaryCard } from '../components/OperatorPrimiti
 import { localizeOperatorError, localizeStatus } from '../i18n/uiText';
 import { useLocale } from '../i18n/useLocale';
 import { getRunDiagnostics, listRuns } from '../lib/api';
+import { buildDiagnosticIssues, groupOrder } from '../lib/diagnosticsUi';
 import { parseRunSummary, pickDefaultRunId, runOptionLabelLocalized } from '../lib/researcherUi';
 
 export function DiagnosticsPage() {
@@ -51,33 +52,32 @@ export function DiagnosticsPage() {
   }
 
   const selectedRun = useMemo(() => runs.find((run) => run.run_id === runId), [runId, runs]);
-  const warnings = Array.isArray(data?.warnings) ? data?.warnings : [];
   const sessionCounts = ((data?.session_counts as Record<string, unknown> | undefined) ?? {}) as Record<string, unknown>;
   const conditionCounts = ((data?.completed_trials_per_condition as Record<string, unknown> | undefined) ?? {}) as Record<string, unknown>;
   const modelWrongShare = ((data?.model_wrong_share as Record<string, unknown> | undefined) ?? {}) as Record<string, unknown>;
-  const groupedWarnings = useMemo(() => {
-    const groups: Record<string, string[]> = {
-      budget: [],
-      data: [],
-      verification: [],
-      other: [],
-    };
-    warnings.forEach((warning) => {
-      const text = String(warning);
-      const lowered = text.toLowerCase();
-      if (lowered.includes('budget')) groups.budget.push(text);
-      else if (lowered.includes('missing') || lowered.includes('schema') || lowered.includes('field')) groups.data.push(text);
-      else if (lowered.includes('verify') || lowered.includes('verification')) groups.verification.push(text);
-      else groups.other.push(text);
-    });
-    return groups;
-  }, [warnings]);
-  const warningGroupMeta: Array<{ key: keyof typeof groupedWarnings; label: string }> = [
-    { key: 'budget', label: 'Budget matching warnings' },
-    { key: 'data', label: 'Data quality warnings' },
-    { key: 'verification', label: 'Verification usage warnings' },
-    { key: 'other', label: 'Other warnings' },
-  ];
+  const issues = useMemo(() => buildDiagnosticIssues(data), [data]);
+  const groupedIssues = useMemo(() => {
+    const groups = new Map<string, { label: string; items: typeof issues }>();
+    for (const issue of issues) {
+      const label =
+        issue.group === 'dataQuality'
+          ? 'Data quality problems'
+          : issue.group === 'runShape'
+            ? 'Run-shape problems'
+            : issue.group === 'behavioralAnomaly'
+              ? 'Behavioral anomalies'
+              : issue.group === 'budgetContract'
+                ? 'Budget-contract anomalies'
+                : 'Other';
+      const entry = groups.get(issue.group);
+      if (entry) entry.items.push(issue);
+      else groups.set(issue.group, { label, items: [issue] });
+    }
+    return [...groups.entries()]
+      .sort((a, b) => groupOrder(a[0] as Parameters<typeof groupOrder>[0]) - groupOrder(b[0] as Parameters<typeof groupOrder>[0]))
+      .map(([, value]) => value);
+  }, [issues]);
+  const topIssues = useMemo(() => issues.filter((item) => item.severity === 'error').concat(issues.filter((item) => item.severity !== 'error')).slice(0, 3), [issues]);
 
   return (
     <section>
@@ -114,26 +114,37 @@ export function DiagnosticsPage() {
               <SummaryCard label={t('diagnostics.totalSessions')} value={String(data.session_count_total ?? 0)} tone="info" />
               <SummaryCard label={t('diagnostics.totalTrials')} value={String(data.trial_count_total ?? 0)} tone="info" />
               <SummaryCard label={t('diagnostics.verificationRate')} value={String(data.verification_usage_rate ?? 0)} tone="warn" />
-              <SummaryCard label={t('diagnostics.warningCount')} value={String(warnings.length)} tone={warnings.length > 0 ? 'bad' : 'good'} />
+              <SummaryCard label={t('diagnostics.warningCount')} value={String(issues.length)} tone={issues.length > 0 ? 'bad' : 'good'} />
             </div>
           </section>
           <section className="panel">
             <h3>{t('diagnostics.warnings')}</h3>
-            {warnings.length === 0 ? <StatusBadge label={t('diagnostics.noWarnings')} tone="good" /> : null}
-            {warnings.length > 0 ? (
-              <div className="stack-grid">
-                {warningGroupMeta
-                  .filter((group) => groupedWarnings[group.key].length > 0)
-                  .map((group) => (
-                    <article key={group.key} className="info-card info-card--warn">
-                      <h4>{group.label}</h4>
-                      <ul>
-                        {groupedWarnings[group.key].map((warning, index) => (
-                          <li key={`${group.key}-${index}`}>{warning}</li>
-                        ))}
-                      </ul>
-                    </article>
+            {issues.length === 0 ? <StatusBadge label={t('diagnostics.noWarnings')} tone="good" /> : null}
+            {topIssues.length > 0 ? (
+              <article className="info-card info-card--bad">
+                <h4>Most important issues first</h4>
+                <ul>
+                  {topIssues.map((issue) => (
+                    <li key={issue.id}>{issue.detail}</li>
                   ))}
+                </ul>
+              </article>
+            ) : null}
+            {groupedIssues.length > 0 ? (
+              <div className="stack-grid">
+                {groupedIssues.map((group, groupIndex) => (
+                  <article
+                    key={`${group.label}-${groupIndex}`}
+                    className={`info-card ${group.items.some((item) => item.severity === 'error') ? 'info-card--bad' : 'info-card--warn'}`}
+                  >
+                    <h4>{group.label}</h4>
+                    <ul>
+                      {group.items.map((issue) => (
+                        <li key={issue.id}>{issue.detail}</li>
+                      ))}
+                    </ul>
+                  </article>
+                ))}
               </div>
             ) : null}
           </section>

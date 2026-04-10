@@ -64,6 +64,42 @@ export function ExportsPage() {
   const availableCount = artifacts.filter((item) => Boolean(item.available)).length;
   const selectedRun = useMemo(() => runs.find((run) => run.run_id === runId), [runId, runs]);
   const exportState = String(data?.export_state ?? 'unknown');
+  const exportStateView = useMemo(() => {
+    if (!data) return null;
+    if (exportState === 'empty') {
+      return {
+        tone: 'state-banner state-banner--empty',
+        title: 'Empty run state',
+        detail: t('exports.empty'),
+      };
+    }
+    if (exportState === 'available' && artifacts.length > 0 && availableCount > 0) {
+      return {
+        tone: 'state-banner state-banner--good',
+        title: 'Generated and available',
+        detail: 'Exports are generated for this run and can be downloaded below.',
+      };
+    }
+    if (exportState === 'available' && artifacts.length === 0) {
+      return {
+        tone: 'state-banner state-banner--warn',
+        title: 'Expected but missing artifacts',
+        detail: t('exports.noArtifacts'),
+      };
+    }
+    if (exportState === 'generating' || exportState === 'pending') {
+      return {
+        tone: 'state-banner state-banner--warn',
+        title: 'Generation in progress',
+        detail: 'Export generation is still in progress. Refresh this page in a few moments.',
+      };
+    }
+    return {
+      tone: 'state-banner state-banner--warn',
+      title: 'Unavailable / error',
+      detail: String(data.message ?? 'Exports are currently unavailable for this run due to a generation or retrieval error.'),
+    };
+  }, [artifacts.length, availableCount, data, exportState, t]);
 
   async function downloadArtifact(artifactType: string, filename: string) {
     if (!runId) return;
@@ -116,13 +152,12 @@ export function ExportsPage() {
               <SummaryCard label={t('exports.generatedAt')} value={String(data.generated_at ?? t('common.na'))} />
             </div>
             <p>{String(data.message ?? '')}</p>
-            {exportState === 'empty' ? <p className="state-banner state-banner--empty">{t('exports.empty')}</p> : null}
-            {exportState === 'available' && artifacts.length === 0 ? <p className="state-banner state-banner--warn">{t('exports.noArtifacts')}</p> : null}
-            {exportState === 'available' && artifacts.length > 0 ? (
-              <p className="state-banner state-banner--good">Exports are generated and available for download below.</p>
-            ) : null}
-            {exportState !== 'available' && exportState !== 'empty' ? (
-              <p className="state-banner state-banner--warn">Exports are not generated yet for this run.</p>
+            {exportStateView ? (
+              <article className={exportStateView.tone}>
+                <strong>{exportStateView.title}</strong>
+                <br />
+                {exportStateView.detail}
+              </article>
             ) : null}
           </section>
 
