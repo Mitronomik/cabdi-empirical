@@ -32,9 +32,9 @@ export async function createSession(
   language: "en" | "ru",
   resumeToken?: string | null,
 ): Promise<{ session_id: string; status: string; entry_mode: 'created' | 'resumed'; resume_token: string }> {
-  return request('/api/v1/sessions', {
+  return request(`/api/v1/public/runs/${encodeURIComponent(runSlug)}/sessions`, {
     method: 'POST',
-    body: JSON.stringify({ run_slug: runSlug, language, resume_token: resumeToken ?? undefined }),
+    body: JSON.stringify({ language, resume_token: resumeToken ?? undefined }),
   });
 }
 
@@ -46,9 +46,9 @@ export async function fetchResumeInfo(runSlug: string, resumeToken: string): Pro
   current_block_index?: number;
   current_trial_index?: number;
 }> {
-  return request('/api/v1/sessions/resume-info', {
+  return request(`/api/v1/public/runs/${encodeURIComponent(runSlug)}/resume-info`, {
     method: 'POST',
-    body: JSON.stringify({ run_slug: runSlug, resume_token: resumeToken }),
+    body: JSON.stringify({ resume_token: resumeToken }),
   });
 }
 
@@ -60,9 +60,9 @@ export async function resumeSession(runSlug: string, resumeToken: string): Promi
   current_block_index?: number;
   current_trial_index?: number;
 }> {
-  return request('/api/v1/sessions/resume', {
+  return request(`/api/v1/public/runs/${encodeURIComponent(runSlug)}/resume`, {
     method: 'POST',
-    body: JSON.stringify({ run_slug: runSlug, resume_token: resumeToken }),
+    body: JSON.stringify({ resume_token: resumeToken }),
   });
 }
 
@@ -77,7 +77,7 @@ export async function fetchPublicRun(runSlug: string): Promise<{
 }
 
 export async function startSession(sessionId: string): Promise<{ session_id: string; status: string }> {
-  return request(`/api/v1/sessions/${sessionId}/start`, { method: 'POST' });
+  return request(`/api/v1/public/sessions/${sessionId}/start`, { method: 'POST' });
 }
 
 export async function fetchSessionProgress(sessionId: string): Promise<{
@@ -87,11 +87,11 @@ export async function fetchSessionProgress(sessionId: string): Promise<{
   current_block_index: number;
   current_trial_index: number;
 }> {
-  return request(`/api/v1/sessions/${sessionId}/progress`);
+  return request(`/api/v1/public/sessions/${sessionId}/progress`);
 }
 
 export async function fetchNextTrial(sessionId: string): Promise<TrialPayload | NextTrialResponseCompleted> {
-  return request(`/api/v1/sessions/${sessionId}/next-trial`);
+  return request(`/api/v1/public/sessions/${sessionId}/next-trial`);
 }
 
 export async function submitTrial(
@@ -107,7 +107,7 @@ export async function submitTrial(
     event_trace?: Array<{ event_type: string; payload: Record<string, unknown> }>;
   },
 ): Promise<{ trial_id: string; status: string; session_completed?: boolean; saved_ack?: { saved: boolean; saved_at?: string } }> {
-  return request(`/api/v1/sessions/${sessionId}/trials/${trialId}/submit`, {
+  return request(`/api/v1/public/sessions/${sessionId}/trials/${trialId}/submit`, {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -118,7 +118,7 @@ export async function submitBlockQuestionnaire(
   blockId: string,
   payload: QuestionnairePayload,
 ): Promise<{ block_id: string; status: string; session_completed?: boolean; saved_ack?: { saved: boolean; saved_at?: string } }> {
-  return request(`/api/v1/sessions/${sessionId}/blocks/${blockId}/questionnaire`, {
+  return request(`/api/v1/public/sessions/${sessionId}/blocks/${blockId}/questionnaire`, {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -127,7 +127,7 @@ export async function submitBlockQuestionnaire(
 export async function finalSubmitSession(
   sessionId: string,
 ): Promise<{ session_id: string; status: string; final_submit: string; already_finalized: boolean }> {
-  return request(`/api/v1/sessions/${sessionId}/final-submit`, {
+  return request(`/api/v1/public/sessions/${sessionId}/final-submit`, {
     method: 'POST',
   });
 }
