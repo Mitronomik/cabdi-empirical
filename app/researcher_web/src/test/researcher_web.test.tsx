@@ -1322,13 +1322,15 @@ describe('researcher auth shell', () => {
 
     render(<App />);
     await screen.findByText('Logged in as: admin');
+    await user.click(screen.getByRole('button', { name: 'RU' }));
 
-    expect(await screen.findByText('Prelaunch Readiness Center')).toBeInTheDocument();
-    expect((await screen.findAllByText('Launch blockers')).length).toBeGreaterThan(0);
+    expect(await screen.findByText('Центр готовности к запуску')).toBeInTheDocument();
+    expect((await screen.findAllByText('Блокеры запуска')).length).toBeGreaterThan(0);
     expect(screen.getByText('main bank required before activation')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Обновить дашборд' })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Inspect run (run_blocked)' }));
-    expect(await screen.findByText('Run Operations')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Проверить запуск (run_blocked)' }));
+    expect(await screen.findByText('Операции запуска')).toBeInTheDocument();
   });
 
 });

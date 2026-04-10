@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
 import { KbdMono, StatusBadge, SummaryCard } from '../components/OperatorPrimitives';
+import type { MessageKey } from '../i18n/messages';
 import { localizeOperatorError, localizeStatus } from '../i18n/uiText';
 import { useLocale } from '../i18n/useLocale';
 import { getDashboard } from '../lib/api';
@@ -14,6 +15,14 @@ type DashboardAction = {
   label: string;
   page: 'run' | 'sessions' | 'diagnostics' | 'exports';
   target_run_id: string;
+};
+
+const dashboardActionKeyMap: Record<string, MessageKey> = {
+  inspect_run: 'dashboard.action.inspectRun',
+  activate_run: 'dashboard.action.activateRun',
+  review_sessions: 'dashboard.action.reviewSessions',
+  inspect_diagnostics: 'dashboard.action.inspectDiagnostics',
+  open_exports: 'dashboard.action.openExports',
 };
 
 export function DashboardPage({ onNavigate }: { onNavigate: (page: 'run' | 'sessions' | 'diagnostics' | 'exports') => void }) {
@@ -52,18 +61,22 @@ export function DashboardPage({ onNavigate }: { onNavigate: (page: 'run' | 'sess
     [dashboard?.next_actions, focusRun?.next_actions],
   );
   const focusRunId = String(focusRun?.run_id ?? '');
+  const localizeActionLabel = (action: DashboardAction): string => {
+    const key = dashboardActionKeyMap[action.action];
+    return key ? t(key) : action.label;
+  };
 
   return (
     <section>
-      <h2>Prelaunch Readiness Center</h2>
-      <p className="muted">Canonical backend dashboard snapshot with separated global and focus-run truths.</p>
+      <h2>{t('dashboard.title')}</h2>
+      <p className="muted">{t('dashboard.description')}</p>
 
       <section className="panel toolbar">
         <p>
-          Focus run: {focusRunId ? <KbdMono>{focusRunId}</KbdMono> : t('common.na')}
+          {t('dashboard.focusRun')}: {focusRunId ? <KbdMono>{focusRunId}</KbdMono> : t('common.na')}
         </p>
         <button className="secondary-btn" onClick={load} disabled={loading}>
-          {loading ? t('common.loading') : 'Refresh dashboard'}
+          {loading ? t('common.loading') : t('dashboard.refresh')}
         </button>
       </section>
 
@@ -74,42 +87,42 @@ export function DashboardPage({ onNavigate }: { onNavigate: (page: 'run' | 'sess
       ) : null}
 
       <section className="panel">
-        <h3>Global operational snapshot</h3>
+        <h3>{t('dashboard.globalSnapshotTitle')}</h3>
         <div className="summary-grid">
-          <SummaryCard label="Total runs" value={String(runCounts.total ?? 0)} tone="info" />
-          <SummaryCard label="Active runs" value={String(runCounts.active ?? 0)} tone="good" />
-          <SummaryCard label="Draft or paused runs" value={String(Number(runCounts.draft ?? 0) + Number(runCounts.paused ?? 0))} tone={Number(runCounts.draft ?? 0) + Number(runCounts.paused ?? 0) > 0 ? 'warn' : 'good'} />
-          <SummaryCard label="Launch blockers" value={String(blockers.length)} tone={blockers.length > 0 ? 'bad' : 'good'} />
-          <SummaryCard label="Sessions (all runs)" value={String(globalSessionCounts.total ?? 0)} tone="info" />
-          <SummaryCard label="In progress" value={String(globalSessionCounts.in_progress ?? 0)} tone="warn" />
-          <SummaryCard label="Awaiting final submit" value={String(globalSessionCounts.awaiting_final_submit ?? 0)} tone={Number(globalSessionCounts.awaiting_final_submit ?? 0) > 0 ? 'warn' : 'good'} />
-          <SummaryCard label="Finalized" value={String(globalSessionCounts.finalized ?? 0)} tone="good" />
+          <SummaryCard label={t('dashboard.global.totalRuns')} value={String(runCounts.total ?? 0)} tone="info" />
+          <SummaryCard label={t('dashboard.global.activeRuns')} value={String(runCounts.active ?? 0)} tone="good" />
+          <SummaryCard label={t('dashboard.global.draftOrPausedRuns')} value={String(Number(runCounts.draft ?? 0) + Number(runCounts.paused ?? 0))} tone={Number(runCounts.draft ?? 0) + Number(runCounts.paused ?? 0) > 0 ? 'warn' : 'good'} />
+          <SummaryCard label={t('dashboard.global.launchBlockers')} value={String(blockers.length)} tone={blockers.length > 0 ? 'bad' : 'good'} />
+          <SummaryCard label={t('dashboard.global.sessionsAllRuns')} value={String(globalSessionCounts.total ?? 0)} tone="info" />
+          <SummaryCard label={t('dashboard.global.inProgress')} value={String(globalSessionCounts.in_progress ?? 0)} tone="warn" />
+          <SummaryCard label={t('dashboard.global.awaitingFinalSubmit')} value={String(globalSessionCounts.awaiting_final_submit ?? 0)} tone={Number(globalSessionCounts.awaiting_final_submit ?? 0) > 0 ? 'warn' : 'good'} />
+          <SummaryCard label={t('dashboard.global.finalized')} value={String(globalSessionCounts.finalized ?? 0)} tone="good" />
         </div>
       </section>
 
       {focusRun ? (
         <section className="panel">
-          <h3>Focus run snapshot</h3>
+          <h3>{t('dashboard.focusSnapshotTitle')}</h3>
           <div className="summary-grid">
-            <SummaryCard label="Run status" value={localizeStatus(t, focusRun.status)} tone="info" />
-            <SummaryCard label="Launchable" value={String(Boolean(focusRun.launchable))} tone={focusRun.launchable ? 'good' : 'bad'} />
-            <SummaryCard label="Active sessions" value={String(Number(focusCounts.in_progress ?? 0) + Number(focusCounts.paused ?? 0))} tone="warn" />
-            <SummaryCard label="Awaiting final submit" value={String(focusCounts.awaiting_final_submit ?? 0)} tone={Number(focusCounts.awaiting_final_submit ?? 0) > 0 ? 'warn' : 'good'} />
-            <SummaryCard label="Likely stale sessions" value={String(focusRun.stale_session_count ?? 0)} tone={Number(focusRun.stale_session_count ?? 0) > 0 ? 'bad' : 'good'} />
+            <SummaryCard label={t('dashboard.focus.runStatus')} value={localizeStatus(t, focusRun.status)} tone="info" />
+            <SummaryCard label={t('dashboard.focus.launchable')} value={String(Boolean(focusRun.launchable))} tone={focusRun.launchable ? 'good' : 'bad'} />
+            <SummaryCard label={t('dashboard.focus.activeSessions')} value={String(Number(focusCounts.in_progress ?? 0) + Number(focusCounts.paused ?? 0))} tone="warn" />
+            <SummaryCard label={t('dashboard.focus.awaitingFinalSubmit')} value={String(focusCounts.awaiting_final_submit ?? 0)} tone={Number(focusCounts.awaiting_final_submit ?? 0) > 0 ? 'warn' : 'good'} />
+            <SummaryCard label={t('dashboard.focus.likelyStaleSessions')} value={String(focusRun.stale_session_count ?? 0)} tone={Number(focusRun.stale_session_count ?? 0) > 0 ? 'bad' : 'good'} />
             <SummaryCard
-              label="Exports available"
+              label={t('dashboard.focus.exportsAvailable')}
               value={String((focusRun.export_availability as Record<string, unknown> | undefined)?.available_artifact_count ?? 0)}
               tone={Number((focusRun.export_availability as Record<string, unknown> | undefined)?.available_artifact_count ?? 0) > 0 ? 'good' : 'warn'}
             />
           </div>
-          <p className="muted">Public slug: {String(focusRun.public_slug ?? t('common.na'))}</p>
-          <p className="muted">Launchability reason: {String(focusRun.launchability_reason ?? t('common.na'))}</p>
+          <p className="muted">{t('dashboard.focus.publicSlug')}: {String(focusRun.public_slug ?? t('common.na'))}</p>
+          <p className="muted">{t('dashboard.focus.launchabilityReason')}: {String(focusRun.launchability_reason ?? t('common.na'))}</p>
         </section>
       ) : null}
 
       <section className="panel">
-        <h3>Launch blockers</h3>
-        {blockers.length === 0 ? <StatusBadge label="No launch blockers detected." tone="good" /> : null}
+        <h3>{t('dashboard.blockersTitle')}</h3>
+        {blockers.length === 0 ? <StatusBadge label={t('dashboard.blockersEmpty')} tone="good" /> : null}
         {blockers.length > 0 ? (
           <div className="stack-grid">
             {blockers.map((blocker, index) => (
@@ -118,9 +131,9 @@ export function DashboardPage({ onNavigate }: { onNavigate: (page: 'run' | 'sess
                 <p>
                   <StatusBadge label={localizeStatus(t, blocker.run_status)} tone={blockerTone(String(blocker.severity ?? 'warning'))} />
                 </p>
-                <p className="muted">{String(blocker.reason ?? 'No launchability reason available.')}</p>
+                <p className="muted">{String(blocker.reason ?? t('dashboard.blockerReasonFallback'))}</p>
                 <p>
-                  Public slug: <KbdMono>{String(blocker.public_slug ?? t('common.na'))}</KbdMono>
+                  {t('dashboard.focus.publicSlug')}: <KbdMono>{String(blocker.public_slug ?? t('common.na'))}</KbdMono>
                 </p>
               </article>
             ))}
@@ -129,8 +142,8 @@ export function DashboardPage({ onNavigate }: { onNavigate: (page: 'run' | 'sess
       </section>
 
       <section className="panel">
-        <h3>Top diagnostics / warnings</h3>
-        {focusWarnings.length === 0 ? <StatusBadge label="No warning flags in the loaded focus run." tone="good" /> : null}
+        <h3>{t('dashboard.warningsTitle')}</h3>
+        {focusWarnings.length === 0 ? <StatusBadge label={t('dashboard.warningsEmpty')} tone="good" /> : null}
         {focusWarnings.length > 0 ? (
           <ul>
             {focusWarnings.map((warning, index) => (
@@ -141,7 +154,7 @@ export function DashboardPage({ onNavigate }: { onNavigate: (page: 'run' | 'sess
       </section>
 
       <section className="panel">
-        <h3>Next actions</h3>
+        <h3>{t('dashboard.nextActionsTitle')}</h3>
         <div className="toolbar">
           {nextActions.map((action) => (
             <button
@@ -149,9 +162,9 @@ export function DashboardPage({ onNavigate }: { onNavigate: (page: 'run' | 'sess
               className={action.action === 'activate_run' ? 'primary-btn' : 'secondary-btn'}
               onClick={() => onNavigate(action.page)}
               data-target-run-id={action.target_run_id}
-              title={`Target run: ${action.target_run_id}`}
+              title={`${t('dashboard.nextActionTargetRun')}: ${action.target_run_id}`}
             >
-              {action.label} ({action.target_run_id})
+              {localizeActionLabel(action)} ({action.target_run_id})
             </button>
           ))}
         </div>
