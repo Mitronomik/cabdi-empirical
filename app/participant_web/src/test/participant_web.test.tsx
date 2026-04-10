@@ -131,9 +131,9 @@ test('session creation sends selected participant language', async () => {
   await user.click(screen.getByRole('button', { name: /начать исследование/i }));
 
   const createCall = fetchMock.mock.calls[1];
-  expect(createCall[0]).toContain('/api/v1/sessions');
+  expect(createCall[0]).toContain('/api/v1/public/runs/public-run-ru/sessions');
   expect(String((createCall[1] as RequestInit).body)).toContain('"language":"ru"');
-  expect(String((createCall[1] as RequestInit).body)).toContain('"run_slug":"public-run-ru"');
+  expect(String((createCall[1] as RequestInit).body)).not.toContain('"run_slug"');
 });
 
 test('trial screen progress uses backend truth', async () => {
@@ -205,8 +205,8 @@ test('resume token is checked and reused for resume', async () => {
   await user.click(screen.getByRole('button', { name: /continue/i }));
   await screen.findByTestId('trial-layout');
 
-  expect(fetchMock.mock.calls[1][0]).toContain('/api/v1/sessions/resume-info');
-  expect(fetchMock.mock.calls[2][0]).toContain('/api/v1/sessions/resume');
+  expect(fetchMock.mock.calls[1][0]).toContain('/api/v1/public/runs/public-run-a/resume-info');
+  expect(fetchMock.mock.calls[2][0]).toContain('/api/v1/public/runs/public-run-a/resume');
   expect(String((fetchMock.mock.calls[2][1] as RequestInit).body)).toContain('"resume_token":"resume-token-1"');
 });
 
@@ -230,8 +230,8 @@ test('invalid saved resume token is surfaced and session starts new', async () =
   await user.click(screen.getByRole('button', { name: /start study/i }));
   await screen.findByTestId('trial-layout');
 
-  expect(fetchMock.mock.calls[1][0]).toContain('/api/v1/sessions/resume-info');
-  expect(fetchMock.mock.calls[2][0]).toContain('/api/v1/sessions/resume-info');
+  expect(fetchMock.mock.calls[1][0]).toContain('/api/v1/public/runs/public-run-a/resume-info');
+  expect(fetchMock.mock.calls[2][0]).toContain('/api/v1/public/runs/public-run-a/resume-info');
 });
 
 test('non-launchable run blocks start in participant flow', async () => {

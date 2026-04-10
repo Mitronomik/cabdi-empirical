@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-router = APIRouter(prefix="/api/v1/sessions", tags=["trials"])
+router = APIRouter(tags=["trials"])
 
 
 class TrialEventInput(BaseModel):
@@ -23,7 +23,8 @@ class SubmitTrialRequest(BaseModel):
     event_trace: list[TrialEventInput] | None = None
 
 
-@router.get("/{session_id}/next-trial")
+@router.get("/api/v1/public/sessions/{session_id}/next-trial")
+@router.get("/api/v1/sessions/{session_id}/next-trial")
 def next_trial(session_id: str, request: Request) -> dict:
     try:
         trial = request.app.state.trial_service.next_trial(session_id)
@@ -40,7 +41,8 @@ def next_trial(session_id: str, request: Request) -> dict:
     return trial
 
 
-@router.post("/{session_id}/trials/{trial_id}/submit")
+@router.post("/api/v1/public/sessions/{session_id}/trials/{trial_id}/submit")
+@router.post("/api/v1/sessions/{session_id}/trials/{trial_id}/submit")
 def submit_trial(session_id: str, trial_id: str, req: SubmitTrialRequest, request: Request) -> dict:
     try:
         return request.app.state.trial_service.submit_trial(session_id, trial_id, req.model_dump())
