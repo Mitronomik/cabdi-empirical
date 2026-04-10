@@ -108,7 +108,7 @@ function AppBody() {
     <main className="app-shell">
       <LanguageSwitcher />
       {flow.error && (
-        <section className="card error">
+        <section className="card error" role="alert" aria-live="assertive">
           <p>{flow.error}</p>
           <button type="button" onClick={flow.retryCurrent}>
             {t('error.retry')}

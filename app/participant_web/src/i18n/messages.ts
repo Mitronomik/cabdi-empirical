@@ -95,6 +95,7 @@ export type MessageKey =
   | 'finalSubmit.resumeUntilSubmit'
   | 'finalSubmit.button'
   | 'finalSubmit.submitting'
+  | 'finalSubmit.confirmation'
   | 'completion.title'
   | 'completion.thanks'
   | 'completion.done'
@@ -195,6 +196,7 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
     'finalSubmit.resumeUntilSubmit': 'Until final submit, your session is saved but not fully completed.',
     'finalSubmit.button': 'Final submit',
     'finalSubmit.submitting': 'Submitting...',
+    'finalSubmit.confirmation': 'I am ready to finalize and lock my responses.',
     'completion.title': 'Study complete',
     'completion.thanks': 'Thank you for your participation.',
     'completion.done': 'Your responses were saved successfully.',
@@ -294,6 +296,7 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
     'finalSubmit.resumeUntilSubmit': 'До финальной отправки сессия сохранена, но еще не считается полностью завершенной.',
     'finalSubmit.button': 'Финальная отправка',
     'finalSubmit.submitting': 'Отправка...',
+    'finalSubmit.confirmation': 'Я готов(а) финализировать и зафиксировать ответы.',
     'completion.title': 'Исследование завершено',
     'completion.thanks': 'Спасибо за участие.',
     'completion.done': 'Ваши ответы успешно сохранены.',

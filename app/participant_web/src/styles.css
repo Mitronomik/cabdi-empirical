@@ -277,3 +277,45 @@ li {
     grid-template-columns: 1fr;
   }
 }
+
+.focus-anchor:focus {
+  outline: 3px solid #4f46e5;
+  outline-offset: 2px;
+}
+
+.response-fieldset {
+  border: none;
+  padding: 0;
+  margin: 8px 0 0;
+}
+
+.response-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.response-option {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid #bcc7d7;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fff;
+}
+
+.response-option.selected {
+  border-color: #4f46e5;
+  background: #eef2ff;
+}
+
+.response-option input {
+  margin: 0;
+}
+
+@media (max-width: 860px) {
+  .response-grid {
+    grid-template-columns: 1fr;
+  }
+}
