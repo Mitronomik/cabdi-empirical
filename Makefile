@@ -1,4 +1,4 @@
-.PHONY: setup test validate lint format-check typecheck frontend-typecheck frontend-build gate-python gate-frontend gate run-participant-api run-researcher-api run-participant-web run-researcher-web dry-run pilot-backup pilot-restore pilot-prelaunch-gate pilot-prelaunch-gate-blackbox pilot-prelaunch-gate-vps
+.PHONY: setup test validate lint format-check typecheck frontend-typecheck frontend-build gate-python gate-frontend gate run-participant-api run-researcher-api run-participant-web run-researcher-web dry-run pilot-backup pilot-backup-rotate pilot-restore pilot-restore-drill pilot-prelaunch-gate pilot-prelaunch-gate-blackbox pilot-prelaunch-gate-vps
 
 PYTHON ?= python3
 VENV_DIR ?= .venv
@@ -67,8 +67,22 @@ dry-run:
 pilot-backup:
 	$(VENV_PY) scripts/pilot_backup.py --output artifacts/pilot_ops/backups/pilot_backup.json
 
+pilot-backup-rotate:
+	$(VENV_PY) scripts/pilot_backup_rotate.py \
+		--db-target "$${PILOT_DB_URL:-$${PILOT_DB_PATH:-pilot/sessions/pilot_sessions.sqlite3}}" \
+		--backup-dir "$${PILOT_BACKUP_DIR:-artifacts/pilot_ops/backups}" \
+		--timestamp-utc "$$(date -u +%Y%m%dT%H%M%SZ)" \
+		--retain-count "$${PILOT_BACKUP_RETAIN_COUNT:-14}"
+
 pilot-restore:
 	$(VENV_PY) scripts/pilot_restore.py --backup artifacts/pilot_ops/backups/pilot_backup.json --confirm-destructive
+
+pilot-restore-drill:
+	$(VENV_PY) scripts/pilot_restore_drill.py \
+		--db-target "$${PILOT_DB_URL:-$${PILOT_DB_PATH:-pilot/sessions/pilot_sessions.sqlite3}}" \
+		--backup-dir "$${PILOT_BACKUP_DIR:-artifacts/pilot_ops/backups}" \
+		--timestamp-utc "$$(date -u +%Y%m%dT%H%M%SZ)" \
+		--report-out "$${PILOT_GATE_OUTPUT_DIR:-artifacts/pilot_ops/prelaunch_gate}/restore_drill_report.json"
 
 pilot-prelaunch-gate:
 	@if [ -z "$${PILOT_RESEARCHER_PASSWORD}" ]; then \
