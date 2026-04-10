@@ -762,7 +762,7 @@ describe('researcher auth shell', () => {
 
   it('single mode derives task family and payload from the selected main bank', async () => {
     const user = userEvent.setup();
-    let createPayload: Record<string, unknown> | null = null;
+    const createPayloadRef: { value: Record<string, unknown> | null } = { value: null };
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -783,7 +783,7 @@ describe('researcher auth shell', () => {
           );
         }
         if (url.endsWith('/runs') && init?.method === 'POST') {
-          createPayload = JSON.parse(String(init.body ?? '{}')) as Record<string, unknown>;
+          createPayloadRef.value = JSON.parse(String(init.body ?? '{}')) as Record<string, unknown>;
           return new Response(JSON.stringify({ run_id: 'run_new', run_name: 'run-new', public_slug: 'run-new', status: 'draft' }), { status: 200 });
         }
         if (url.endsWith('/runs/preview')) {
@@ -815,14 +815,18 @@ describe('researcher auth shell', () => {
     expect(screen.getByText('Main bank(s): Main Claim (8)')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Create Run' }));
 
-    await waitFor(() => expect(createPayload).not.toBeNull());
-    expect(createPayload?.stimulus_set_ids).toEqual(['stim_claim']);
-    expect(createPayload?.task_family).toBe('claim_review');
+    await waitFor(() => expect(createPayloadRef.value).not.toBeNull());
+    if (!createPayloadRef.value) {
+      throw new Error('Expected create payload to be captured');
+    }
+    const payload = createPayloadRef.value;
+    expect(payload.stimulus_set_ids).toEqual(['stim_claim']);
+    expect(payload.task_family).toBe('claim_review');
   });
 
   it('multi mode derives task family and payload from selected banks only when consistent', async () => {
     const user = userEvent.setup();
-    let createPayload: Record<string, unknown> | null = null;
+    const createPayloadRef: { value: Record<string, unknown> | null } = { value: null };
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -844,7 +848,7 @@ describe('researcher auth shell', () => {
           );
         }
         if (url.endsWith('/runs') && init?.method === 'POST') {
-          createPayload = JSON.parse(String(init.body ?? '{}')) as Record<string, unknown>;
+          createPayloadRef.value = JSON.parse(String(init.body ?? '{}')) as Record<string, unknown>;
           return new Response(JSON.stringify({ run_id: 'run_new', run_name: 'run-new', public_slug: 'run-new', status: 'draft' }), { status: 200 });
         }
         if (url.endsWith('/runs/preview')) {
@@ -879,9 +883,13 @@ describe('researcher auth shell', () => {
     expect(screen.getByText('Main bank(s): Multi A (8), Multi B (7)')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Create Run' }));
 
-    await waitFor(() => expect(createPayload).not.toBeNull());
-    expect(createPayload?.stimulus_set_ids).toEqual(['stim_multi_a', 'stim_multi_b']);
-    expect(createPayload?.task_family).toBe('claim_review');
+    await waitFor(() => expect(createPayloadRef.value).not.toBeNull());
+    if (!createPayloadRef.value) {
+      throw new Error('Expected create payload to be captured');
+    }
+    const payload = createPayloadRef.value;
+    expect(payload.stimulus_set_ids).toEqual(['stim_multi_a', 'stim_multi_b']);
+    expect(payload.task_family).toBe('claim_review');
   });
 
   it('blocks submit in multi mode when selected banks have mixed task families', async () => {
@@ -1092,7 +1100,7 @@ describe('researcher auth shell', () => {
 
   it('allows submit when a main bank is selected and practice bank remains optional supplementary', async () => {
     const user = userEvent.setup();
-    let createPayload: Record<string, unknown> | null = null;
+    const createPayloadRef: { value: Record<string, unknown> | null } = { value: null };
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -1113,7 +1121,7 @@ describe('researcher auth shell', () => {
           );
         }
         if (url.endsWith('/runs') && init?.method === 'POST') {
-          createPayload = JSON.parse(String(init.body ?? '{}')) as Record<string, unknown>;
+          createPayloadRef.value = JSON.parse(String(init.body ?? '{}')) as Record<string, unknown>;
           return new Response(JSON.stringify({ run_id: 'run_new', run_name: 'run-new', public_slug: 'run-new', status: 'draft' }), { status: 200 });
         }
         if (url.endsWith('/runs')) return new Response(JSON.stringify([]), { status: 200 });
@@ -1128,14 +1136,18 @@ describe('researcher auth shell', () => {
     await user.selectOptions(screen.getByDisplayValue('Practice bank (optional supplementary)'), 'stim_practice');
     await user.click(screen.getByRole('button', { name: 'Create Run' }));
 
-    await waitFor(() => expect(createPayload).not.toBeNull());
-    expect(createPayload?.stimulus_set_ids).toEqual(['stim_main']);
-    expect(createPayload?.practice_stimulus_set_id).toBe('stim_practice');
+    await waitFor(() => expect(createPayloadRef.value).not.toBeNull());
+    if (!createPayloadRef.value) {
+      throw new Error('Expected create payload to be captured');
+    }
+    const payload = createPayloadRef.value;
+    expect(payload.stimulus_set_ids).toEqual(['stim_main']);
+    expect(payload.practice_stimulus_set_id).toBe('stim_practice');
   });
 
   it('keeps one authoritative main-bank selection when switching between single and multi modes', async () => {
     const user = userEvent.setup();
-    let createPayload: Record<string, unknown> | null = null;
+    const createPayloadRef: { value: Record<string, unknown> | null } = { value: null };
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -1157,7 +1169,7 @@ describe('researcher auth shell', () => {
           );
         }
         if (url.endsWith('/runs') && init?.method === 'POST') {
-          createPayload = JSON.parse(String(init.body ?? '{}')) as Record<string, unknown>;
+          createPayloadRef.value = JSON.parse(String(init.body ?? '{}')) as Record<string, unknown>;
           return new Response(JSON.stringify({ run_id: 'run_new', run_name: 'run-new', public_slug: 'run-new', status: 'draft' }), { status: 200 });
         }
         if (url.endsWith('/runs')) return new Response(JSON.stringify([]), { status: 200 });
@@ -1184,8 +1196,12 @@ describe('researcher auth shell', () => {
     expect(screen.getByText(/Selected stimulus set: Main One/)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Create Run' }));
-    await waitFor(() => expect(createPayload).not.toBeNull());
-    expect(createPayload?.stimulus_set_ids).toEqual(['stim_one']);
+    await waitFor(() => expect(createPayloadRef.value).not.toBeNull());
+    if (!createPayloadRef.value) {
+      throw new Error('Expected create payload to be captured');
+    }
+    const payload = createPayloadRef.value;
+    expect(payload.stimulus_set_ids).toEqual(['stim_one']);
   });
 
   it('renders only the single main-bank control in single mode and updates authoritative selection', async () => {

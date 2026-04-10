@@ -1,4 +1,4 @@
-.PHONY: setup test validate lint format-check typecheck gate-python run-participant-api run-researcher-api run-participant-web run-researcher-web dry-run pilot-backup pilot-restore pilot-prelaunch-gate pilot-prelaunch-gate-blackbox
+.PHONY: setup test validate lint format-check typecheck frontend-typecheck frontend-build gate-python gate-frontend gate run-participant-api run-researcher-api run-participant-web run-researcher-web dry-run pilot-backup pilot-restore pilot-prelaunch-gate pilot-prelaunch-gate-blackbox
 
 PYTHON ?= python3
 VENV_DIR ?= .venv
@@ -31,8 +31,20 @@ test:
 	cd app/participant_web && $(NPM) run test
 	cd app/researcher_web && $(NPM) run test
 
+frontend-typecheck:
+	cd app/participant_web && $(NPM) run typecheck
+	cd app/researcher_web && $(NPM) run typecheck
+
+frontend-build:
+	cd app/participant_web && $(NPM) run build
+	cd app/researcher_web && $(NPM) run build
+
 gate-python: lint format-check typecheck
 	$(PYTHON_RUN) -m pytest -q $(PY_GATE_TESTS)
+
+gate-frontend: frontend-typecheck frontend-build
+
+gate: gate-python gate-frontend
 
 validate:
 	$(VENV_PY) experiments/run_minimal_validation.py
