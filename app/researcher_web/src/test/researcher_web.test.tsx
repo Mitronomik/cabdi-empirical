@@ -1161,32 +1161,42 @@ describe('researcher auth shell', () => {
         if (url.endsWith('/auth/me')) {
           return new Response(JSON.stringify({ authenticated: true, user: { user_id: 'u1', username: 'admin', is_admin: true } }), { status: 200 });
         }
-        if (url.endsWith('/runs')) {
+        if (url.endsWith('/dashboard')) {
           return new Response(
-            JSON.stringify([
-              {
+            JSON.stringify({
+              global_snapshot: {
+                run_counts: { total: 1, draft: 1, active: 0, paused: 0, closed: 0 },
+                session_counts: { total: 2, in_progress: 1, awaiting_final_submit: 1, finalized: 0 },
+              },
+              focus_run_snapshot: {
                 run_id: 'run_blocked',
-                run_name: 'blocked-run',
                 public_slug: 'blocked-run',
                 status: 'draft',
-                task_family: 'scam_detection',
-                linked_stimulus_set_ids: ['stim_1'],
                 launchable: false,
-                launchability_state: 'not_launchable',
                 launchability_reason: 'main bank required before activation',
+                counts: { in_progress: 1, awaiting_final_submit: 1, finalized: 0 },
+                stale_session_count: 1,
+                export_availability: { state: 'empty', available_artifact_count: 0, artifact_count: 0 },
+                warnings: ['Potential stale sessions: 1', 'Budget tolerance warning'],
+                next_actions: [
+                  { action: 'inspect_run', label: 'Inspect run', page: 'run', target_run_id: 'run_blocked' },
+                ],
               },
-            ]),
+              blockers: [
+                {
+                  kind: 'launchability',
+                  severity: 'error',
+                  run_id: 'run_blocked',
+                  public_slug: 'blocked-run',
+                  run_status: 'draft',
+                  reason: 'main bank required before activation',
+                },
+              ],
+              warnings: ['Potential stale sessions: 1', 'Budget tolerance warning'],
+              next_actions: [{ action: 'inspect_run', label: 'Inspect run', page: 'run', target_run_id: 'run_blocked' }],
+            }),
             { status: 200 },
           );
-        }
-        if (url.endsWith('/runs/run_blocked/sessions')) {
-          return new Response(JSON.stringify({ counts: { in_progress: 1, awaiting_final_submit: 1, finalized: 0 }, sessions: [] }), { status: 200 });
-        }
-        if (url.endsWith('/runs/run_blocked/diagnostics')) {
-          return new Response(JSON.stringify({ warnings: ['Budget tolerance warning'] }), { status: 200 });
-        }
-        if (url.endsWith('/runs/run_blocked/exports')) {
-          return new Response(JSON.stringify({ export_state: 'empty', artifacts: [] }), { status: 200 });
         }
         if (url.endsWith('/runs/defaults')) {
           return new Response(JSON.stringify({ experiment_id: 'exp_1', task_family: 'scam_detection', config_preset_options: [] }), { status: 200 });
@@ -1205,7 +1215,7 @@ describe('researcher auth shell', () => {
     expect((await screen.findAllByText('Launch blockers')).length).toBeGreaterThan(0);
     expect(screen.getByText('main bank required before activation')).toBeInTheDocument();
 
-    await user.click(screen.getAllByRole('button', { name: 'Inspect run' })[0]);
+    await user.click(screen.getByRole('button', { name: 'Inspect run (run_blocked)' }));
     expect(await screen.findByText('Run Operations')).toBeInTheDocument();
   });
 

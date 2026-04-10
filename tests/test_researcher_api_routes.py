@@ -461,3 +461,60 @@ def test_budget_diagnostics_warn_on_incomplete_basis(tmp_path):
     body = diagnostics.json()
     assert any(flag["kind"] == "insufficient_budget_data" for flag in body["budget_tolerance_flags"])
     assert any("Budget diagnostics are incomplete" in warning for warning in body["warnings"])
+
+
+def test_dashboard_endpoint_returns_canonical_global_and_focus_snapshots(tmp_path):
+    db_path = str(tmp_path / "pilot.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    _login_researcher(researcher)
+    participant = TestClient(create_participant_app(db_path))
+
+    stimulus_set_id = _upload_stimulus(researcher)
+    create_run = researcher.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "dashboard run",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"n_blocks": 1},
+            "stimulus_set_ids": [stimulus_set_id],
+        },
+    )
+    run_id = create_run.json()["run_id"]
+    run_slug = create_run.json()["public_slug"]
+    assert researcher.post(f"/admin/api/v1/runs/{run_id}/activate").status_code == 200
+
+    session_id = participant.post("/api/v1/sessions", json={"run_slug": run_slug}).json()["session_id"]
+    participant.app.state.store.execute(
+        "UPDATE participant_sessions SET status = 'in_progress', started_at = '2026-01-01T00:00:00+00:00', last_activity_at = '2026-01-01T00:00:00+00:00' WHERE session_id = ?",
+        (session_id,),
+    )
+
+    dashboard_res = researcher.get("/admin/api/v1/dashboard")
+    assert dashboard_res.status_code == 200
+    body = dashboard_res.json()
+
+    assert set(body.keys()) == {"global_snapshot", "focus_run_snapshot", "blockers", "warnings", "next_actions"}
+    assert body["global_snapshot"]["run_counts"]["total"] >= 1
+    assert body["global_snapshot"]["session_counts"]["in_progress"] >= 1
+
+    focus = body["focus_run_snapshot"]
+    assert focus["run_id"] == run_id
+    assert focus["public_slug"] == run_slug
+    assert focus["status"] == "active"
+    assert isinstance(focus["stale_session_count"], int)
+    assert "export_availability" in focus
+    assert isinstance(focus["warnings"], list)
+
+    blockers = body["blockers"]
+    assert isinstance(blockers, list)
+    if blockers:
+        blocker = blockers[0]
+        assert "run_id" in blocker
+        assert "kind" in blocker
+        assert "severity" in blocker
+
+    actions = body["next_actions"]
+    assert isinstance(actions, list)
+    assert actions
+    assert all(action["target_run_id"] == run_id for action in actions)

@@ -1,3 +1,3 @@
-from app.researcher_api.routes import admin_runs, auth, diagnostics, exports, stimuli
+from app.researcher_api.routes import admin_runs, auth, dashboard, diagnostics, exports, stimuli
 
-__all__ = ["admin_runs", "auth", "diagnostics", "exports", "stimuli"]
+__all__ = ["admin_runs", "auth", "dashboard", "diagnostics", "exports", "stimuli"]

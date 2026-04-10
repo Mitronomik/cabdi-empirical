@@ -8,8 +8,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.participant_api.persistence.store_factory import create_store
-from app.researcher_api.routes import admin_runs, auth, diagnostics, exports, stimuli
+from app.researcher_api.routes import admin_runs, auth, dashboard, diagnostics, exports, stimuli
 from app.researcher_api.services.auth_service import AuthService
+from app.researcher_api.services.dashboard_service import DashboardService
 from app.researcher_api.services.diagnostics_service import DiagnosticsService
 from app.researcher_api.services.export_service import AdminExportService
 from app.researcher_api.services.run_service import RunService
@@ -122,6 +123,11 @@ def create_app(db_path: str | None = None) -> FastAPI:
     app.state.run_service = RunService(store, participant_base_url=_resolve_participant_base_url())
     app.state.diagnostics_service = DiagnosticsService(store)
     app.state.admin_export_service = AdminExportService(store, export_root=_resolve_export_root())
+    app.state.dashboard_service = DashboardService(
+        run_service=app.state.run_service,
+        diagnostics_service=app.state.diagnostics_service,
+        export_service=app.state.admin_export_service,
+    )
     app.state.auth_service = AuthService(store)
     app.state.researcher_session_secret = session_secret
     app.state.researcher_cookie_secure = _resolve_cookie_security()
@@ -134,6 +140,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
     app.include_router(admin_runs.router)
     app.include_router(diagnostics.router)
     app.include_router(exports.router)
+    app.include_router(dashboard.router)
     return app
 
 

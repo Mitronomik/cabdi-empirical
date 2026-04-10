@@ -71,6 +71,11 @@ export function listRuns() {
   return apiGet<Array<Record<string, unknown>>>('/admin/api/v1/runs')
 }
 
+export function getDashboard(focusRunId?: string) {
+  const query = focusRunId ? `?focus_run_id=${encodeURIComponent(focusRunId)}` : ''
+  return apiGet<Record<string, unknown>>(`/admin/api/v1/dashboard${query}`)
+}
+
 export function getRun(runId: string) {
   return apiGet<Record<string, unknown>>(`/admin/api/v1/runs/${runId}`)
 }
