@@ -127,3 +127,53 @@ def test_create_run_requires_main_bank_even_when_practice_bank_selected(tmp_path
         "at least one main stimulus_set_id is required; practice_stimulus_set_id is optional and supplementary only"
         in create.json()["detail"]
     )
+
+
+def test_run_preview_returns_backend_canonical_counts_and_launchability(tmp_path) -> None:
+    client = TestClient(create_app(str(tmp_path / "semantics.sqlite3")))
+    _login(client)
+    set_a = _upload_set(client, name="main_bank", n_items=6)
+    practice_set = _upload_set(client, name="practice_bank", n_items=2)
+
+    preview = client.post(
+        "/admin/api/v1/runs/preview",
+        json={
+            "run_name": "preview-only",
+            "experiment_id": "toy_v1",
+            "task_family": None,
+            "config": {"mode": "test"},
+            "stimulus_set_ids": [set_a],
+            "practice_stimulus_set_id": practice_set,
+            "aggregation_mode": "single",
+            "notes": "preview",
+        },
+    )
+    assert preview.status_code == 200
+    body = preview.json()
+    assert body["resolved_task_family"] == "scam_detection"
+    assert body["practice_item_count"] == 2
+    assert body["main_item_count"] == 6
+    assert body["expected_trial_count"] == 8
+    assert body["validation_errors"] == []
+    assert body["launchability_preview"]["launchable"] is True
+    assert body["payload_schema_compatibility"]["compatible"] is True
+
+
+def test_create_run_accepts_derivable_task_family_via_shared_preview_core(tmp_path) -> None:
+    client = TestClient(create_app(str(tmp_path / "semantics.sqlite3")))
+    _login(client)
+    set_a = _upload_set(client, name="main_bank", n_items=6)
+
+    create = client.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "derive-task-family",
+            "experiment_id": "toy_v1",
+            "task_family": None,
+            "config": {"mode": "test"},
+            "stimulus_set_ids": [set_a],
+            "aggregation_mode": "single",
+        },
+    )
+    assert create.status_code == 200
+    assert create.json()["task_family"] == "scam_detection"

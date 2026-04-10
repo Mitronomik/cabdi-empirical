@@ -29,6 +29,17 @@ export async function createRun(payload: Record<string, unknown>) {
   return res.json()
 }
 
+export async function previewRun(payload: Record<string, unknown>) {
+  const res = await fetch(`${BASE}/admin/api/v1/runs/preview`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) throw new Error(await parseError(res))
+  return res.json()
+}
+
 export async function apiPost<T>(path: string, payload?: Record<string, unknown>): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: 'POST',
