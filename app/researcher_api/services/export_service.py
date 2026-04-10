@@ -228,6 +228,18 @@ class AdminExportService:
             "run_id": payload.get("run_id"),
             "artifact_root": payload.get("artifact_root"),
         }
+        payload["interpretation_semantics"] = {
+            "claim_layer": "behavior_first_only",
+            "supports": [
+                "run-level and cohort-level behavior-first evidence statements",
+                "confirmatory/narrowing analysis readiness assessment",
+            ],
+            "does_not_support": [
+                "physiology-grounded interpretation",
+                "participant psych/cognition inference",
+                "whole-framework real-world validation claims",
+            ],
+        }
         return payload
 
     def _run_export_dir(self, run_id: str) -> Path:

@@ -79,6 +79,16 @@ def build_report(
         warnings.append("diagnostics_json not provided; budget and run-level diagnostics omitted")
 
     diagnostic_lines = "\n".join(f"- {w}" for w in warnings)
+    run_level_flags = diagnostics.get("run_level_flags", [])
+    cohort_level_flags = diagnostics.get("cohort_level_flags", [])
+    run_flag_lines = "\n".join(
+        f"- [{str(flag.get('severity', 'info')).upper()}] {flag.get('code', 'unknown')}: {flag.get('message', '')}"
+        for flag in run_level_flags
+    )
+    cohort_flag_lines = "\n".join(
+        f"- [{str(flag.get('severity', 'info')).upper()}] {flag.get('code', 'unknown')}: {flag.get('message', '')}"
+        for flag in cohort_level_flags
+    )
 
     signal_framing = [
         "- Supported signal: consistent with a behavior-first routing signal under this toy pilot setup when appropriate_reliance_proxy > 0.",
@@ -107,6 +117,17 @@ def build_report(
         "",
         "## Signal framing",
         *signal_framing,
+        "",
+        "## Claim discipline (behavior-first only)",
+        "- Can justify: behavior-first, run-scoped evidence quality statements that support, narrow, or fail to support CABDI routing claims in this toy pilot.",
+        "- Cannot justify: psych/physiology interpretations, cognition claims, or whole-framework real-world validation claims.",
+        "",
+        "## Confirmatory-readiness flags",
+        "### Run-level flags",
+        run_flag_lines if run_flag_lines else "- None",
+        "",
+        "### Cohort-level flags",
+        cohort_flag_lines if cohort_flag_lines else "- None",
         "",
         "## Budget notes",
         budget_note,

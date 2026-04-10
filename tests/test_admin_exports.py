@@ -70,6 +70,7 @@ def test_run_exports_include_expected_sections(tmp_path):
     assert body["artifact_policy"]["mode"] == "replace_current"
     assert body["manifest_version"] == "pilot_export_manifest.v1"
     assert body["run_scope"]["scope_level"] == "run"
+    assert body["interpretation_semantics"]["claim_layer"] == "behavior_first_only"
     assert body["artifact_layers"]["source_of_truth_extracts"]
     assert "trial_level_csv" in body["artifact_layers"]["derived_analysis_artifacts"]
     artifact_types = {item["artifact_type"] for item in body["artifacts"]}

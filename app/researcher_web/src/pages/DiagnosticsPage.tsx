@@ -56,6 +56,8 @@ export function DiagnosticsPage() {
   const operationalSummary = ((data?.operational_summary as Record<string, unknown> | undefined) ?? {}) as Record<string, unknown>;
   const conditionCounts = ((data?.completed_trials_per_condition as Record<string, unknown> | undefined) ?? {}) as Record<string, unknown>;
   const modelWrongShare = ((data?.model_wrong_share as Record<string, unknown> | undefined) ?? {}) as Record<string, unknown>;
+  const runLevelFlags = (Array.isArray(data?.run_level_flags) ? data?.run_level_flags : []) as Array<Record<string, unknown>>;
+  const cohortLevelFlags = (Array.isArray(data?.cohort_level_flags) ? data?.cohort_level_flags : []) as Array<Record<string, unknown>>;
   const issues = useMemo(() => buildDiagnosticIssues(data), [data]);
   const groupedIssues = useMemo(() => {
     const groups = new Map<string, { label: string; items: typeof issues }>();
@@ -118,6 +120,8 @@ export function DiagnosticsPage() {
               <SummaryCard label="Likely stale sessions" value={String(data.stale_session_count ?? operationalSummary.stale_session_count ?? 0)} tone={Number(data.stale_session_count ?? operationalSummary.stale_session_count ?? 0) > 0 ? 'bad' : 'good'} />
               <SummaryCard label="Incomplete questionnaire sessions" value={String(operationalSummary.incomplete_questionnaire_count ?? 0)} tone={Number(operationalSummary.incomplete_questionnaire_count ?? 0) > 0 ? 'warn' : 'good'} />
               <SummaryCard label="Lifecycle anomalies" value={String(operationalSummary.lifecycle_anomaly_count ?? 0)} tone={Number(operationalSummary.lifecycle_anomaly_count ?? 0) > 0 ? 'bad' : 'good'} />
+              <SummaryCard label="Run-level flags" value={String(runLevelFlags.length)} tone={runLevelFlags.some((f) => String(f.severity) === 'warning') ? 'warn' : 'good'} />
+              <SummaryCard label="Cohort-level flags" value={String(cohortLevelFlags.length)} tone={cohortLevelFlags.some((f) => String(f.severity) === 'warning') ? 'warn' : 'good'} />
               <SummaryCard label={t('diagnostics.warningCount')} value={String(issues.length)} tone={issues.length > 0 ? 'bad' : 'good'} />
             </div>
           </section>
@@ -179,6 +183,26 @@ export function DiagnosticsPage() {
                 {Object.entries(modelWrongShare).map(([key, value]) => (
                   <p key={key}>
                     <KbdMono>{key}</KbdMono>: {String(value)}
+                  </p>
+                ))}
+              </article>
+              <article className="info-card">
+                <h4>Run-level flags</h4>
+                {runLevelFlags.length === 0 ? <p className="muted">{t('common.na')}</p> : null}
+                {runLevelFlags.map((flag, index) => (
+                  <p key={`run-flag-${index}`}>
+                    <StatusBadge label={String(flag.severity ?? 'info')} tone={String(flag.severity) === 'warning' ? 'warn' : 'good'} />{' '}
+                    <KbdMono>{String(flag.code ?? 'unknown')}</KbdMono>: {String(flag.message ?? '')}
+                  </p>
+                ))}
+              </article>
+              <article className="info-card">
+                <h4>Cohort-level flags</h4>
+                {cohortLevelFlags.length === 0 ? <p className="muted">{t('common.na')}</p> : null}
+                {cohortLevelFlags.map((flag, index) => (
+                  <p key={`cohort-flag-${index}`}>
+                    <StatusBadge label={String(flag.severity ?? 'info')} tone={String(flag.severity) === 'warning' ? 'warn' : 'good'} />{' '}
+                    <KbdMono>{String(flag.code ?? 'unknown')}</KbdMono>: {String(flag.message ?? '')}
                   </p>
                 ))}
               </article>

@@ -26,6 +26,8 @@ _REQUIRED_COLUMNS = {
     "verification_completed",
     "reason_clicked",
     "evidence_opened",
+    "risk_bucket",
+    "model_confidence",
 }
 
 
@@ -123,6 +125,7 @@ def derive_trial_level_rows(
             "session_id": session_id,
             "experiment_id": row.get("experiment_id", ""),
             "condition": row.get("condition", ""),
+            "risk_bucket": row.get("risk_bucket", ""),
             "task_family": row.get("task_family", ""),
             "block_id": row.get("block_id") or meta.get("block_id", ""),
             "trial_id": trial_id,
@@ -132,6 +135,7 @@ def derive_trial_level_rows(
             "incorrect": int(not correct),
             "utility_accuracy": int(correct),
             "model_wrong": int(model_wrong),
+            "model_confidence": row.get("model_confidence", ""),
             "followed_model": int(followed_model),
             "followed_wrong_model": int(followed_wrong_model),
             "correct_override": int(correct_override),
