@@ -8,7 +8,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.participant_api.persistence.store_factory import create_store
-from app.researcher_api.routes import admin_runs, auth, dashboard, diagnostics, exports, health, stimuli
+from app.researcher_api.routes import (
+    admin_runs,
+    auth,
+    dashboard,
+    diagnostics,
+    exports,
+    health,
+    stimuli,
+)
 from app.researcher_api.services.auth_service import AuthService
 from app.researcher_api.services.dashboard_service import DashboardService
 from app.researcher_api.services.diagnostics_service import DiagnosticsService
@@ -43,7 +51,9 @@ def _resolve_db_target(db_path: str | None) -> str | None:
     if _is_production_like_env():
         db_url = os.getenv("PILOT_DB_URL", "")
         if not db_url:
-            raise RuntimeError("Missing PILOT_DB_URL in production-like mode for deployment packaging.")
+            raise RuntimeError(
+                "Missing PILOT_DB_URL in production-like mode for deployment packaging."
+            )
         if not db_url.startswith(("postgres://", "postgresql://")):
             raise RuntimeError("PILOT_DB_URL must be a Postgres URL in production-like mode.")
     return resolved

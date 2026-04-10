@@ -57,7 +57,9 @@ class AuthService:
                     "Researcher auth bootstrap requires PILOT_RESEARCHER_PASSWORD in production-like mode."
                 )
             password = self.LOCAL_DEFAULT_BOOTSTRAP_PASSWORD
-        elif env_mode in {"prod", "production", "staging"} and self._is_weak_bootstrap_password(password):
+        elif env_mode in {"prod", "production", "staging"} and self._is_weak_bootstrap_password(
+            password
+        ):
             raise RuntimeError(
                 "PILOT_RESEARCHER_PASSWORD is too weak for production-like mode. "
                 "Set a non-default bootstrap password with at least 12 characters and no placeholder text."
@@ -99,7 +101,9 @@ class AuthService:
         if not self.verify_password(password=password, password_hash=str(row["password_hash"])):
             return None
         return AuthenticatedUser(
-            user_id=str(row["user_id"]), username=str(row["username"]), is_admin=bool(int(row.get("is_admin", 0)))
+            user_id=str(row["user_id"]),
+            username=str(row["username"]),
+            is_admin=bool(int(row.get("is_admin", 0))),
         )
 
     def get_user(self, user_id: str) -> AuthenticatedUser | None:
@@ -110,7 +114,9 @@ class AuthService:
         if not row or int(row.get("is_active", 0)) != 1:
             return None
         return AuthenticatedUser(
-            user_id=str(row["user_id"]), username=str(row["username"]), is_admin=bool(int(row.get("is_admin", 0)))
+            user_id=str(row["user_id"]),
+            username=str(row["username"]),
+            is_admin=bool(int(row.get("is_admin", 0))),
         )
 
     def hash_password(self, password: str) -> str:

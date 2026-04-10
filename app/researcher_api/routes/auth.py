@@ -3,7 +3,11 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-from app.researcher_api.auth import SESSION_COOKIE_NAME, issue_session_token, require_researcher_auth
+from app.researcher_api.auth import (
+    SESSION_COOKIE_NAME,
+    issue_session_token,
+    require_researcher_auth,
+)
 
 router = APIRouter(prefix="/admin/api/v1/auth", tags=["admin-auth"])
 
@@ -38,7 +42,10 @@ def login(req: LoginRequest, request: Request, response: Response) -> dict:
         secure=bool(getattr(request.app.state, "researcher_cookie_secure", False)),
         max_age=60 * 60 * 12,
     )
-    return {"ok": True, "user": {"user_id": user.user_id, "username": user.username, "is_admin": user.is_admin}}
+    return {
+        "ok": True,
+        "user": {"user_id": user.user_id, "username": user.username, "is_admin": user.is_admin},
+    }
 
 
 @router.post("/logout")
@@ -51,4 +58,7 @@ def logout(request: Request, response: Response) -> dict:
 @router.get("/me")
 def current_user(request: Request) -> dict:
     user = require_researcher_auth(request)
-    return {"authenticated": True, "user": {"user_id": user.user_id, "username": user.username, "is_admin": user.is_admin}}
+    return {
+        "authenticated": True,
+        "user": {"user_id": user.user_id, "username": user.username, "is_admin": user.is_admin},
+    }

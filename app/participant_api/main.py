@@ -42,7 +42,9 @@ def _resolve_db_target(db_path: str | None) -> str | None:
     resolved = db_path or os.getenv("PILOT_DB_URL") or os.getenv("PILOT_DB_PATH")
     if _is_production_like_env():
         if not os.getenv("PILOT_DB_URL"):
-            raise RuntimeError("Missing PILOT_DB_URL in production-like mode for deployment packaging.")
+            raise RuntimeError(
+                "Missing PILOT_DB_URL in production-like mode for deployment packaging."
+            )
         if not str(os.getenv("PILOT_DB_URL", "")).startswith(("postgres://", "postgresql://")):
             raise RuntimeError("PILOT_DB_URL must be a Postgres URL in production-like mode.")
     return resolved
