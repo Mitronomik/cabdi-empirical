@@ -67,6 +67,20 @@ class DiagnosticsService:
                 "stale_session_count": int(empty_operational_summary["stale_session_count"]),
                 "operational_summary": empty_operational_summary,
                 "warnings": ["No sessions linked to this run yet"],
+                "run_level_flags": [
+                    {
+                        "severity": "warning",
+                        "code": "no_sessions",
+                        "message": "Run has no linked sessions; confirmatory and narrowing interpretations are not available.",
+                    }
+                ],
+                "cohort_level_flags": [
+                    {
+                        "severity": "warning",
+                        "code": "insufficient_sample",
+                        "message": "No cohort observations are available yet.",
+                    }
+                ],
             }
 
         parsed_summaries = list(run_data.trial_summary_rows)
@@ -136,6 +150,15 @@ class DiagnosticsService:
             warnings.insert(0, f"Potential stale sessions: {stale_session_count}")
         if int(operational_summary["lifecycle_anomaly_count"]) > 0:
             warnings.append(f"Lifecycle anomalies detected: {int(operational_summary['lifecycle_anomaly_count'])}")
+        run_level_flags, cohort_level_flags = self._analysis_flags(
+            trial_summary_count=len(parsed_summaries),
+            missing_core_fields_count=missing_core_fields_count,
+            warnings=warnings,
+            budget_flags=budget_flags,
+            stale_session_count=stale_session_count,
+            session_count_total=len(session_ids),
+            completed_trials_per_condition=dict(completed_trials_per_condition),
+        )
 
         return {
             "run_id": run_id,
@@ -156,7 +179,91 @@ class DiagnosticsService:
             "stale_session_count": stale_session_count,
             "operational_summary": operational_summary,
             "warnings": warnings,
+            "run_level_flags": run_level_flags,
+            "cohort_level_flags": cohort_level_flags,
         }
+
+    def _analysis_flags(
+        self,
+        *,
+        trial_summary_count: int,
+        missing_core_fields_count: int,
+        warnings: list[str],
+        budget_flags: list[dict[str, Any]],
+        stale_session_count: int,
+        session_count_total: int,
+        completed_trials_per_condition: dict[str, int],
+    ) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+        run_level_flags: list[dict[str, str]] = []
+        cohort_level_flags: list[dict[str, str]] = []
+
+        if trial_summary_count == 0:
+            run_level_flags.append(
+                {
+                    "severity": "warning",
+                    "code": "no_trial_summaries",
+                    "message": "No trial summaries logged; analysis-ready confirmatory interpretation is unavailable.",
+                }
+            )
+        if missing_core_fields_count > 0:
+            run_level_flags.append(
+                {
+                    "severity": "warning",
+                    "code": "missing_core_fields",
+                    "message": "Core trial-summary fields are missing; claim-facing interpretation should be treated as narrowing-only.",
+                }
+            )
+        if any(flag.get("kind") in {"missing_reference", "insufficient_budget_data"} for flag in budget_flags):
+            run_level_flags.append(
+                {
+                    "severity": "warning",
+                    "code": "budget_diagnostics_incomplete",
+                    "message": "Matched-budget diagnostics are incomplete; admissible confirmatory comparisons are unresolved.",
+                }
+            )
+        if stale_session_count > 0:
+            run_level_flags.append(
+                {
+                    "severity": "warning",
+                    "code": "stale_sessions_detected",
+                    "message": "Stale sessions detected; lifecycle truth requires operator review before confirmatory claims.",
+                }
+            )
+        if any("Lifecycle anomalies detected" in warning for warning in warnings):
+            run_level_flags.append(
+                {
+                    "severity": "warning",
+                    "code": "lifecycle_anomaly",
+                    "message": "Lifecycle anomalies detected in run-bound sessions.",
+                }
+            )
+        if not run_level_flags:
+            run_level_flags.append(
+                {
+                    "severity": "info",
+                    "code": "run_ready_for_behavior_first_analysis",
+                    "message": "Run diagnostics pass minimum behavior-first analysis readiness checks.",
+                }
+            )
+
+        min_condition_trials = min(completed_trials_per_condition.values()) if completed_trials_per_condition else 0
+        if session_count_total < 4 or min_condition_trials < 5:
+            cohort_level_flags.append(
+                {
+                    "severity": "warning",
+                    "code": "insufficient_sample",
+                    "message": "Cohort sample is small for confirmatory mixed-effects use; treat outputs as narrowing or exploratory.",
+                }
+            )
+        else:
+            cohort_level_flags.append(
+                {
+                    "severity": "info",
+                    "code": "cohort_minimum_met",
+                    "message": "Minimum cohort coverage met for behavior-first confirmatory modeling attempts.",
+                }
+            )
+        return run_level_flags, cohort_level_flags
 
     def _budget_diagnostics(
         self,

@@ -126,6 +126,8 @@ def test_create_run_and_session_monitor_and_diagnostics(tmp_path):
     diagnostics_body = diagnostics_res.json()
     assert "missing_core_fields_count" in diagnostics_body
     assert "session_counts" in diagnostics_body
+    assert "run_level_flags" in diagnostics_body
+    assert "cohort_level_flags" in diagnostics_body
 
 
 def test_run_lifecycle_transitions_and_invalid_transition_errors(tmp_path):
