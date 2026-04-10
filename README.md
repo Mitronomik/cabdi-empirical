@@ -75,6 +75,9 @@ make lint
 make format-check
 make typecheck
 make gate-python  # scoped Python release gate (lint/format/type + critical backend tests)
+make frontend-typecheck
+make frontend-build
+make gate         # standard release gate (Python gate + frontend typecheck/build)
 make test         # full Python + frontend test suite
 make validate
 make run-participant-api

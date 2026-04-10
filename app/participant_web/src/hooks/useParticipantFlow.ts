@@ -6,6 +6,7 @@ import {
   fetchSessionProgress,
   fetchPublicRun,
   fetchNextTrial,
+  type NextTrialResponseCompleted,
   finalSubmitSession,
   resumeSession,
   startSession,
@@ -94,6 +95,10 @@ function sessionStorageKey(runSlug: string): string {
   return `participant_web.session_id.${runSlug}`;
 }
 
+function isTrialPayload(next: TrialPayload | NextTrialResponseCompleted): next is TrialPayload {
+  return 'trial_id' in next;
+}
+
 export function useParticipantFlow() {
   const [stage, setStage] = useState<ParticipantStage>('consent');
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -156,6 +161,11 @@ export function useParticipantFlow() {
       }
       if (nextStage === 'completion') {
         setCompletionState(activeSessionId);
+        return;
+      }
+
+      if (!isTrialPayload(next)) {
+        setError(localizedError('error.loadNextTrial'));
         return;
       }
 
