@@ -3,20 +3,21 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { KbdMono, StatusBadge, SummaryCard } from '../components/OperatorPrimitives';
 import { localizeOperatorError, localizeStatus } from '../i18n/uiText';
 import { useLocale } from '../i18n/useLocale';
-import { getRunDiagnostics, getRunExports, getRunSessions, listRuns } from '../lib/api';
-import { parseRunSummary, type RunSummary } from '../lib/researcherUi';
+import { getDashboard } from '../lib/api';
 
-function blockerTone(run: RunSummary): 'bad' | 'warn' {
-  if (run.status === 'draft') return 'bad';
-  return 'warn';
+function blockerTone(severity: string): 'bad' | 'warn' {
+  return severity === 'error' ? 'bad' : 'warn';
 }
 
+type DashboardAction = {
+  action: string;
+  label: string;
+  page: 'run' | 'sessions' | 'diagnostics' | 'exports';
+  target_run_id: string;
+};
+
 export function DashboardPage({ onNavigate }: { onNavigate: (page: 'run' | 'sessions' | 'diagnostics' | 'exports') => void }) {
-  const [runs, setRuns] = useState<RunSummary[]>([]);
-  const [focusRunId, setFocusRunId] = useState('');
-  const [sessionsData, setSessionsData] = useState<Record<string, unknown> | null>(null);
-  const [diagnosticsData, setDiagnosticsData] = useState<Record<string, unknown> | null>(null);
-  const [exportsData, setExportsData] = useState<Record<string, unknown> | null>(null);
+  const [dashboard, setDashboard] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const { t } = useLocale();
@@ -25,33 +26,8 @@ export function DashboardPage({ onNavigate }: { onNavigate: (page: 'run' | 'sess
     setLoading(true);
     setError('');
     try {
-      const parsedRuns = (await listRuns()).slice(0, 30).map(parseRunSummary);
-      setRuns(parsedRuns);
-
-      const activeRun = parsedRuns.find((run) => run.status === 'active');
-      const nextFocusRunId = activeRun?.run_id ?? parsedRuns[0]?.run_id ?? '';
-      setFocusRunId(nextFocusRunId);
-
-      if (!nextFocusRunId) {
-        setSessionsData(null);
-        setDiagnosticsData(null);
-        setExportsData(null);
-        return;
-      }
-
-      const [sessionsResult, diagnosticsResult, exportsResult] = await Promise.allSettled([
-        getRunSessions(nextFocusRunId),
-        getRunDiagnostics(nextFocusRunId),
-        getRunExports(nextFocusRunId),
-      ]);
-
-      setSessionsData(sessionsResult.status === 'fulfilled' ? sessionsResult.value : null);
-      setDiagnosticsData(diagnosticsResult.status === 'fulfilled' ? diagnosticsResult.value : null);
-      setExportsData(exportsResult.status === 'fulfilled' ? exportsResult.value : null);
-
-      if (sessionsResult.status === 'rejected' || diagnosticsResult.status === 'rejected' || exportsResult.status === 'rejected') {
-        setError('Some dashboard sections could not be loaded. Open detailed pages for complete diagnostics.');
-      }
+      const payload = await getDashboard();
+      setDashboard(payload);
     } catch (err) {
       setError(localizeOperatorError(t, err));
     } finally {
@@ -63,50 +39,24 @@ export function DashboardPage({ onNavigate }: { onNavigate: (page: 'run' | 'sess
     void load();
   }, []);
 
-  const activeRuns = useMemo(() => runs.filter((run) => run.status === 'active'), [runs]);
-  const draftOrPausedRuns = useMemo(() => runs.filter((run) => run.status === 'draft' || run.status === 'paused'), [runs]);
-  const blockers = useMemo(
-    () => runs.filter((run) => !run.launchable || run.launchability_state !== 'launchable' || run.status === 'draft'),
-    [runs],
+  const globalSnapshot = (dashboard?.global_snapshot as Record<string, unknown> | undefined) ?? {};
+  const runCounts = (globalSnapshot.run_counts as Record<string, unknown> | undefined) ?? {};
+  const globalSessionCounts = (globalSnapshot.session_counts as Record<string, unknown> | undefined) ?? {};
+
+  const focusRun = (dashboard?.focus_run_snapshot as Record<string, unknown> | undefined) ?? null;
+  const focusCounts = ((focusRun?.counts as Record<string, unknown> | undefined) ?? {}) as Record<string, unknown>;
+  const focusWarnings = (Array.isArray(focusRun?.warnings) ? focusRun?.warnings : []) as string[];
+  const blockers = ((dashboard?.blockers as Array<Record<string, unknown>> | undefined) ?? []).slice(0, 8);
+  const nextActions = useMemo(
+    () => (((dashboard?.next_actions as DashboardAction[] | undefined) ?? (focusRun?.next_actions as DashboardAction[] | undefined) ?? []) as DashboardAction[]),
+    [dashboard?.next_actions, focusRun?.next_actions],
   );
-
-  const counts = ((sessionsData?.counts as Record<string, unknown> | undefined) ?? {}) as Record<string, unknown>;
-  const sessions = (sessionsData?.sessions as Array<Record<string, unknown>> | undefined) ?? [];
-  const activeSessionCount = Number(counts.in_progress ?? 0) + Number(counts.paused ?? 0);
-  const awaitingFinalSubmitCount = Number(counts.awaiting_final_submit ?? 0);
-  const finalizedCount = Number(counts.finalized ?? 0);
-
-  const staleSessionLikelyCount = useMemo(() => {
-    const thresholdMs = 30 * 60 * 1000;
-    const now = Date.now();
-    return sessions.filter((session) => {
-      const status = String(session.status ?? '');
-      if (status === 'completed' || status === 'finalized') return false;
-      const raw = session.last_activity_at ?? session.started_at;
-      if (!raw) return false;
-      const ts = Date.parse(String(raw));
-      if (Number.isNaN(ts)) return false;
-      return now - ts > thresholdMs;
-    }).length;
-  }, [sessions]);
-
-  const warnings = useMemo(() => {
-    const diagnosticWarnings = Array.isArray(diagnosticsData?.warnings)
-      ? diagnosticsData.warnings.map((item) => String(item))
-      : [];
-    if (staleSessionLikelyCount > 0) {
-      diagnosticWarnings.unshift(`Potential stale sessions: ${staleSessionLikelyCount}`);
-    }
-    return diagnosticWarnings.slice(0, 5);
-  }, [diagnosticsData?.warnings, staleSessionLikelyCount]);
-
-  const artifacts = Array.isArray(exportsData?.artifacts) ? (exportsData.artifacts as Array<Record<string, unknown>>) : [];
-  const availableExportCount = artifacts.filter((artifact) => Boolean(artifact.available)).length;
+  const focusRunId = String(focusRun?.run_id ?? '');
 
   return (
     <section>
       <h2>Prelaunch Readiness Center</h2>
-      <p className="muted">Single-screen operational view for launchability, active work, blockers, and next actions.</p>
+      <p className="muted">Canonical backend dashboard snapshot with separated global and focus-run truths.</p>
 
       <section className="panel toolbar">
         <p>
@@ -124,37 +74,54 @@ export function DashboardPage({ onNavigate }: { onNavigate: (page: 'run' | 'sess
       ) : null}
 
       <section className="panel">
-        <h3>Operational snapshot</h3>
+        <h3>Global operational snapshot</h3>
         <div className="summary-grid">
-          <SummaryCard label="Active runs" value={String(activeRuns.length)} tone="good" />
-          <SummaryCard label="Draft or paused runs" value={String(draftOrPausedRuns.length)} tone={draftOrPausedRuns.length > 0 ? 'warn' : 'good'} />
+          <SummaryCard label="Total runs" value={String(runCounts.total ?? 0)} tone="info" />
+          <SummaryCard label="Active runs" value={String(runCounts.active ?? 0)} tone="good" />
+          <SummaryCard label="Draft or paused runs" value={String(Number(runCounts.draft ?? 0) + Number(runCounts.paused ?? 0))} tone={Number(runCounts.draft ?? 0) + Number(runCounts.paused ?? 0) > 0 ? 'warn' : 'good'} />
           <SummaryCard label="Launch blockers" value={String(blockers.length)} tone={blockers.length > 0 ? 'bad' : 'good'} />
-          <SummaryCard label="Active sessions" value={String(activeSessionCount)} tone={activeSessionCount > 0 ? 'warn' : 'info'} />
-          <SummaryCard label="Awaiting final submit" value={String(awaitingFinalSubmitCount)} tone={awaitingFinalSubmitCount > 0 ? 'warn' : 'good'} />
-          <SummaryCard label="Finalized sessions" value={String(finalizedCount)} tone="good" />
-          <SummaryCard label="Exports available" value={String(availableExportCount)} tone={availableExportCount > 0 ? 'good' : 'warn'} />
-          <SummaryCard label="Top warnings" value={String(warnings.length)} tone={warnings.length > 0 ? 'bad' : 'good'} />
+          <SummaryCard label="Sessions (all runs)" value={String(globalSessionCounts.total ?? 0)} tone="info" />
+          <SummaryCard label="In progress" value={String(globalSessionCounts.in_progress ?? 0)} tone="warn" />
+          <SummaryCard label="Awaiting final submit" value={String(globalSessionCounts.awaiting_final_submit ?? 0)} tone={Number(globalSessionCounts.awaiting_final_submit ?? 0) > 0 ? 'warn' : 'good'} />
+          <SummaryCard label="Finalized" value={String(globalSessionCounts.finalized ?? 0)} tone="good" />
         </div>
       </section>
+
+      {focusRun ? (
+        <section className="panel">
+          <h3>Focus run snapshot</h3>
+          <div className="summary-grid">
+            <SummaryCard label="Run status" value={localizeStatus(t, focusRun.status)} tone="info" />
+            <SummaryCard label="Launchable" value={String(Boolean(focusRun.launchable))} tone={focusRun.launchable ? 'good' : 'bad'} />
+            <SummaryCard label="Active sessions" value={String(Number(focusCounts.in_progress ?? 0) + Number(focusCounts.paused ?? 0))} tone="warn" />
+            <SummaryCard label="Awaiting final submit" value={String(focusCounts.awaiting_final_submit ?? 0)} tone={Number(focusCounts.awaiting_final_submit ?? 0) > 0 ? 'warn' : 'good'} />
+            <SummaryCard label="Likely stale sessions" value={String(focusRun.stale_session_count ?? 0)} tone={Number(focusRun.stale_session_count ?? 0) > 0 ? 'bad' : 'good'} />
+            <SummaryCard
+              label="Exports available"
+              value={String((focusRun.export_availability as Record<string, unknown> | undefined)?.available_artifact_count ?? 0)}
+              tone={Number((focusRun.export_availability as Record<string, unknown> | undefined)?.available_artifact_count ?? 0) > 0 ? 'good' : 'warn'}
+            />
+          </div>
+          <p className="muted">Public slug: {String(focusRun.public_slug ?? t('common.na'))}</p>
+          <p className="muted">Launchability reason: {String(focusRun.launchability_reason ?? t('common.na'))}</p>
+        </section>
+      ) : null}
 
       <section className="panel">
         <h3>Launch blockers</h3>
         {blockers.length === 0 ? <StatusBadge label="No launch blockers detected." tone="good" /> : null}
         {blockers.length > 0 ? (
           <div className="stack-grid">
-            {blockers.map((run) => (
-              <article key={run.run_id} className={`info-card ${blockerTone(run) === 'bad' ? 'info-card--bad' : 'info-card--warn'}`}>
-                <h4>{run.run_name || run.run_id}</h4>
+            {blockers.map((blocker, index) => (
+              <article key={`${String(blocker.run_id)}-${index}`} className={`info-card ${blockerTone(String(blocker.severity ?? 'warning')) === 'bad' ? 'info-card--bad' : 'info-card--warn'}`}>
+                <h4>{String(blocker.run_id)}</h4>
                 <p>
-                  <StatusBadge label={localizeStatus(t, run.status)} tone={blockerTone(run)} />
+                  <StatusBadge label={localizeStatus(t, blocker.run_status)} tone={blockerTone(String(blocker.severity ?? 'warning'))} />
                 </p>
-                <p className="muted">{run.launchability_reason || 'No launchability reason available.'}</p>
+                <p className="muted">{String(blocker.reason ?? 'No launchability reason available.')}</p>
                 <p>
-                  Run ID: <KbdMono>{run.run_id}</KbdMono>
+                  Public slug: <KbdMono>{String(blocker.public_slug ?? t('common.na'))}</KbdMono>
                 </p>
-                <button className="secondary-btn" onClick={() => onNavigate('run')}>
-                  Inspect run
-                </button>
               </article>
             ))}
           </div>
@@ -163,10 +130,10 @@ export function DashboardPage({ onNavigate }: { onNavigate: (page: 'run' | 'sess
 
       <section className="panel">
         <h3>Top diagnostics / warnings</h3>
-        {warnings.length === 0 ? <StatusBadge label="No warning flags in the loaded focus run." tone="good" /> : null}
-        {warnings.length > 0 ? (
+        {focusWarnings.length === 0 ? <StatusBadge label="No warning flags in the loaded focus run." tone="good" /> : null}
+        {focusWarnings.length > 0 ? (
           <ul>
-            {warnings.map((warning, index) => (
+            {focusWarnings.map((warning, index) => (
               <li key={`${warning}-${index}`}>{warning}</li>
             ))}
           </ul>
@@ -176,21 +143,17 @@ export function DashboardPage({ onNavigate }: { onNavigate: (page: 'run' | 'sess
       <section className="panel">
         <h3>Next actions</h3>
         <div className="toolbar">
-          <button className="primary-btn" onClick={() => onNavigate('run')}>
-            Activate run
-          </button>
-          <button className="secondary-btn" onClick={() => onNavigate('run')}>
-            Inspect run
-          </button>
-          <button className="secondary-btn" onClick={() => onNavigate('sessions')}>
-            Monitor sessions
-          </button>
-          <button className="secondary-btn" onClick={() => onNavigate('diagnostics')}>
-            Open diagnostics
-          </button>
-          <button className="secondary-btn" onClick={() => onNavigate('exports')}>
-            Download exports
-          </button>
+          {nextActions.map((action) => (
+            <button
+              key={`${action.action}-${action.target_run_id}`}
+              className={action.action === 'activate_run' ? 'primary-btn' : 'secondary-btn'}
+              onClick={() => onNavigate(action.page)}
+              data-target-run-id={action.target_run_id}
+              title={`Target run: ${action.target_run_id}`}
+            >
+              {action.label} ({action.target_run_id})
+            </button>
+          ))}
         </div>
       </section>
     </section>
