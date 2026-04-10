@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import os
 import re
 from typing import Any
 from uuid import uuid4
@@ -30,10 +31,80 @@ _EMPTY_MAIN_BLOCKS_REASON_TEMPLATE = (
     "run has insufficient main items for configured block design: "
     "main_item_count={main_item_count}, n_blocks={n_blocks}; would produce one or more empty main blocks"
 )
+_DEFAULT_STALE_SESSION_THRESHOLD_MINUTES = 30
 
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _resolve_stale_session_threshold_minutes(raw: str | None) -> int:
+    """Resolve stale-session threshold from env/config with sane bounds."""
+    if raw is None or not str(raw).strip():
+        return _DEFAULT_STALE_SESSION_THRESHOLD_MINUTES
+    try:
+        parsed = int(str(raw).strip())
+    except ValueError:
+        return _DEFAULT_STALE_SESSION_THRESHOLD_MINUTES
+    return parsed if parsed > 0 else _DEFAULT_STALE_SESSION_THRESHOLD_MINUTES
+
+
+def _parse_iso_utc(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _is_terminal_session_status(status: str) -> bool:
+    return status in {"completed", "finalized", "abandoned"}
+
+
+def build_session_operational_summary(
+    sessions: list[dict[str, Any]],
+    *,
+    stale_session_threshold_minutes: int,
+) -> dict[str, Any]:
+    """Build canonical session-level operational heuristics for researcher read models."""
+    now = datetime.now(timezone.utc)
+    stale_session_count = 0
+    incomplete_questionnaire_count = 0
+    lifecycle_anomaly_count = 0
+
+    for session in sessions:
+        raw_status = str(session.get("status") or "")
+        status = "finalized" if raw_status == "completed" else raw_status
+
+        if status == "awaiting_final_submit":
+            incomplete_questionnaire_count += 1
+
+        started_at = _parse_iso_utc(session.get("started_at"))
+        completed_at = _parse_iso_utc(session.get("completed_at"))
+        last_activity_at = _parse_iso_utc(session.get("last_activity_at")) or started_at
+
+        if status == "finalized" and completed_at is None:
+            lifecycle_anomaly_count += 1
+        if completed_at is not None and status != "finalized":
+            lifecycle_anomaly_count += 1
+        if started_at is not None and completed_at is not None and completed_at < started_at:
+            lifecycle_anomaly_count += 1
+
+        if not _is_terminal_session_status(status) and last_activity_at is not None:
+            delta_seconds = (now - last_activity_at).total_seconds()
+            if delta_seconds > stale_session_threshold_minutes * 60:
+                stale_session_count += 1
+
+    return {
+        "stale_session_count": stale_session_count,
+        "stale_session_threshold_minutes": stale_session_threshold_minutes,
+        "incomplete_questionnaire_count": incomplete_questionnaire_count,
+        "lifecycle_anomaly_count": lifecycle_anomaly_count,
+    }
 
 
 def compute_expected_trial_count(*, practice_item_count: int, main_item_count: int) -> int:
@@ -121,9 +192,20 @@ def compute_run_summary(
 
 
 class RunService:
-    def __init__(self, store: PilotStore, *, participant_base_url: str = "http://localhost:5173") -> None:
+    def __init__(
+        self,
+        store: PilotStore,
+        *,
+        participant_base_url: str = "http://localhost:5173",
+        stale_session_threshold_minutes: int | None = None,
+    ) -> None:
         self.store = store
         self.participant_base_url = participant_base_url.rstrip("/")
+        self.stale_session_threshold_minutes = (
+            stale_session_threshold_minutes
+            if stale_session_threshold_minutes is not None
+            else _resolve_stale_session_threshold_minutes(os.getenv("PILOT_STALE_SESSION_THRESHOLD_MINUTES"))
+        )
 
     def _invite_url(self, public_slug: str) -> str:
         return f"{self.participant_base_url}/join/{public_slug}"
@@ -606,12 +688,18 @@ class RunService:
                 completion_seconds.append((completed - started).total_seconds())
 
         mean_completion_seconds = sum(completion_seconds) / len(completion_seconds) if completion_seconds else None
+        operational_summary = build_session_operational_summary(
+            rows,
+            stale_session_threshold_minutes=self.stale_session_threshold_minutes,
+        )
         return {
             "run_id": run_id,
             "public_slug": run["public_slug"],
             "run_status": run["status"],
             "counts": counts,
             "mean_completion_seconds": mean_completion_seconds,
+            "stale_session_count": int(operational_summary["stale_session_count"]),
+            "operational_summary": operational_summary,
             "sessions": rows,
         }
 

@@ -54,6 +54,7 @@ export function DashboardPage({ onNavigate }: { onNavigate: (page: 'run' | 'sess
 
   const focusRun = (dashboard?.focus_run_snapshot as Record<string, unknown> | undefined) ?? null;
   const focusCounts = ((focusRun?.counts as Record<string, unknown> | undefined) ?? {}) as Record<string, unknown>;
+  const focusOperationalSummary = ((focusRun?.operational_summary as Record<string, unknown> | undefined) ?? {}) as Record<string, unknown>;
   const focusWarnings = (Array.isArray(focusRun?.warnings) ? focusRun?.warnings : []) as string[];
   const blockers = ((dashboard?.blockers as Array<Record<string, unknown>> | undefined) ?? []).slice(0, 8);
   const nextActions = useMemo(
@@ -108,7 +109,7 @@ export function DashboardPage({ onNavigate }: { onNavigate: (page: 'run' | 'sess
             <SummaryCard label={t('dashboard.focus.launchable')} value={String(Boolean(focusRun.launchable))} tone={focusRun.launchable ? 'good' : 'bad'} />
             <SummaryCard label={t('dashboard.focus.activeSessions')} value={String(Number(focusCounts.in_progress ?? 0) + Number(focusCounts.paused ?? 0))} tone="warn" />
             <SummaryCard label={t('dashboard.focus.awaitingFinalSubmit')} value={String(focusCounts.awaiting_final_submit ?? 0)} tone={Number(focusCounts.awaiting_final_submit ?? 0) > 0 ? 'warn' : 'good'} />
-            <SummaryCard label={t('dashboard.focus.likelyStaleSessions')} value={String(focusRun.stale_session_count ?? 0)} tone={Number(focusRun.stale_session_count ?? 0) > 0 ? 'bad' : 'good'} />
+            <SummaryCard label={t('dashboard.focus.likelyStaleSessions')} value={String(focusRun.stale_session_count ?? focusOperationalSummary.stale_session_count ?? 0)} tone={Number(focusRun.stale_session_count ?? focusOperationalSummary.stale_session_count ?? 0) > 0 ? 'bad' : 'good'} />
             <SummaryCard
               label={t('dashboard.focus.exportsAvailable')}
               value={String((focusRun.export_availability as Record<string, unknown> | undefined)?.available_artifact_count ?? 0)}

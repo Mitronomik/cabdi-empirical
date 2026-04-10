@@ -59,19 +59,8 @@ export function SessionMonitorPage() {
   const sessions = (data?.sessions as Array<Record<string, unknown>> | undefined) ?? [];
   const counts = (data?.counts as Record<string, number> | undefined) ?? {};
   const selectedRun = useMemo(() => runs.find((run) => run.run_id === runId), [runId, runs]);
-  const staleSessionLikelyCount = useMemo(() => {
-    const thresholdMs = 30 * 60 * 1000;
-    const now = Date.now();
-    return sessions.filter((session) => {
-      const status = String(session.status ?? '');
-      if (status === 'completed' || status === 'finalized') return false;
-      const raw = session.last_activity_at ?? session.started_at;
-      if (!raw) return false;
-      const ts = Date.parse(String(raw));
-      if (Number.isNaN(ts)) return false;
-      return now - ts > thresholdMs;
-    }).length;
-  }, [sessions]);
+  const operationalSummary = ((data?.operational_summary as Record<string, unknown> | undefined) ?? {}) as Record<string, unknown>;
+  const staleSessionLikelyCount = Number(data?.stale_session_count ?? operationalSummary.stale_session_count ?? 0);
 
   return (
     <section>
@@ -119,8 +108,8 @@ export function SessionMonitorPage() {
             </div>
             <p className="muted">
               {staleSessionLikelyCount > 0
-                ? `Potential stale sessions detected (${staleSessionLikelyCount}). Review sessions with old last activity timestamps.`
-                : 'No stale session signal detected based on last activity timestamps.'}
+                ? `Potential stale sessions detected (${staleSessionLikelyCount}).`
+                : 'No stale session signal detected.'}
             </p>
           </section>
 

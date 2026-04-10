@@ -2,15 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from app.researcher_api.services.diagnostics_service import DiagnosticsService
 from app.researcher_api.services.export_service import AdminExportService
 from app.researcher_api.services.run_service import RunService
-
-_STALE_SESSION_THRESHOLD_MINUTES = 30
-
 
 class DashboardService:
     """Build backend-first dashboard payload with explicit run context."""
@@ -117,12 +113,15 @@ class DashboardService:
 
         export_artifacts = export_payload.get("artifacts") if isinstance(export_payload.get("artifacts"), list) else []
         export_available_count = sum(1 for item in export_artifacts if bool(item.get("available")))
-        stale_session_count = self._compute_stale_session_count(session_payload.get("sessions") or [])
+        operational_summary = (
+            session_payload.get("operational_summary")
+            if isinstance(session_payload.get("operational_summary"), dict)
+            else {}
+        )
+        stale_session_count = int(operational_summary.get("stale_session_count") or 0)
 
         warnings: list[str] = []
         warnings.extend(str(item) for item in diagnostics.get("warnings", []) if str(item).strip())
-        if stale_session_count > 0:
-            warnings.insert(0, f"Potential stale sessions: {stale_session_count}")
 
         focus_snapshot = {
             "run_id": run_id,
@@ -132,6 +131,7 @@ class DashboardService:
             "launchability_reason": run.get("launchability_reason"),
             "counts": session_payload.get("counts", {}),
             "stale_session_count": stale_session_count,
+            "operational_summary": operational_summary,
             "export_availability": {
                 "state": export_payload.get("export_state", "unknown"),
                 "available_artifact_count": export_available_count,
@@ -175,24 +175,3 @@ class DashboardService:
         if status in {"draft", "paused"} and launchable:
             actions.insert(0, {"action": "activate_run", "label": "Activate run", "page": "run", "target_run_id": run_id})
         return actions
-
-    def _compute_stale_session_count(self, sessions: list[dict[str, Any]]) -> int:
-        now = datetime.now(timezone.utc)
-        threshold = timedelta(minutes=_STALE_SESSION_THRESHOLD_MINUTES)
-        stale = 0
-        for session in sessions:
-            status = str(session.get("status") or "")
-            if status in {"completed", "finalized"}:
-                continue
-            raw = session.get("last_activity_at") or session.get("started_at")
-            if not raw:
-                continue
-            try:
-                activity = datetime.fromisoformat(str(raw))
-            except ValueError:
-                continue
-            if activity.tzinfo is None:
-                activity = activity.replace(tzinfo=timezone.utc)
-            if now - activity > threshold:
-                stale += 1
-        return stale
