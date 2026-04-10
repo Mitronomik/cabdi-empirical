@@ -117,6 +117,7 @@ def test_prelaunch_gate_blackbox_http_mode(tmp_path: Path) -> None:
     assert by_id["launch_boundary_mode"]["detail"] == "black-box HTTP boundary mode enabled"
     assert by_id["blackbox_launch_realism_mode"]["passed"] is True
     assert by_id["http_stack_readiness"]["passed"] is True
+    assert by_id["packaged_service_smoke"]["passed"] is True
     assert by_id["public_private_surface_boundary"]["passed"] is True
     assert by_id["researcher_cookie_persistence"]["passed"] is True
     assert by_id["researcher_protected_boundary"]["passed"] is True

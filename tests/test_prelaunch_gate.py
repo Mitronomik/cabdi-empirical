@@ -91,6 +91,7 @@ def test_prelaunch_gate_passes_full_integrity_path_with_restore_drill(tmp_path):
     assert report["blocking_failures"] == []
     by_id = {entry["check_id"]: entry for entry in report["checks"]}
     assert by_id["participant_public_slug_entry"]["passed"] is True
+    assert by_id["packaged_service_smoke"]["passed"] is True
     assert by_id["public_private_surface_boundary"]["passed"] is True
     assert by_id["researcher_auth"]["passed"] is True
     assert by_id["researcher_protected_boundary"]["passed"] is True
@@ -141,6 +142,43 @@ def test_prelaunch_gate_boundary_failure_is_diagnostic(tmp_path, monkeypatch):
     assert by_id["public_private_surface_boundary"]["metadata"]["researcher_docs"] == 200
     blocker_ids = {entry["check_id"] for entry in report["blocking_failures"]}
     assert "public_private_surface_boundary" in blocker_ids
+
+
+def test_prelaunch_gate_packaged_smoke_failure_is_blocking(tmp_path, monkeypatch):
+    db_path = str(tmp_path / "pilot.sqlite3")
+    run_slug = _bootstrap_active_run(db_path)
+
+    def _fake_packaged_smoke(*, participant_client, researcher_client):
+        return (
+            False,
+            "packaged service smoke (participant health=200, participant ready=503, researcher health=200, researcher ready=503)",
+            {
+                "participant_health": 200,
+                "participant_ready": 503,
+                "researcher_health": 200,
+                "researcher_ready": 503,
+            },
+        )
+
+    monkeypatch.setattr("scripts.pilot_prelaunch_gate._check_packaged_service_smoke", _fake_packaged_smoke)
+    report = run_prelaunch_gate(
+        db_target=db_path,
+        run_slug=run_slug,
+        output_dir=tmp_path / "gate_packaged_smoke_failure",
+        researcher_username="admin",
+        researcher_password="admin1234",
+        require_postgres=False,
+        require_blackbox_http=False,
+        run_restore_drill=False,
+        allow_restore_drill_skip=True,
+    )
+
+    assert report["launch_ready"] is False
+    by_id = {entry["check_id"]: entry for entry in report["checks"]}
+    assert by_id["packaged_service_smoke"]["passed"] is False
+    assert by_id["packaged_service_smoke"]["metadata"]["participant_ready"] == 503
+    blocker_ids = {entry["check_id"] for entry in report["blocking_failures"]}
+    assert "packaged_service_smoke" in blocker_ids
 
 
 def test_prelaunch_gate_blocks_when_postgres_required_but_sqlite_target(tmp_path):

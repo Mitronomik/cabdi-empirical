@@ -217,6 +217,12 @@ python scripts/pilot_prelaunch_gate.py \
   --output-dir artifacts/pilot_ops/prelaunch_gate
 ```
 
+Equivalent Make target (recommended for VPS sign-off):
+
+```bash
+make pilot-prelaunch-gate-vps
+```
+
 Outputs:
 
 - `artifacts/pilot_ops/prelaunch_gate/prelaunch_gate_report.json`
@@ -226,7 +232,7 @@ Gate semantics:
 
 - **Blockers** (`severity=blocker`) fail launch readiness immediately.
 - **Warnings** require explicit operator acknowledgement before launch.
-- The gate includes one consolidated readiness chain: Postgres posture, black-box launch realism boundary, active run + public slug readiness, participant progression/resume/final-submit (EN + RU path), researcher auth + protected boundary + cabinet route reachability, diagnostics/export + analysis-ready outputs, concurrent smoke, and backup/restore discipline.
+- The gate includes one consolidated readiness chain: Postgres posture, black-box launch realism boundary, packaged service smoke (`/health` + `/ready` on both participant and researcher surfaces), active run + public slug readiness, participant progression/resume/final-submit (EN + RU path), researcher auth + protected boundary + cabinet route reachability, diagnostics/export + analysis-ready outputs, concurrent smoke, and backup/restore discipline.
 - The markdown checklist is the operator-facing **go/no-go artifact**. It includes execution timestamps/id, full check results, and explicit blocker/warning sections.
 
 Notes:
@@ -254,6 +260,7 @@ python scripts/pilot_prelaunch_gate.py \
 
 This mode validates launch realism over the external HTTP/process boundary, including:
 
+- packaged participant/researcher service readiness probes (`/health`, `/ready`) across the deployed boundary,
 - participant public routes and run-bound flow (`run_slug` lookup, session create/start, resume, questionnaire gate, final submit),
 - researcher auth cookie issuance/persistence and protected-route rejection when unauthenticated,
 - researcher cabinet operational routes (run defaults, session monitor route, stimulus library),
