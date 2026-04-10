@@ -503,6 +503,7 @@ def test_dashboard_endpoint_returns_canonical_global_and_focus_snapshots(tmp_pat
     assert focus["public_slug"] == run_slug
     assert focus["status"] == "active"
     assert isinstance(focus["stale_session_count"], int)
+    assert isinstance(focus["operational_summary"], dict)
     assert "export_availability" in focus
     assert isinstance(focus["warnings"], list)
 
@@ -518,3 +519,79 @@ def test_dashboard_endpoint_returns_canonical_global_and_focus_snapshots(tmp_pat
     assert isinstance(actions, list)
     assert actions
     assert all(action["target_run_id"] == run_id for action in actions)
+
+
+def test_stale_session_truth_is_backend_canonical_across_read_models(tmp_path):
+    db_path = str(tmp_path / "pilot.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    _login_researcher(researcher)
+    participant = TestClient(create_participant_app(db_path))
+
+    stimulus_set_id = _upload_stimulus(researcher)
+    run_res = researcher.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "stale coherence run",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"n_blocks": 1},
+            "stimulus_set_ids": [stimulus_set_id],
+        },
+    )
+    run_id = run_res.json()["run_id"]
+    run_slug = run_res.json()["public_slug"]
+    assert researcher.post(f"/admin/api/v1/runs/{run_id}/activate").status_code == 200
+
+    stale_session_id = participant.post("/api/v1/sessions", json={"run_slug": run_slug}).json()["session_id"]
+    fresh_session_id = participant.post("/api/v1/sessions", json={"run_slug": run_slug}).json()["session_id"]
+    participant.app.state.store.execute(
+        "UPDATE participant_sessions SET status = 'in_progress', started_at = '2026-01-01T00:00:00+00:00', last_activity_at = '2026-01-01T00:00:00+00:00' WHERE session_id = ?",
+        (stale_session_id,),
+    )
+    participant.app.state.store.execute(
+        "UPDATE participant_sessions SET status = 'in_progress', started_at = '2026-01-01T00:00:00+00:00', last_activity_at = CURRENT_TIMESTAMP WHERE session_id = ?",
+        (fresh_session_id,),
+    )
+
+    sessions_body = researcher.get(f"/admin/api/v1/runs/{run_id}/sessions").json()
+    diagnostics_body = researcher.get(f"/admin/api/v1/runs/{run_id}/diagnostics").json()
+    dashboard_body = researcher.get("/admin/api/v1/dashboard").json()
+    focus_snapshot = dashboard_body["focus_run_snapshot"]
+
+    assert sessions_body["stale_session_count"] == diagnostics_body["stale_session_count"]
+    assert sessions_body["stale_session_count"] == focus_snapshot["stale_session_count"]
+    assert sessions_body["operational_summary"]["stale_session_count"] == diagnostics_body["operational_summary"]["stale_session_count"]
+    assert sessions_body["operational_summary"]["stale_session_count"] == focus_snapshot["operational_summary"]["stale_session_count"]
+
+
+def test_stale_session_threshold_can_be_configured_from_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("PILOT_STALE_SESSION_THRESHOLD_MINUTES", "5")
+    db_path = str(tmp_path / "pilot.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    _login_researcher(researcher)
+    participant = TestClient(create_participant_app(db_path))
+
+    stimulus_set_id = _upload_stimulus(researcher)
+    run_res = researcher.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "stale threshold run",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"n_blocks": 1},
+            "stimulus_set_ids": [stimulus_set_id],
+        },
+    )
+    run_id = run_res.json()["run_id"]
+    run_slug = run_res.json()["public_slug"]
+    assert researcher.post(f"/admin/api/v1/runs/{run_id}/activate").status_code == 200
+    session_id = participant.post("/api/v1/sessions", json={"run_slug": run_slug}).json()["session_id"]
+    participant.app.state.store.execute(
+        "UPDATE participant_sessions SET status = 'in_progress', last_activity_at = '2026-01-01T00:00:00+00:00' WHERE session_id = ?",
+        (session_id,),
+    )
+
+    sessions_body = researcher.get(f"/admin/api/v1/runs/{run_id}/sessions").json()
+    diagnostics_body = researcher.get(f"/admin/api/v1/runs/{run_id}/diagnostics").json()
+    assert sessions_body["operational_summary"]["stale_session_threshold_minutes"] == 5
+    assert diagnostics_body["operational_summary"]["stale_session_threshold_minutes"] == 5

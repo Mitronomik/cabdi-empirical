@@ -53,6 +53,7 @@ export function DiagnosticsPage() {
 
   const selectedRun = useMemo(() => runs.find((run) => run.run_id === runId), [runId, runs]);
   const sessionCounts = ((data?.session_counts as Record<string, unknown> | undefined) ?? {}) as Record<string, unknown>;
+  const operationalSummary = ((data?.operational_summary as Record<string, unknown> | undefined) ?? {}) as Record<string, unknown>;
   const conditionCounts = ((data?.completed_trials_per_condition as Record<string, unknown> | undefined) ?? {}) as Record<string, unknown>;
   const modelWrongShare = ((data?.model_wrong_share as Record<string, unknown> | undefined) ?? {}) as Record<string, unknown>;
   const issues = useMemo(() => buildDiagnosticIssues(data), [data]);
@@ -114,6 +115,9 @@ export function DiagnosticsPage() {
               <SummaryCard label={t('diagnostics.totalSessions')} value={String(data.session_count_total ?? 0)} tone="info" />
               <SummaryCard label={t('diagnostics.totalTrials')} value={String(data.trial_count_total ?? 0)} tone="info" />
               <SummaryCard label={t('diagnostics.verificationRate')} value={String(data.verification_usage_rate ?? 0)} tone="warn" />
+              <SummaryCard label="Likely stale sessions" value={String(data.stale_session_count ?? operationalSummary.stale_session_count ?? 0)} tone={Number(data.stale_session_count ?? operationalSummary.stale_session_count ?? 0) > 0 ? 'bad' : 'good'} />
+              <SummaryCard label="Incomplete questionnaire sessions" value={String(operationalSummary.incomplete_questionnaire_count ?? 0)} tone={Number(operationalSummary.incomplete_questionnaire_count ?? 0) > 0 ? 'warn' : 'good'} />
+              <SummaryCard label="Lifecycle anomalies" value={String(operationalSummary.lifecycle_anomaly_count ?? 0)} tone={Number(operationalSummary.lifecycle_anomaly_count ?? 0) > 0 ? 'bad' : 'good'} />
               <SummaryCard label={t('diagnostics.warningCount')} value={String(issues.length)} tone={issues.length > 0 ? 'bad' : 'good'} />
             </div>
           </section>

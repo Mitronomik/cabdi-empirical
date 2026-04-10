@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+import os
 from typing import Any
 
 from app.participant_api.persistence.json_codec import loads
 from app.participant_api.persistence.store_protocol import PilotStore
 from app.researcher_api.services.run_data_service import RunDataService
+from app.researcher_api.services.run_service import (
+    _resolve_stale_session_threshold_minutes,
+    build_session_operational_summary,
+)
 from packages.shared_types.pilot_types import RiskBucket
 from policies.budget_checks import compare_budget_to_reference, summarize_budgets_by_condition
 from policies.contracts import BudgetTrace
@@ -31,6 +36,9 @@ class DiagnosticsService:
     def __init__(self, store: PilotStore) -> None:
         self.store = store
         self.run_data_service = RunDataService(store)
+        self.stale_session_threshold_minutes = _resolve_stale_session_threshold_minutes(
+            os.getenv("PILOT_STALE_SESSION_THRESHOLD_MINUTES")
+        )
 
     def get_run_diagnostics(self, run_id: str) -> dict[str, Any]:
         run_data = self.run_data_service.load_run_scoped_data(run_id)
@@ -38,6 +46,10 @@ class DiagnosticsService:
         session_ids = run_data.session_ids
 
         if not session_ids:
+            empty_operational_summary = build_session_operational_summary(
+                [],
+                stale_session_threshold_minutes=self.stale_session_threshold_minutes,
+            )
             return {
                 "run_id": run_id,
                 "session_counts": session_info["counts"],
@@ -52,6 +64,8 @@ class DiagnosticsService:
                 "evidence_open_rate": 0.0,
                 "block_order_distribution": {},
                 "budget_tolerance_flags": [],
+                "stale_session_count": int(empty_operational_summary["stale_session_count"]),
+                "operational_summary": empty_operational_summary,
                 "warnings": ["No sessions linked to this run yet"],
             }
 
@@ -113,6 +127,15 @@ class DiagnosticsService:
             warnings.append("No trial summaries logged for this run yet")
         if any(flag["kind"] in {"missing_reference", "insufficient_budget_data"} for flag in budget_flags):
             warnings.append("Budget diagnostics are incomplete; matched-budget interpretation is unresolved for this run")
+        operational_summary = build_session_operational_summary(
+            session_info.get("sessions", []),
+            stale_session_threshold_minutes=self.stale_session_threshold_minutes,
+        )
+        stale_session_count = int(operational_summary["stale_session_count"])
+        if stale_session_count > 0:
+            warnings.insert(0, f"Potential stale sessions: {stale_session_count}")
+        if int(operational_summary["lifecycle_anomaly_count"]) > 0:
+            warnings.append(f"Lifecycle anomalies detected: {int(operational_summary['lifecycle_anomaly_count'])}")
 
         return {
             "run_id": run_id,
@@ -130,6 +153,8 @@ class DiagnosticsService:
             "budget_observed_by_condition": budget_observed,
             "budget_reference_by_condition": budget_reference,
             "budget_tolerance_flags": budget_flags,
+            "stale_session_count": stale_session_count,
+            "operational_summary": operational_summary,
             "warnings": warnings,
         }
 
