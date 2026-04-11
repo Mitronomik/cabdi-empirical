@@ -1615,6 +1615,12 @@ describe('researcher auth shell', () => {
 
     render(<App />);
     await screen.findByText('Logged in as: admin');
+    await screen.findByRole('button', { name: 'Activate run (run_actions)' });
+
+    const acceptingLabel = screen.getByText('Accepting sessions now', { selector: '.summary-card__label' });
+    expect(within(acceptingLabel.closest('.summary-card') as HTMLElement).getByText('false')).toBeInTheDocument();
+    const activationLabel = screen.getByText('Activation readiness', { selector: '.summary-card__label' });
+    expect(within(activationLabel.closest('.summary-card') as HTMLElement).getByText('true')).toBeInTheDocument();
 
     expect(screen.getByRole('button', { name: 'Activate run (run_actions)' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Inspect run (run_actions)' })).toBeInTheDocument();
@@ -1623,6 +1629,11 @@ describe('researcher auth shell', () => {
     expect(screen.getByRole('button', { name: 'Download exports (run_actions)' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'RU' }));
+
+    const acceptingLabelRu = screen.getByText('Сейчас принимает сессии', { selector: '.summary-card__label' });
+    expect(within(acceptingLabelRu.closest('.summary-card') as HTMLElement).getByText('false')).toBeInTheDocument();
+    const activationLabelRu = screen.getByText('Готовность к активации', { selector: '.summary-card__label' });
+    expect(within(activationLabelRu.closest('.summary-card') as HTMLElement).getByText('true')).toBeInTheDocument();
 
     expect(screen.getByRole('button', { name: 'Активировать запуск (run_actions)' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Проверить запуск (run_actions)' })).toBeInTheDocument();
@@ -1696,6 +1707,7 @@ describe('researcher auth shell', () => {
 
     render(<App />);
     await screen.findByText('Logged in as: admin');
+    await screen.findByRole('button', { name: 'Refresh dashboard' });
     expect(screen.queryByRole('button', { name: 'Activate run (run_not_ready)' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Refresh dashboard' }));
     expect(await screen.findByRole('button', { name: 'Activate run (run_ready)' })).toBeInTheDocument();

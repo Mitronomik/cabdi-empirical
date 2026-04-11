@@ -111,9 +111,14 @@ export function DashboardPage({
           <div className="summary-grid">
             <SummaryCard label={t('dashboard.focus.runStatus')} value={localizeStatus(t, focusRun.status)} tone="info" />
             <SummaryCard
-              label={t('dashboard.focus.launchable')}
+              label={t('dashboard.focus.acceptingSessionsNow')}
               value={String(Boolean(focusRun.accepting_sessions_now))}
               tone={focusRun.accepting_sessions_now ? 'good' : 'bad'}
+            />
+            <SummaryCard
+              label={t('dashboard.focus.activationReady')}
+              value={String(Boolean(focusRun.activation_ready))}
+              tone={focusRun.activation_ready ? 'good' : 'warn'}
             />
             <SummaryCard label={t('dashboard.focus.activeSessions')} value={String(Number(focusCounts.in_progress ?? 0) + Number(focusCounts.paused ?? 0))} tone="warn" />
             <SummaryCard label={t('dashboard.focus.awaitingFinalSubmit')} value={String(focusCounts.awaiting_final_submit ?? 0)} tone={Number(focusCounts.awaiting_final_submit ?? 0) > 0 ? 'warn' : 'good'} />
