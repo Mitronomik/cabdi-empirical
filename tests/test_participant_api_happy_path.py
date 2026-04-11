@@ -223,7 +223,8 @@ def test_session_creation_requires_run_reference(tmp_path):
         "/api/v1/sessions",
         json={},
     )
-    assert create_res.status_code == 422
+    assert create_res.status_code == 400
+    assert create_res.json()["detail"] == "run_slug_required"
 
 
 def test_session_creation_rejects_client_supplied_participant_id(tmp_path):

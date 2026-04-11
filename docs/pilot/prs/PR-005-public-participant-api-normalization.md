@@ -19,7 +19,11 @@ Make participant-facing endpoints canonical under explicit public namespaces tha
 
 ## Compatibility
 
-Legacy `/api/v1/sessions/...` aliases are intentionally retained for compatibility, but no longer treated as canonical in participant web clients.
+Legacy `/api/v1/sessions/...` aliases are transitional only:
+
+- canonical contract for participant web is `/api/v1/public/...` exclusively;
+- legacy aliases are explicitly marked deprecated in OpenAPI;
+- legacy alias responses include deprecation headers to support migration monitoring.
 
 ## Invariants kept
 

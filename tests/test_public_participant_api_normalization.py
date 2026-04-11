@@ -75,6 +75,23 @@ def test_legacy_session_alias_routes_still_work(tmp_path) -> None:
 
     created = participant.post("/api/v1/sessions", json={"run_slug": run_slug, "language": "en"})
     assert created.status_code == 200
+    assert created.headers["Deprecation"] == "true"
     session_id = created.json()["session_id"]
-    assert participant.post(f"/api/v1/sessions/{session_id}/start").status_code == 200
-    assert participant.get(f"/api/v1/sessions/{session_id}/next-trial").status_code == 200
+    start = participant.post(f"/api/v1/sessions/{session_id}/start")
+    assert start.status_code == 200
+    assert start.headers["Deprecation"] == "true"
+    next_trial = participant.get(f"/api/v1/sessions/{session_id}/next-trial")
+    assert next_trial.status_code == 200
+    assert next_trial.headers["Deprecation"] == "true"
+
+
+def test_openapi_marks_legacy_alias_routes_as_deprecated(tmp_path) -> None:
+    participant, _ = _bootstrap_run(tmp_path)
+
+    schema = participant.get("/openapi.json").json()
+    paths = schema["paths"]
+    assert paths["/api/v1/public/runs/{run_slug}/sessions"]["post"].get("deprecated") is not True
+    assert paths["/api/v1/public/sessions/{session_id}/next-trial"]["get"].get("deprecated") is not True
+    assert paths["/api/v1/sessions"]["post"]["deprecated"] is True
+    assert paths["/api/v1/sessions/{session_id}/start"]["post"]["deprecated"] is True
+    assert paths["/api/v1/sessions/{session_id}/next-trial"]["get"]["deprecated"] is True
