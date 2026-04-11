@@ -9,6 +9,7 @@ export type AuthState = 'loading' | 'authenticated' | 'unauthenticated' | 'servi
 
 export function useResearcherShell(t: ReturnType<typeof useLocale>['t']) {
   const [page, setPage] = useState<PageKey>('dashboard');
+  const [selectedRunId, setSelectedRunId] = useState('');
   const [authState, setAuthState] = useState<AuthState>('loading');
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('');
@@ -54,9 +55,19 @@ export function useResearcherShell(t: ReturnType<typeof useLocale>['t']) {
 
   const canRenderCabinet = useMemo(() => authState === 'authenticated', [authState]);
 
+  function navigateTo(nextPage: PageKey, targetRunId?: string) {
+    setPage(nextPage);
+    if (typeof targetRunId === 'string') {
+      setSelectedRunId(targetRunId);
+    }
+  }
+
   return {
     page,
     setPage,
+    selectedRunId,
+    setSelectedRunId,
+    navigateTo,
     authState,
     username,
     setUsername,

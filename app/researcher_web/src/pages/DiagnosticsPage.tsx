@@ -7,7 +7,13 @@ import { getRunDiagnostics, listRuns } from '../lib/api';
 import { buildDiagnosticIssues, groupOrder } from '../lib/diagnosticsUi';
 import { parseRunSummary, pickDefaultRunId, runOptionLabelLocalized } from '../lib/researcherUi';
 
-export function DiagnosticsPage() {
+export function DiagnosticsPage({
+  initialSelectedRunId,
+  onSelectedRunIdChange,
+}: {
+  initialSelectedRunId?: string;
+  onSelectedRunIdChange?: (runId: string) => void;
+}) {
   const [runId, setRunId] = useState('');
   const [data, setData] = useState<Record<string, unknown> | null>(null);
   const [runs, setRuns] = useState<Array<ReturnType<typeof parseRunSummary>>>([]);
@@ -22,7 +28,12 @@ export function DiagnosticsPage() {
     try {
       const items = (await listRuns()).slice(0, 30).map(parseRunSummary);
       setRuns(items);
-      if (items.length > 0) setRunId((prev) => prev || pickDefaultRunId(items));
+      if (items.length > 0) {
+        setRunId((prev) => {
+          if (initialSelectedRunId && items.some((run) => run.run_id === initialSelectedRunId)) return initialSelectedRunId;
+          return prev || pickDefaultRunId(items);
+        });
+      }
     } catch (err) {
       setError(localizeOperatorError(t, err));
     } finally {
@@ -33,6 +44,16 @@ export function DiagnosticsPage() {
   useEffect(() => {
     void loadRuns();
   }, []);
+
+  useEffect(() => {
+    if (!initialSelectedRunId) return;
+    setRunId((prev) => (prev === initialSelectedRunId ? prev : initialSelectedRunId));
+  }, [initialSelectedRunId]);
+
+  useEffect(() => {
+    if (!onSelectedRunIdChange) return;
+    onSelectedRunIdChange(runId);
+  }, [onSelectedRunIdChange, runId]);
 
   async function load() {
     if (!runId) {

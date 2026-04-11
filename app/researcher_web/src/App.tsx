@@ -14,16 +14,20 @@ import { StimulusUploadPage } from './pages/StimulusUploadPage';
 function ResearcherPageContent({
   page,
   onNavigate,
+  selectedRunId,
+  onSelectedRunIdChange,
 }: {
   page: PageKey;
-  onNavigate: (page: PageKey) => void;
+  onNavigate: (page: PageKey, targetRunId?: string) => void;
+  selectedRunId: string;
+  onSelectedRunIdChange: (runId: string) => void;
 }) {
   if (page === 'dashboard') return <DashboardPage onNavigate={onNavigate} />;
   if (page === 'upload') return <StimulusUploadPage />;
-  if (page === 'run') return <RunBuilderPage />;
-  if (page === 'sessions') return <SessionMonitorPage />;
-  if (page === 'diagnostics') return <DiagnosticsPage />;
-  return <ExportsPage />;
+  if (page === 'run') return <RunBuilderPage initialSelectedRunId={selectedRunId} onSelectedRunIdChange={onSelectedRunIdChange} />;
+  if (page === 'sessions') return <SessionMonitorPage initialSelectedRunId={selectedRunId} onSelectedRunIdChange={onSelectedRunIdChange} />;
+  if (page === 'diagnostics') return <DiagnosticsPage initialSelectedRunId={selectedRunId} onSelectedRunIdChange={onSelectedRunIdChange} />;
+  return <ExportsPage initialSelectedRunId={selectedRunId} onSelectedRunIdChange={onSelectedRunIdChange} />;
 }
 
 function AppBody() {
@@ -120,8 +124,13 @@ function AppBody() {
           {t('auth.logout')}
         </button>
       </section>
-      <Nav page={shell.page} setPage={shell.setPage} />
-      <ResearcherPageContent page={shell.page} onNavigate={shell.setPage} />
+      <Nav page={shell.page} setPage={(page) => shell.navigateTo(page)} />
+      <ResearcherPageContent
+        page={shell.page}
+        onNavigate={shell.navigateTo}
+        selectedRunId={shell.selectedRunId}
+        onSelectedRunIdChange={shell.setSelectedRunId}
+      />
     </main>
   );
 }

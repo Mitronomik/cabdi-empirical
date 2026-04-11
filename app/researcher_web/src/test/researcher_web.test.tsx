@@ -1349,6 +1349,90 @@ describe('researcher auth shell', () => {
     expect(await screen.findByText('Операции запуска')).toBeInTheDocument();
   });
 
+  it('preserves dashboard target run context when navigating to run operations', async () => {
+    const user = userEvent.setup();
+    const fetchCalls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        fetchCalls.push(url);
+        if (url.endsWith('/auth/me')) {
+          return new Response(JSON.stringify({ authenticated: true, user: { user_id: 'u1', username: 'admin', is_admin: true } }), { status: 200 });
+        }
+        if (url.endsWith('/dashboard')) {
+          return new Response(
+            JSON.stringify({
+              global_snapshot: { run_counts: { total: 1, draft: 1, active: 0, paused: 0, closed: 0 }, session_counts: { total: 0, in_progress: 0 } },
+              focus_run_snapshot: { run_id: 'run_focus', next_actions: [{ action: 'inspect_run', page: 'run', target_run_id: 'run_focus' }] },
+              blockers: [],
+              next_actions: [{ action: 'inspect_run', page: 'run', target_run_id: 'run_focus' }],
+            }),
+            { status: 200 },
+          );
+        }
+        if (url.endsWith('/runs/defaults')) {
+          return new Response(JSON.stringify({ experiment_id: 'exp_1', task_family: 'scam_detection', config_preset_options: [] }), { status: 200 });
+        }
+        if (url.endsWith('/stimuli')) return new Response(JSON.stringify([]), { status: 200 });
+        if (url.endsWith('/runs')) {
+          return new Response(JSON.stringify([{ run_id: 'run_focus', run_name: 'Focused run', public_slug: 'focused', status: 'draft', launchable: false }]), { status: 200 });
+        }
+        if (url.endsWith('/runs/run_focus')) {
+          return new Response(JSON.stringify({ run_id: 'run_focus', run_name: 'Focused run', status: 'draft', run_status: 'draft' }), { status: 200 });
+        }
+        return new Response(JSON.stringify([]), { status: 200 });
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText('Logged in as: admin');
+    await user.click(screen.getByRole('button', { name: 'Inspect run (run_focus)' }));
+    expect(await screen.findByText('Run Operations')).toBeInTheDocument();
+    await waitFor(() => expect(fetchCalls.some((url) => url.endsWith('/runs/run_focus'))).toBe(true));
+  });
+
+  it('preserves dashboard target run context when navigating to diagnostics', async () => {
+    const user = userEvent.setup();
+    const fetchCalls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        fetchCalls.push(url);
+        if (url.endsWith('/auth/me')) {
+          return new Response(JSON.stringify({ authenticated: true, user: { user_id: 'u1', username: 'admin', is_admin: true } }), { status: 200 });
+        }
+        if (url.endsWith('/dashboard')) {
+          return new Response(
+            JSON.stringify({
+              global_snapshot: { run_counts: { total: 1, draft: 0, active: 1, paused: 0, closed: 0 }, session_counts: { total: 0, in_progress: 0 } },
+              focus_run_snapshot: { run_id: 'run_diag', next_actions: [{ action: 'open_diagnostics', page: 'diagnostics', target_run_id: 'run_diag' }] },
+              blockers: [],
+              next_actions: [{ action: 'open_diagnostics', page: 'diagnostics', target_run_id: 'run_diag' }],
+            }),
+            { status: 200 },
+          );
+        }
+        if (url.endsWith('/runs')) {
+          return new Response(JSON.stringify([{ run_id: 'run_diag', run_name: 'Diagnostics run', public_slug: 'diag', status: 'active', launchable: true }]), { status: 200 });
+        }
+        if (url.endsWith('/runs/run_diag/diagnostics')) {
+          return new Response(JSON.stringify({ session_count_total: 0, trial_count_total: 0 }), { status: 200 });
+        }
+        return new Response(JSON.stringify([]), { status: 200 });
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText('Logged in as: admin');
+    await user.click(screen.getByRole('button', { name: 'Open diagnostics (run_diag)' }));
+    expect(await screen.findByRole('heading', { name: 'Diagnostics' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox')).toHaveValue('run_diag');
+    await user.click(screen.getByRole('button', { name: 'Load Diagnostics' }));
+    await waitFor(() => expect(fetchCalls.some((url) => url.endsWith('/runs/run_diag/diagnostics'))).toBe(true));
+  });
+
   it('localizes canonical dashboard action keys in EN and RU without backend label fallback', async () => {
     const user = userEvent.setup();
     vi.stubGlobal(

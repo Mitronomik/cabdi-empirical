@@ -25,7 +25,11 @@ const dashboardActionKeyMap: Record<DashboardAction['action'], MessageKey> = {
 };
 const MAX_VISIBLE_BLOCKERS = 8;
 
-export function DashboardPage({ onNavigate }: { onNavigate: (page: 'run' | 'sessions' | 'diagnostics' | 'exports') => void }) {
+export function DashboardPage({
+  onNavigate,
+}: {
+  onNavigate: (page: 'run' | 'sessions' | 'diagnostics' | 'exports', targetRunId?: string) => void;
+}) {
   const [dashboard, setDashboard] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -161,7 +165,7 @@ export function DashboardPage({ onNavigate }: { onNavigate: (page: 'run' | 'sess
             <button
               key={`${action.action}-${action.target_run_id}`}
               className={action.action === 'activate_run' ? 'primary-btn' : 'secondary-btn'}
-              onClick={() => onNavigate(action.page)}
+              onClick={() => onNavigate(action.page, action.target_run_id)}
               data-target-run-id={action.target_run_id}
               title={`${t('dashboard.nextActionTargetRun')}: ${action.target_run_id}`}
             >
