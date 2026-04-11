@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import App from '../App';
+import { messages } from '../i18n/messages';
 
 afterEach(() => {
   cleanup();
@@ -54,13 +55,13 @@ describe('researcher run details refresh invariants', () => {
     await screen.findByText('Logged in as: admin');
     await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
 
-    const detailsHeading = await screen.findByText('Run details');
+    const detailsHeading = await screen.findByText(messages.en['run.detailsTitle']);
     const detailsPanel = detailsHeading.closest('section');
     expect(detailsPanel).not.toBeNull();
 
     expect(await within(detailsPanel as HTMLElement).findByText(/Run name: run-a-v1/)).toBeInTheDocument();
 
-    const detailsButtons = await screen.findAllByRole('button', { name: 'Details' });
+    const detailsButtons = await screen.findAllByRole('button', { name: messages.en['run.detailsAction'] });
     await user.click(detailsButtons[1]);
     expect(await within(detailsPanel as HTMLElement).findByText(/Run name: run-b-v1/)).toBeInTheDocument();
 

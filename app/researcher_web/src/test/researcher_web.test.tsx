@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import App from '../App';
+import { messages } from '../i18n/messages';
 
 afterEach(() => {
   cleanup();
@@ -543,11 +544,11 @@ describe('researcher auth shell', () => {
     await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
     await user.selectOptions(screen.getByDisplayValue('Practice bank (optional supplementary)'), 'stim_practice');
 
-    const draftSummarySection = (await screen.findByText('Run summary before activation')).closest('section');
+    const draftSummarySection = (await screen.findByText(messages.en['run.preActivationSummaryTitle'])).closest('section');
     expect(draftSummarySection).not.toBeNull();
-    expect(within(draftSummarySection as HTMLElement).getByText('Total practice items: 6')).toBeInTheDocument();
-    expect(within(draftSummarySection as HTMLElement).getByText('Total main items: 48')).toBeInTheDocument();
-    expect(within(draftSummarySection as HTMLElement).getByText('Expected trial count: 54')).toBeInTheDocument();
+    expect(within(draftSummarySection as HTMLElement).getByText(`${messages.en['run.totalPracticeItems']}: 6`)).toBeInTheDocument();
+    expect(within(draftSummarySection as HTMLElement).getByText(`${messages.en['run.totalMainItems']}: 48`)).toBeInTheDocument();
+    expect(within(draftSummarySection as HTMLElement).getByText(`${messages.en['run.expectedTrialCount']}: 54`)).toBeInTheDocument();
   });
 
   it('loads details when clicking Details on a non-selected run', async () => {
@@ -588,11 +589,11 @@ describe('researcher auth shell', () => {
     await screen.findByText('Logged in as: admin');
     await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
 
-    const detailsHeading = await screen.findByText('Run details');
+    const detailsHeading = await screen.findByText(messages.en['run.detailsTitle']);
     const detailsPanel = detailsHeading.closest('section');
     expect(detailsPanel).not.toBeNull();
     expect(within(detailsPanel as HTMLElement).getByText(/Run name: run-1/)).toBeInTheDocument();
-    await user.click((await screen.findAllByRole('button', { name: 'Details' }))[1]);
+    await user.click((await screen.findAllByRole('button', { name: messages.en['run.detailsAction'] }))[1]);
     expect(await within(detailsPanel as HTMLElement).findByText(/Run name: run-2/)).toBeInTheDocument();
   });
 
@@ -633,7 +634,7 @@ describe('researcher auth shell', () => {
     await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
 
     expect(await screen.findByText(/Run name: run-1-a/)).toBeInTheDocument();
-    await user.click(await screen.findByRole('button', { name: 'Details' }));
+    await user.click(await screen.findByRole('button', { name: messages.en['run.detailsAction'] }));
     expect(await screen.findByText(/Run name: run-1-b/)).toBeInTheDocument();
     expect(run1DetailsFetch).toHaveBeenCalledTimes(2);
   });
@@ -678,11 +679,11 @@ describe('researcher auth shell', () => {
     await screen.findByText('Logged in as: admin');
     await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
 
-    const copyButton = await screen.findByRole('button', { name: 'Copy link' });
+    const copyButton = await screen.findByRole('button', { name: messages.en['run.copyLink'] });
     expect(copyButton).toBeEnabled();
     await user.click(copyButton);
     expect(clipboardWrite).toHaveBeenCalledWith('https://cabdi.local/r/run-1');
-    expect(await screen.findByText('Participant link copied.')).toBeInTheDocument();
+    expect(await screen.findByText(messages.en['run.participantLinkCopied'])).toBeInTheDocument();
   });
 
   it('excludes selected main bank from practice selector options', async () => {

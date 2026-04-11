@@ -120,17 +120,17 @@ export function SessionMonitorPage({
             <div className="summary-grid">
               <SummaryCard label={t('sessions.runStatus')} value={localizeStatus(t, data.run_status ?? 'unknown')} tone="info" />
               <SummaryCard label={t('sessions.summaryTotal')} value={String(sessions.length)} tone="info" />
-              <SummaryCard label="Active sessions" value={String(counts.in_progress ?? 0)} tone="warn" />
-              <SummaryCard label="Paused sessions" value={String(counts.paused ?? 0)} tone="warn" />
-              <SummaryCard label="Awaiting final submit" value={String(counts.awaiting_final_submit ?? 0)} tone="warn" />
-              <SummaryCard label="Finalized sessions" value={String(counts.finalized ?? 0)} tone="good" />
+              <SummaryCard label={t('sessions.summaryActive')} value={String(counts.in_progress ?? 0)} tone="warn" />
+              <SummaryCard label={t('sessions.summaryPaused')} value={String(counts.paused ?? 0)} tone="warn" />
+              <SummaryCard label={t('sessions.summaryAwaitingFinalSubmit')} value={String(counts.awaiting_final_submit ?? 0)} tone="warn" />
+              <SummaryCard label={t('sessions.summaryFinalized')} value={String(counts.finalized ?? 0)} tone="good" />
               <SummaryCard label={t('sessions.summaryCompleted')} value={String((counts.completed ?? 0) + (counts.finalized ?? 0))} tone="good" />
-              <SummaryCard label="Likely stale sessions" value={String(staleSessionLikelyCount)} tone={staleSessionLikelyCount > 0 ? 'bad' : 'good'} />
+              <SummaryCard label={t('sessions.summaryLikelyStale')} value={String(staleSessionLikelyCount)} tone={staleSessionLikelyCount > 0 ? 'bad' : 'good'} />
             </div>
             <p className="muted">
               {staleSessionLikelyCount > 0
-                ? `Potential stale sessions detected (${staleSessionLikelyCount}).`
-                : 'No stale session signal detected.'}
+                ? t('sessions.staleDetected').replace('{count}', String(staleSessionLikelyCount))
+                : t('sessions.staleNone')}
             </p>
           </section>
 
