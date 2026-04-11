@@ -11,18 +11,17 @@ function blockerTone(severity: string): 'bad' | 'warn' {
 }
 
 type DashboardAction = {
-  action: string;
-  label: string;
+  action: 'inspect_run' | 'activate_run' | 'monitor_sessions' | 'open_diagnostics' | 'download_exports';
   page: 'run' | 'sessions' | 'diagnostics' | 'exports';
   target_run_id: string;
 };
 
-const dashboardActionKeyMap: Record<string, MessageKey> = {
+const dashboardActionKeyMap: Record<DashboardAction['action'], MessageKey> = {
   inspect_run: 'dashboard.action.inspectRun',
   activate_run: 'dashboard.action.activateRun',
-  review_sessions: 'dashboard.action.reviewSessions',
-  inspect_diagnostics: 'dashboard.action.inspectDiagnostics',
-  open_exports: 'dashboard.action.openExports',
+  monitor_sessions: 'dashboard.action.monitorSessions',
+  open_diagnostics: 'dashboard.action.openDiagnostics',
+  download_exports: 'dashboard.action.downloadExports',
 };
 const MAX_VISIBLE_BLOCKERS = 8;
 
@@ -65,8 +64,7 @@ export function DashboardPage({ onNavigate }: { onNavigate: (page: 'run' | 'sess
   );
   const focusRunId = String(focusRun?.run_id ?? '');
   const localizeActionLabel = (action: DashboardAction): string => {
-    const key = dashboardActionKeyMap[action.action];
-    return key ? t(key) : action.label;
+    return t(dashboardActionKeyMap[action.action]);
   };
 
   return (

@@ -167,11 +167,11 @@ class DashboardService:
         status = str(focus_snapshot.get("status") or "")
         launchable = bool(focus_snapshot.get("launchable"))
         actions: list[dict[str, Any]] = [
-            {"action": "inspect_run", "label": "Inspect run", "page": "run", "target_run_id": run_id},
-            {"action": "monitor_sessions", "label": "Monitor sessions", "page": "sessions", "target_run_id": run_id},
-            {"action": "open_diagnostics", "label": "Open diagnostics", "page": "diagnostics", "target_run_id": run_id},
-            {"action": "download_exports", "label": "Download exports", "page": "exports", "target_run_id": run_id},
+            {"action": "inspect_run", "page": "run", "target_run_id": run_id},
+            {"action": "monitor_sessions", "page": "sessions", "target_run_id": run_id},
+            {"action": "open_diagnostics", "page": "diagnostics", "target_run_id": run_id},
+            {"action": "download_exports", "page": "exports", "target_run_id": run_id},
         ]
         if status in {"draft", "paused"} and launchable:
-            actions.insert(0, {"action": "activate_run", "label": "Activate run", "page": "run", "target_run_id": run_id})
+            actions.insert(0, {"action": "activate_run", "page": "run", "target_run_id": run_id})
         return actions

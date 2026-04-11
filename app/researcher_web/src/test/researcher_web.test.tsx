@@ -1307,7 +1307,7 @@ describe('researcher auth shell', () => {
                 export_availability: { state: 'empty', available_artifact_count: 0, artifact_count: 0 },
                 warnings: ['Potential stale sessions: 1', 'Budget tolerance warning'],
                 next_actions: [
-                  { action: 'inspect_run', label: 'Inspect run', page: 'run', target_run_id: 'run_blocked' },
+                  { action: 'inspect_run', page: 'run', target_run_id: 'run_blocked' },
                 ],
               },
               blockers: [
@@ -1321,7 +1321,7 @@ describe('researcher auth shell', () => {
                 },
               ],
               warnings: ['Potential stale sessions: 1', 'Budget tolerance warning'],
-              next_actions: [{ action: 'inspect_run', label: 'Inspect run', page: 'run', target_run_id: 'run_blocked' }],
+              next_actions: [{ action: 'inspect_run', page: 'run', target_run_id: 'run_blocked' }],
             }),
             { status: 200 },
           );
@@ -1347,6 +1347,81 @@ describe('researcher auth shell', () => {
 
     await user.click(screen.getByRole('button', { name: 'Проверить запуск (run_blocked)' }));
     expect(await screen.findByText('Операции запуска')).toBeInTheDocument();
+  });
+
+  it('localizes canonical dashboard action keys in EN and RU without backend label fallback', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith('/auth/me')) {
+          return new Response(JSON.stringify({ authenticated: true, user: { user_id: 'u1', username: 'admin', is_admin: true } }), { status: 200 });
+        }
+        if (url.endsWith('/dashboard')) {
+          return new Response(
+            JSON.stringify({
+              global_snapshot: {
+                run_counts: { total: 1, draft: 1, active: 0, paused: 0, closed: 0 },
+                session_counts: { total: 0, in_progress: 0, awaiting_final_submit: 0, finalized: 0 },
+              },
+              focus_run_snapshot: {
+                run_id: 'run_actions',
+                public_slug: 'actions-run',
+                status: 'draft',
+                launchable: true,
+                launchability_reason: 'ready',
+                counts: {},
+                stale_session_count: 0,
+                export_availability: { state: 'empty', available_artifact_count: 0, artifact_count: 0 },
+                warnings: [],
+                next_actions: [
+                  { action: 'activate_run', page: 'run', target_run_id: 'run_actions' },
+                  { action: 'inspect_run', page: 'run', target_run_id: 'run_actions' },
+                  { action: 'monitor_sessions', page: 'sessions', target_run_id: 'run_actions' },
+                  { action: 'open_diagnostics', page: 'diagnostics', target_run_id: 'run_actions' },
+                  { action: 'download_exports', page: 'exports', target_run_id: 'run_actions' },
+                ],
+              },
+              blockers: [],
+              warnings: [],
+              next_actions: [
+                { action: 'activate_run', page: 'run', target_run_id: 'run_actions' },
+                { action: 'inspect_run', page: 'run', target_run_id: 'run_actions' },
+                { action: 'monitor_sessions', page: 'sessions', target_run_id: 'run_actions' },
+                { action: 'open_diagnostics', page: 'diagnostics', target_run_id: 'run_actions' },
+                { action: 'download_exports', page: 'exports', target_run_id: 'run_actions' },
+              ],
+            }),
+            { status: 200 },
+          );
+        }
+        if (url.endsWith('/runs/defaults')) {
+          return new Response(JSON.stringify({ experiment_id: 'exp_1', task_family: 'scam_detection', config_preset_options: [] }), { status: 200 });
+        }
+        if (url.endsWith('/stimuli')) {
+          return new Response(JSON.stringify([]), { status: 200 });
+        }
+        return new Response(JSON.stringify([]), { status: 200 });
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText('Logged in as: admin');
+
+    expect(screen.getByRole('button', { name: 'Activate run (run_actions)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Inspect run (run_actions)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Monitor sessions (run_actions)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open diagnostics (run_actions)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Download exports (run_actions)' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'RU' }));
+
+    expect(screen.getByRole('button', { name: 'Активировать запуск (run_actions)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Проверить запуск (run_actions)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Мониторить сессии (run_actions)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Открыть диагностику (run_actions)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Скачать экспорт (run_actions)' })).toBeInTheDocument();
   });
 
   it('keeps global launch-blocker count truthful when blocker cards are visually capped', async () => {
