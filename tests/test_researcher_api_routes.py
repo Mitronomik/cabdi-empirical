@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from app.participant_api.main import create_app as create_participant_app
 from app.participant_api.persistence.json_codec import dumps
 from app.researcher_api.main import create_app as create_researcher_app
+from app.researcher_api.services.dashboard_service import DashboardService
 
 
 def _login_researcher(client: TestClient) -> None:
@@ -521,6 +522,27 @@ def test_dashboard_endpoint_returns_canonical_global_and_focus_snapshots(tmp_pat
     assert isinstance(actions, list)
     assert actions
     assert all(action["target_run_id"] == run_id for action in actions)
+    assert [action["action"] for action in actions] == [
+        "inspect_run",
+        "monitor_sessions",
+        "open_diagnostics",
+        "download_exports",
+    ]
+    assert all("label" not in action for action in actions)
+
+
+def test_dashboard_next_actions_include_activate_for_launchable_draft_snapshot():
+    dashboard_service = DashboardService.__new__(DashboardService)
+    actions = dashboard_service._build_next_actions({"run_id": "run_1", "status": "draft", "launchable": True})
+    assert [action["action"] for action in actions] == [
+        "activate_run",
+        "inspect_run",
+        "monitor_sessions",
+        "open_diagnostics",
+        "download_exports",
+    ]
+    assert all(action["target_run_id"] == "run_1" for action in actions)
+    assert all("label" not in action for action in actions)
 
 
 def test_stale_session_truth_is_backend_canonical_across_read_models(tmp_path):
