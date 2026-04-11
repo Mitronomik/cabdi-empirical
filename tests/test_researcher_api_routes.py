@@ -507,7 +507,7 @@ def test_dashboard_endpoint_returns_canonical_global_and_focus_snapshots(tmp_pat
     assert focus["status"] == "active"
     assert focus["accepting_sessions_now"] is True
     assert focus["activation_ready"] is False
-    assert focus["ready_to_activate"] is False
+    assert "ready_to_activate" not in focus
     assert isinstance(focus["stale_session_count"], int)
     assert isinstance(focus["operational_summary"], dict)
     assert "export_availability" in focus
@@ -582,7 +582,7 @@ def test_dashboard_blockers_only_include_non_ready_draft_or_paused_runs():
     assert len(blockers) == 1
     blocker = blockers[0]
     assert blocker["run_id"] == "run_draft_bad"
-    assert blocker["ready_to_activate"] is False
+    assert "ready_to_activate" not in blocker
     assert blocker["reason"] == "run.config must be a non-empty object"
 
 
@@ -615,7 +615,7 @@ def test_dashboard_focus_snapshot_marks_draft_invalid_as_blocker_and_no_activate
     assert focus["status"] == "draft"
     assert focus["accepting_sessions_now"] is False
     assert focus["activation_ready"] is False
-    assert focus["ready_to_activate"] is False
+    assert "ready_to_activate" not in focus
     assert "run.config must be a non-empty object" in focus["activation_readiness_reason"]
     assert all(action["action"] != "activate_run" for action in body["next_actions"])
     assert any(
@@ -648,7 +648,7 @@ def test_dashboard_focus_snapshot_marks_draft_ready_for_activation(tmp_path):
     assert focus["status"] == "draft"
     assert focus["accepting_sessions_now"] is False
     assert focus["activation_ready"] is True
-    assert focus["ready_to_activate"] is True
+    assert "ready_to_activate" not in focus
     assert any(action["action"] == "activate_run" for action in body["next_actions"])
     assert all(blocker["run_id"] != run_id for blocker in body["blockers"])
 
@@ -679,7 +679,7 @@ def test_dashboard_focus_snapshot_marks_paused_ready_for_activation(tmp_path):
     assert focus["status"] == "paused"
     assert focus["accepting_sessions_now"] is False
     assert focus["activation_ready"] is True
-    assert focus["ready_to_activate"] is True
+    assert "ready_to_activate" not in focus
     assert any(action["action"] == "activate_run" for action in body["next_actions"])
     assert all(blocker["run_id"] != run_id for blocker in body["blockers"])
 
