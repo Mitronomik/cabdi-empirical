@@ -143,6 +143,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
     app.state.researcher_cookie_secure = _resolve_cookie_security()
     app.state.researcher_cookie_samesite = "strict" if env_mode in PRODUCTION_LIKE_ENVS else "lax"
     app.state.researcher_allowed_origins = tuple(allowed_origins)
+    app.state.researcher_csrf_require_origin = env_mode in PRODUCTION_LIKE_ENVS
     app.state.auth_service.bootstrap_initial_user()
 
     app.include_router(health.router)

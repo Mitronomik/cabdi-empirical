@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 from app.researcher_api.auth import (
     SESSION_COOKIE_NAME,
+    enforce_researcher_csrf_contract,
     issue_session_token,
     require_researcher_auth,
 )
@@ -17,18 +18,9 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1)
 
 
-def _reject_cross_origin_auth_request(request: Request) -> None:
-    origin = request.headers.get("origin", "").strip()
-    if not origin:
-        return
-    allowed_origins = getattr(request.app.state, "researcher_allowed_origins", ())
-    if origin not in allowed_origins:
-        raise HTTPException(status_code=403, detail="Cross-origin auth request blocked")
-
-
 @router.post("/login")
 def login(req: LoginRequest, request: Request, response: Response) -> dict:
-    _reject_cross_origin_auth_request(request)
+    enforce_researcher_csrf_contract(request)
     user = request.app.state.auth_service.authenticate(req.username, req.password)
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid username or password")
@@ -50,7 +42,7 @@ def login(req: LoginRequest, request: Request, response: Response) -> dict:
 
 @router.post("/logout")
 def logout(request: Request, response: Response) -> dict:
-    _reject_cross_origin_auth_request(request)
+    enforce_researcher_csrf_contract(request)
     response.delete_cookie(key=SESSION_COOKIE_NAME)
     return {"ok": True}
 

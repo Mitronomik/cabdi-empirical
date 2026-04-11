@@ -9,10 +9,37 @@ from typing import Any
 
 from fastapi import HTTPException, Request
 
+SAFE_HTTP_METHODS = {"GET", "HEAD", "OPTIONS"}
+
 from app.researcher_api.services.auth_service import AuthenticatedUser
 
 SESSION_COOKIE_NAME = "researcher_session"
 SESSION_TTL_SECONDS = 60 * 60 * 12
+
+
+def enforce_researcher_csrf_contract(request: Request) -> None:
+    """Enforce minimal CSRF contract for researcher cookie-session endpoints.
+
+    In production-like posture, state-changing requests must include an Origin
+    header that matches the explicit researcher origin allow-list.
+    """
+
+    if request.method.upper() in SAFE_HTTP_METHODS:
+        return
+
+    origin = request.headers.get("origin", "").strip()
+    allowed_origins = getattr(request.app.state, "researcher_allowed_origins", ())
+    production_like = bool(getattr(request.app.state, "researcher_csrf_require_origin", False))
+
+    if not origin:
+        if production_like:
+            raise HTTPException(
+                status_code=403, detail="Missing Origin for state-changing researcher request"
+            )
+        return
+
+    if origin not in allowed_origins:
+        raise HTTPException(status_code=403, detail="Cross-origin auth request blocked")
 
 
 def _sign_payload(payload_json: str, secret: str) -> str:
@@ -51,7 +78,13 @@ def _decode_payload(token: str, secret: str) -> dict[str, Any] | None:
 def issue_session_token(user: AuthenticatedUser, secret: str) -> str:
     now = int(time.time())
     return _encode_payload(
-        {"sub": user.user_id, "username": user.username, "is_admin": user.is_admin, "iat": now, "exp": now + SESSION_TTL_SECONDS},
+        {
+            "sub": user.user_id,
+            "username": user.username,
+            "is_admin": user.is_admin,
+            "iat": now,
+            "exp": now + SESSION_TTL_SECONDS,
+        },
         secret,
     )
 
