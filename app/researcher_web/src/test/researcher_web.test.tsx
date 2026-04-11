@@ -1573,8 +1573,11 @@ describe('researcher auth shell', () => {
                 run_id: 'run_actions',
                 public_slug: 'actions-run',
                 status: 'draft',
-                launchable: true,
-                launchability_reason: 'ready',
+                accepting_sessions_now: false,
+                activation_ready: true,
+                activation_readiness_reason: 'run is draft and ready to activate',
+                launchable: false,
+                launchability_reason: 'run is draft; activate to accept new participant sessions',
                 counts: {},
                 stale_session_count: 0,
                 export_availability: { state: 'empty', available_artifact_count: 0, artifact_count: 0 },
@@ -1626,6 +1629,76 @@ describe('researcher auth shell', () => {
     expect(screen.getByRole('button', { name: 'Мониторить сессии (run_actions)' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Открыть диагностику (run_actions)' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Скачать экспорт (run_actions)' })).toBeInTheDocument();
+  });
+
+  it('renders activate_run only when backend marks the focus run activation-ready', async () => {
+    const user = userEvent.setup();
+    let dashboardCalls = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith('/auth/me')) {
+          return new Response(JSON.stringify({ authenticated: true, user: { user_id: 'u1', username: 'admin', is_admin: true } }), { status: 200 });
+        }
+        if (url.endsWith('/dashboard')) {
+          dashboardCalls += 1;
+          if (dashboardCalls === 1) {
+            return new Response(
+              JSON.stringify({
+                global_snapshot: { run_counts: { total: 1, draft: 1, active: 0, paused: 0, closed: 0 }, session_counts: { total: 0, in_progress: 0 } },
+                focus_run_snapshot: {
+                  run_id: 'run_not_ready',
+                  status: 'draft',
+                  accepting_sessions_now: false,
+                  activation_ready: false,
+                  activation_readiness_reason: 'missing config',
+                  launchable: true,
+                  launchability_reason: 'legacy field should not drive dashboard actions',
+                  next_actions: [{ action: 'inspect_run', page: 'run', target_run_id: 'run_not_ready' }],
+                },
+                blockers: [{ kind: 'launchability', severity: 'error', run_id: 'run_not_ready', run_status: 'draft', reason: 'missing config' }],
+                warnings: [],
+                next_actions: [{ action: 'inspect_run', page: 'run', target_run_id: 'run_not_ready' }],
+              }),
+              { status: 200 },
+            );
+          }
+          return new Response(
+            JSON.stringify({
+              global_snapshot: { run_counts: { total: 1, draft: 1, active: 0, paused: 0, closed: 0 }, session_counts: { total: 0, in_progress: 0 } },
+              focus_run_snapshot: {
+                run_id: 'run_ready',
+                status: 'paused',
+                accepting_sessions_now: false,
+                activation_ready: true,
+                activation_readiness_reason: 'run is paused and ready to activate',
+                launchable: false,
+                launchability_reason: 'run is paused; activate to accept new participant sessions',
+                next_actions: [
+                  { action: 'activate_run', page: 'run', target_run_id: 'run_ready' },
+                  { action: 'inspect_run', page: 'run', target_run_id: 'run_ready' },
+                ],
+              },
+              blockers: [],
+              warnings: [],
+              next_actions: [
+                { action: 'activate_run', page: 'run', target_run_id: 'run_ready' },
+                { action: 'inspect_run', page: 'run', target_run_id: 'run_ready' },
+              ],
+            }),
+            { status: 200 },
+          );
+        }
+        return new Response(JSON.stringify([]), { status: 200 });
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText('Logged in as: admin');
+    expect(screen.queryByRole('button', { name: 'Activate run (run_not_ready)' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Refresh dashboard' }));
+    expect(await screen.findByRole('button', { name: 'Activate run (run_ready)' })).toBeInTheDocument();
   });
 
   it('keeps global launch-blocker count truthful when blocker cards are visually capped', async () => {
