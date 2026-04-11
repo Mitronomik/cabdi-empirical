@@ -24,6 +24,7 @@ const dashboardActionKeyMap: Record<string, MessageKey> = {
   inspect_diagnostics: 'dashboard.action.inspectDiagnostics',
   open_exports: 'dashboard.action.openExports',
 };
+const MAX_VISIBLE_BLOCKERS = 8;
 
 export function DashboardPage({ onNavigate }: { onNavigate: (page: 'run' | 'sessions' | 'diagnostics' | 'exports') => void }) {
   const [dashboard, setDashboard] = useState<Record<string, unknown> | null>(null);
@@ -56,7 +57,8 @@ export function DashboardPage({ onNavigate }: { onNavigate: (page: 'run' | 'sess
   const focusCounts = ((focusRun?.counts as Record<string, unknown> | undefined) ?? {}) as Record<string, unknown>;
   const focusOperationalSummary = ((focusRun?.operational_summary as Record<string, unknown> | undefined) ?? {}) as Record<string, unknown>;
   const focusWarnings = (Array.isArray(focusRun?.warnings) ? focusRun?.warnings : []) as string[];
-  const blockers = ((dashboard?.blockers as Array<Record<string, unknown>> | undefined) ?? []).slice(0, 8);
+  const blockers = (dashboard?.blockers as Array<Record<string, unknown>> | undefined) ?? [];
+  const visibleBlockers = blockers.slice(0, MAX_VISIBLE_BLOCKERS);
   const nextActions = useMemo(
     () => (((dashboard?.next_actions as DashboardAction[] | undefined) ?? (focusRun?.next_actions as DashboardAction[] | undefined) ?? []) as DashboardAction[]),
     [dashboard?.next_actions, focusRun?.next_actions],
@@ -123,10 +125,10 @@ export function DashboardPage({ onNavigate }: { onNavigate: (page: 'run' | 'sess
 
       <section className="panel">
         <h3>{t('dashboard.blockersTitle')}</h3>
-        {blockers.length === 0 ? <StatusBadge label={t('dashboard.blockersEmpty')} tone="good" /> : null}
-        {blockers.length > 0 ? (
+        {visibleBlockers.length === 0 ? <StatusBadge label={t('dashboard.blockersEmpty')} tone="good" /> : null}
+        {visibleBlockers.length > 0 ? (
           <div className="stack-grid">
-            {blockers.map((blocker, index) => (
+            {visibleBlockers.map((blocker, index) => (
               <article key={`${String(blocker.run_id)}-${index}`} className={`info-card ${blockerTone(String(blocker.severity ?? 'warning')) === 'bad' ? 'info-card--bad' : 'info-card--warn'}`}>
                 <h4>{String(blocker.run_id)}</h4>
                 <p>

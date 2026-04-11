@@ -1349,4 +1349,55 @@ describe('researcher auth shell', () => {
     expect(await screen.findByText('Операции запуска')).toBeInTheDocument();
   });
 
+  it('keeps global launch-blocker count truthful when blocker cards are visually capped', async () => {
+    const user = userEvent.setup();
+    const blockers = Array.from({ length: 10 }, (_, index) => ({
+      kind: 'launchability',
+      severity: 'error',
+      run_id: `run_blocked_${index}`,
+      public_slug: `blocked-${index}`,
+      run_status: 'draft',
+      reason: `blocker reason ${index}`,
+    }));
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith('/auth/me')) {
+          return new Response(JSON.stringify({ authenticated: true, user: { user_id: 'u1', username: 'admin', is_admin: true } }), { status: 200 });
+        }
+        if (url.endsWith('/dashboard')) {
+          return new Response(
+            JSON.stringify({
+              global_snapshot: {
+                run_counts: { total: 10, draft: 10, active: 0, paused: 0, closed: 0 },
+                session_counts: { total: 0, in_progress: 0, awaiting_final_submit: 0, finalized: 0 },
+              },
+              focus_run_snapshot: null,
+              blockers,
+              warnings: [],
+              next_actions: [],
+            }),
+            { status: 200 },
+          );
+        }
+        return new Response(JSON.stringify([]), { status: 200 });
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText('Logged in as: admin');
+    await user.click(screen.getByRole('button', { name: 'RU' }));
+    await screen.findByText('Центр готовности к запуску');
+
+    const launchBlockersLabel = (await screen.findAllByText('Блокеры запуска', { selector: '.summary-card__label' }))[0];
+    expect(within(launchBlockersLabel.closest('.summary-card') as HTMLElement).getByText('10')).toBeInTheDocument();
+
+    expect(screen.getByText('run_blocked_0')).toBeInTheDocument();
+    expect(screen.getByText('run_blocked_7')).toBeInTheDocument();
+    expect(screen.queryByText('run_blocked_8')).not.toBeInTheDocument();
+    expect(screen.queryByText('run_blocked_9')).not.toBeInTheDocument();
+  });
+
 });
