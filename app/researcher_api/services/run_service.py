@@ -214,6 +214,19 @@ class RunService:
     def _launchability_state(launchable: bool) -> str:
         return "launchable" if launchable else "not_launchable"
 
+    def _compute_activation_readiness_fields(self, run: dict[str, Any]) -> tuple[bool, str]:
+        """Return whether a run can be activated now plus canonical reason text."""
+        status = str(run.get("status") or RUN_STATUS_DRAFT)
+        if status == RUN_STATUS_ACTIVE:
+            return False, "run is already active"
+        if status == RUN_STATUS_CLOSED:
+            return False, "run is closed and cannot be activated"
+
+        validation_errors = self._validate_launchability(run)
+        if validation_errors:
+            return False, validation_errors[0]
+        return True, f"run is {status} and ready to activate"
+
     def _compute_launchability_fields(self, run: dict[str, Any]) -> tuple[bool, str, str]:
         status = str(run.get("status") or RUN_STATUS_DRAFT)
         if status == RUN_STATUS_ACTIVE:
@@ -512,6 +525,8 @@ class RunService:
             practice_stimulus_set_id=row["practice_stimulus_set_id"],
             aggregation_mode=row["aggregation_mode"],
         )
+        row["accepting_sessions_now"] = str(row.get("status") or RUN_STATUS_DRAFT) == RUN_STATUS_ACTIVE
+        row["ready_to_activate"], row["activation_readiness_reason"] = self._compute_activation_readiness_fields(row)
         row["launchable"], row["launchability_state"], row["launchability_reason"] = self._compute_launchability_fields(
             row
         )
@@ -542,6 +557,8 @@ class RunService:
                 aggregation_mode=aggregation_mode,
             )
             row["stimulus_set_ids"] = row["linked_stimulus_set_ids"]
+            row["accepting_sessions_now"] = str(row.get("status") or RUN_STATUS_DRAFT) == RUN_STATUS_ACTIVE
+            row["ready_to_activate"], row["activation_readiness_reason"] = self._compute_activation_readiness_fields(row)
             row["launchable"], row["launchability_state"], row["launchability_reason"] = self._compute_launchability_fields(
                 row
             )
@@ -589,6 +606,9 @@ class RunService:
             "invite_url": run["invite_url"],
             "status": run["status"],
             "run_status": run["status"],
+            "accepting_sessions_now": run["accepting_sessions_now"],
+            "ready_to_activate": run["ready_to_activate"],
+            "activation_readiness_reason": run["activation_readiness_reason"],
             "launchable": run["launchable"],
             "launchability_state": run["launchability_state"],
             "launchability_reason": run["launchability_reason"],

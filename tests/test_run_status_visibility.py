@@ -42,14 +42,14 @@ def test_run_statuses_render_consistently_in_researcher_ui_contract(tmp_path) ->
     run_id = str(create.json()["run_id"])
 
     expected = [
-        ("draft", False, "not_launchable"),
-        ("active", True, "launchable"),
-        ("paused", False, "not_launchable"),
-        ("closed", False, "not_launchable"),
+        ("draft", False, "not_launchable", False, True),
+        ("active", True, "launchable", True, False),
+        ("paused", False, "not_launchable", False, True),
+        ("closed", False, "not_launchable", False, False),
     ]
     transitions = [None, "activate", "pause", "close"]
 
-    for idx, (status, launchable, launchability_state) in enumerate(expected):
+    for idx, (status, launchable, launchability_state, accepting_sessions_now, ready_to_activate) in enumerate(expected):
         if transitions[idx] is not None:
             path = f"/admin/api/v1/runs/{run_id}/{transitions[idx]}"
             payload = {"confirm_run_id": run_id} if transitions[idx] == "close" else None
@@ -69,6 +69,8 @@ def test_run_statuses_render_consistently_in_researcher_ui_contract(tmp_path) ->
             assert body["run_status"] == status
             assert body["launchable"] is launchable
             assert body["launchability_state"] == launchability_state
+            assert body["accepting_sessions_now"] is accepting_sessions_now
+            assert body["ready_to_activate"] is ready_to_activate
             assert body["invite_url"].endswith("/join/status-visibility-run")
 
     closed_detail = client.get(f"/admin/api/v1/runs/{run_id}")

@@ -127,6 +127,9 @@ class DashboardService:
             "run_id": run_id,
             "public_slug": run.get("public_slug"),
             "status": run.get("status"),
+            "accepting_sessions_now": bool(run.get("accepting_sessions_now")),
+            "ready_to_activate": bool(run.get("ready_to_activate")),
+            "activation_readiness_reason": run.get("activation_readiness_reason"),
             "launchable": bool(run.get("launchable")),
             "launchability_reason": run.get("launchability_reason"),
             "counts": session_payload.get("counts", {}),
@@ -145,9 +148,9 @@ class DashboardService:
     def _build_blockers(self, runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
         blockers: list[dict[str, Any]] = []
         for run in runs:
-            launchable = bool(run.get("launchable"))
             status = str(run.get("status") or "draft")
-            if launchable and status != "draft":
+            ready_to_activate = bool(run.get("ready_to_activate"))
+            if status not in {"draft", "paused"} or ready_to_activate:
                 continue
             blockers.append(
                 {
@@ -156,8 +159,8 @@ class DashboardService:
                     "run_id": run["run_id"],
                     "public_slug": run.get("public_slug"),
                     "run_status": status,
-                    "launchable": launchable,
-                    "reason": run.get("launchability_reason") or "Run is not launchable.",
+                    "ready_to_activate": ready_to_activate,
+                    "reason": run.get("activation_readiness_reason") or "Run is not ready to activate.",
                 }
             )
         return blockers
@@ -165,13 +168,13 @@ class DashboardService:
     def _build_next_actions(self, focus_snapshot: dict[str, Any]) -> list[dict[str, Any]]:
         run_id = str(focus_snapshot["run_id"])
         status = str(focus_snapshot.get("status") or "")
-        launchable = bool(focus_snapshot.get("launchable"))
+        ready_to_activate = bool(focus_snapshot.get("ready_to_activate"))
         actions: list[dict[str, Any]] = [
             {"action": "inspect_run", "page": "run", "target_run_id": run_id},
             {"action": "monitor_sessions", "page": "sessions", "target_run_id": run_id},
             {"action": "open_diagnostics", "page": "diagnostics", "target_run_id": run_id},
             {"action": "download_exports", "page": "exports", "target_run_id": run_id},
         ]
-        if status in {"draft", "paused"} and launchable:
+        if status in {"draft", "paused"} and ready_to_activate:
             actions.insert(0, {"action": "activate_run", "page": "run", "target_run_id": run_id})
         return actions
