@@ -85,14 +85,14 @@ export function DiagnosticsPage({
     for (const issue of issues) {
       const label =
         issue.group === 'dataQuality'
-          ? 'Data quality problems'
+          ? t('diagnostics.group.dataQuality')
           : issue.group === 'runShape'
-            ? 'Run-shape problems'
+            ? t('diagnostics.group.runShape')
             : issue.group === 'behavioralAnomaly'
-              ? 'Behavioral anomalies'
+              ? t('diagnostics.group.behavioralAnomaly')
               : issue.group === 'budgetContract'
-                ? 'Budget-contract anomalies'
-                : 'Other';
+                ? t('diagnostics.group.budgetContract')
+                : t('diagnostics.group.other');
       const entry = groups.get(issue.group);
       if (entry) entry.items.push(issue);
       else groups.set(issue.group, { label, items: [issue] });
@@ -138,11 +138,11 @@ export function DiagnosticsPage({
               <SummaryCard label={t('diagnostics.totalSessions')} value={String(data.session_count_total ?? 0)} tone="info" />
               <SummaryCard label={t('diagnostics.totalTrials')} value={String(data.trial_count_total ?? 0)} tone="info" />
               <SummaryCard label={t('diagnostics.verificationRate')} value={String(data.verification_usage_rate ?? 0)} tone="warn" />
-              <SummaryCard label="Likely stale sessions" value={String(data.stale_session_count ?? operationalSummary.stale_session_count ?? 0)} tone={Number(data.stale_session_count ?? operationalSummary.stale_session_count ?? 0) > 0 ? 'bad' : 'good'} />
-              <SummaryCard label="Incomplete questionnaire sessions" value={String(operationalSummary.incomplete_questionnaire_count ?? 0)} tone={Number(operationalSummary.incomplete_questionnaire_count ?? 0) > 0 ? 'warn' : 'good'} />
-              <SummaryCard label="Lifecycle anomalies" value={String(operationalSummary.lifecycle_anomaly_count ?? 0)} tone={Number(operationalSummary.lifecycle_anomaly_count ?? 0) > 0 ? 'bad' : 'good'} />
-              <SummaryCard label="Run-level flags" value={String(runLevelFlags.length)} tone={runLevelFlags.some((f) => String(f.severity) === 'warning') ? 'warn' : 'good'} />
-              <SummaryCard label="Cohort-level flags" value={String(cohortLevelFlags.length)} tone={cohortLevelFlags.some((f) => String(f.severity) === 'warning') ? 'warn' : 'good'} />
+              <SummaryCard label={t('diagnostics.summaryLikelyStale')} value={String(data.stale_session_count ?? operationalSummary.stale_session_count ?? 0)} tone={Number(data.stale_session_count ?? operationalSummary.stale_session_count ?? 0) > 0 ? 'bad' : 'good'} />
+              <SummaryCard label={t('diagnostics.summaryIncompleteQuestionnaire')} value={String(operationalSummary.incomplete_questionnaire_count ?? 0)} tone={Number(operationalSummary.incomplete_questionnaire_count ?? 0) > 0 ? 'warn' : 'good'} />
+              <SummaryCard label={t('diagnostics.summaryLifecycleAnomalies')} value={String(operationalSummary.lifecycle_anomaly_count ?? 0)} tone={Number(operationalSummary.lifecycle_anomaly_count ?? 0) > 0 ? 'bad' : 'good'} />
+              <SummaryCard label={t('diagnostics.summaryRunFlags')} value={String(runLevelFlags.length)} tone={runLevelFlags.some((f) => String(f.severity) === 'warning') ? 'warn' : 'good'} />
+              <SummaryCard label={t('diagnostics.summaryCohortFlags')} value={String(cohortLevelFlags.length)} tone={cohortLevelFlags.some((f) => String(f.severity) === 'warning') ? 'warn' : 'good'} />
               <SummaryCard label={t('diagnostics.warningCount')} value={String(issues.length)} tone={issues.length > 0 ? 'bad' : 'good'} />
             </div>
           </section>
@@ -151,7 +151,7 @@ export function DiagnosticsPage({
             {issues.length === 0 ? <StatusBadge label={t('diagnostics.noWarnings')} tone="good" /> : null}
             {topIssues.length > 0 ? (
               <article className="info-card info-card--bad">
-                <h4>Most important issues first</h4>
+                <h4>{t('diagnostics.topIssuesTitle')}</h4>
                 <ul>
                   {topIssues.map((issue) => (
                     <li key={issue.id}>{issue.detail}</li>
@@ -178,7 +178,7 @@ export function DiagnosticsPage({
             ) : null}
           </section>
           <section className="panel">
-            <h3>Operator view</h3>
+            <h3>{t('diagnostics.operatorViewTitle')}</h3>
             <div className="stack-grid">
               <article className="info-card">
                 <h4>{t('diagnostics.sessionCounts')}</h4>
@@ -208,7 +208,7 @@ export function DiagnosticsPage({
                 ))}
               </article>
               <article className="info-card">
-                <h4>Run-level flags</h4>
+                <h4>{t('diagnostics.summaryRunFlags')}</h4>
                 {runLevelFlags.length === 0 ? <p className="muted">{t('common.na')}</p> : null}
                 {runLevelFlags.map((flag, index) => (
                   <p key={`run-flag-${index}`}>
@@ -218,7 +218,7 @@ export function DiagnosticsPage({
                 ))}
               </article>
               <article className="info-card">
-                <h4>Cohort-level flags</h4>
+                <h4>{t('diagnostics.summaryCohortFlags')}</h4>
                 {cohortLevelFlags.length === 0 ? <p className="muted">{t('common.na')}</p> : null}
                 {cohortLevelFlags.map((flag, index) => (
                   <p key={`cohort-flag-${index}`}>

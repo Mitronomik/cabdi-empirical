@@ -260,11 +260,11 @@ export function RunBuilderPage({
   const mainTaskFamilyMixed = selectedMainTaskFamilies.length > 1;
   const derivedMainTaskFamily = selectedMainTaskFamilies.length === 1 ? selectedMainTaskFamilies[0] : '';
   const taskFamilyFieldValue = mainTaskFamilyMixed
-    ? 'mixed task families (invalid)'
+    ? t('run.taskFamilyMixedInvalid')
     : selectedMainSetIds.length === 0
-      ? 'no main bank selected'
-      : (derivedMainTaskFamily || 'no main bank selected');
-  const selectedMainSummary = selectedMainBanks.map((bank) => `${bank.name} (${bank.n_items})`).join(', ') || 'none';
+      ? t('run.taskFamilyNoneSelected')
+      : (derivedMainTaskFamily || t('run.taskFamilyNoneSelected'));
+  const selectedMainSummary = selectedMainBanks.map((bank) => `${bank.name} (${bank.n_items})`).join(', ') || t('run.none');
   const selectedSingleMainBank = !aggregationEnabled && selectedMainBanks.length === 1 ? selectedMainBanks[0] : null;
   const practiceItemCount = Number(preview?.practice_item_count ?? 0);
   const mainItemCount = Number(preview?.main_item_count ?? 0);
@@ -340,7 +340,7 @@ export function RunBuilderPage({
         <h3>{t('run.createPanelTitle')}</h3>
         <form onSubmit={onSubmit}>
           <section className="subsection">
-            <h4>Run basics</h4>
+            <h4>{t('run.basicsTitle')}</h4>
             <div className="form-row">
               <input name="run_name" value={runName} onChange={(e) => setRunName(e.target.value)} placeholder={t('run.name')} required />
               <input name="public_slug" value={publicSlug} onChange={(e) => setPublicSlug(e.target.value)} placeholder={t('run.slug')} />
@@ -350,14 +350,14 @@ export function RunBuilderPage({
             </div>
           </section>
           <section className="subsection">
-            <h4>Main and practice bank selection</h4>
+            <h4>{t('run.bankSelectionTitle')}</h4>
             <p className="muted" style={{ margin: 0 }}>
-              Main bank(s) are required. Practice bank is optional and supplementary only.
+              {t('run.bankSelectionHint')}
             </p>
             <div className="form-row" style={{ marginTop: 8 }}>
               {!aggregationEnabled ? (
                 <select
-                  aria-label="Main bank"
+                  aria-label={t('run.mainBankAriaLabel')}
                   value={selectedSingleMainSetId}
                   onChange={(e) => setSelectedMainStimulusSetIds(e.target.value ? [e.target.value] : [])}
                   required
@@ -371,7 +371,7 @@ export function RunBuilderPage({
                 </select>
               ) : (
                 <select
-                  aria-label="Main banks"
+                  aria-label={t('run.mainBanksAriaLabel')}
                   multiple
                   value={selectedMainStimulusSetIds}
                   onChange={(e) => setSelectedMainStimulusSetIds(Array.from(e.target.selectedOptions).map((o) => o.value))}
@@ -395,10 +395,10 @@ export function RunBuilderPage({
                     });
                   }
                 }} />
-                Aggregation mode
+                {t('run.aggregationModeLabel')}
               </label>
               <select value={selectedPracticeStimulusSetId} onChange={(e) => setSelectedPracticeStimulusSetId(e.target.value)}>
-                <option value="">Practice bank (optional supplementary)</option>
+                <option value="">{t('run.practiceBankOptional')}</option>
                 {availablePracticeStimulusSets.map((item) => (
                   <option key={`practice-${item.stimulus_set_id}`} value={item.stimulus_set_id}>
                     {item.name} • {item.n_items}
@@ -408,23 +408,23 @@ export function RunBuilderPage({
             </div>
           </section>
           <section className="subsection">
-            <h4>Prelaunch summary</h4>
+            <h4>{t('run.prelaunchSummaryTitle')}</h4>
             <div className="summary-grid">
-              <SummaryCard label="Practice bank items" value={String(practiceItemCount)} tone="info" />
-              <SummaryCard label="Main bank items" value={String(mainItemCount)} tone="info" />
-              <SummaryCard label="Expected total trials" value={String(expectedTrialCount)} tone="warn" />
-              <SummaryCard label="Aggregation mode" value={aggregationEnabled ? 'multi-bank' : 'single-bank'} tone={aggregationEnabled ? 'warn' : 'good'} />
+              <SummaryCard label={t('run.practiceBankItems')} value={String(practiceItemCount)} tone="info" />
+              <SummaryCard label={t('run.mainBankItems')} value={String(mainItemCount)} tone="info" />
+              <SummaryCard label={t('run.expectedTotalTrials')} value={String(expectedTrialCount)} tone="warn" />
+              <SummaryCard label={t('run.aggregationModeLabel')} value={aggregationEnabled ? t('run.aggregationModeMulti') : t('run.aggregationModeSingle')} tone={aggregationEnabled ? 'warn' : 'good'} />
             </div>
-            <p>Selected practice bank: {selectedPracticeStimulus ? `${selectedPracticeStimulus.name} (${practiceItemCount})` : 'none'}</p>
-            <p>Selected main banks: {selectedMainSummary}</p>
+            <p>{t('run.selectedPracticeBank')}: {selectedPracticeStimulus ? `${selectedPracticeStimulus.name} (${practiceItemCount})` : t('run.none')}</p>
+            <p>{t('run.selectedMainBanks')}: {selectedMainSummary}</p>
             {previewValidationErrors.length > 0 ? (
               <p role="alert" className="alert-error">{previewValidationErrors[0]}</p>
             ) : null}
             {previewRefreshError ? (
               <p role="alert" className="alert-error">{previewRefreshError}</p>
             ) : null}
-            {previewWarnings.length > 0 ? <p className="muted">Operator warning: {previewWarnings.join('; ')}</p> : null}
-            {previewBlockWarnings.length > 0 ? <p className="muted">Block warning: {previewBlockWarnings.join('; ')}</p> : null}
+            {previewWarnings.length > 0 ? <p className="muted">{t('run.operatorWarningPrefix')}: {previewWarnings.join('; ')}</p> : null}
+            {previewBlockWarnings.length > 0 ? <p className="muted">{t('run.blockWarningPrefix')}: {previewBlockWarnings.join('; ')}</p> : null}
             <div className="toolbar">
               <button className="primary-btn" type="submit" disabled={isCreating || validStimulusSets.length === 0}>
                 {isCreating ? t('run.creating') : t('run.submit')}
@@ -436,10 +436,10 @@ export function RunBuilderPage({
           </section>
           <div className="form-row" style={{ marginTop: 8 }}>
             {mainTaskFamilyMixed ? (
-              <p role="alert" className="alert-error">
-                Selected main banks have mixed task families. Choose banks with one shared task family before creating a run.
-              </p>
-            ) : null}
+                <p role="alert" className="alert-error">
+                  {t('run.mainBankMixedError')}
+                </p>
+              ) : null}
           </div>
         </form>
       </section>
@@ -451,13 +451,13 @@ export function RunBuilderPage({
         </p>
       ) : null}
       <section className="panel">
-        <h3>Run summary before activation</h3>
-        <p>Practice bank: {selectedPracticeStimulus ? `${selectedPracticeStimulus.name} (${practiceItemCount})` : 'none'}</p>
-        <p>Main bank(s): {selectedMainSummary}</p>
-        <p>Aggregation: {aggregationEnabled ? 'enabled (explicit)' : 'disabled (single-select)'}</p>
-        <p>Total practice items: {practiceItemCount}</p>
-        <p>Total main items: {mainItemCount}</p>
-        <p>Expected trial count: {expectedTrialCount}</p>
+        <h3>{t('run.preActivationSummaryTitle')}</h3>
+        <p>{t('run.practiceBankLabel')}: {selectedPracticeStimulus ? `${selectedPracticeStimulus.name} (${practiceItemCount})` : t('run.none')}</p>
+        <p>{t('run.mainBanksLabel')}: {selectedMainSummary}</p>
+        <p>{t('run.aggregationLabel')}: {aggregationEnabled ? t('run.aggregationEnabled') : t('run.aggregationDisabled')}</p>
+        <p>{t('run.totalPracticeItems')}: {practiceItemCount}</p>
+        <p>{t('run.totalMainItems')}: {mainItemCount}</p>
+        <p>{t('run.expectedTrialCount')}: {expectedTrialCount}</p>
       </section>
       {error ? (
         <p role="alert" className="alert-error">
@@ -480,11 +480,11 @@ export function RunBuilderPage({
       ) : null}
       {runDetails ? (
         <section className="panel" aria-live="polite">
-          <h3>Run details</h3>
+          <h3>{t('run.detailsTitle')}</h3>
           <p>
-            Selected run: <KbdMono>{selectedRunId}</KbdMono>
+            {t('run.selectedRunLabel')}: <KbdMono>{selectedRunId}</KbdMono>
           </p>
-          {runDetailsLoading && runDetailsLoadingRunId === selectedRunId ? <p className="muted">Refreshing run details…</p> : null}
+          {runDetailsLoading && runDetailsLoadingRunId === selectedRunId ? <p className="muted">{t('run.refreshingDetails')}</p> : null}
           <p>
             {t('run.tableRunName')}: {runDetails.run_name} · <KbdMono>{runDetails.run_id}</KbdMono>
           </p>
@@ -493,7 +493,7 @@ export function RunBuilderPage({
             {runDetails.launchability_state}
           </p>
           <p>
-            Participant link: <KbdMono>{runDetails.invite_url || t('common.na')}</KbdMono>
+            {t('run.participantLinkLabel')}: <KbdMono>{runDetails.invite_url || t('common.na')}</KbdMono>
           </p>
           <p>
             {t('run.tableSlug')}: <KbdMono>{runDetails.public_slug || t('common.na')}</KbdMono>
@@ -505,11 +505,11 @@ export function RunBuilderPage({
               onClick={async () => {
                 if (!runDetails.invite_url) return;
                 await navigator.clipboard.writeText(runDetails.invite_url);
-                setCopySuccess('Participant link copied.');
+                setCopySuccess(t('run.participantLinkCopied'));
               }}
               disabled={!runDetails.invite_url}
             >
-              Copy link
+              {t('run.copyLink')}
             </button>
             <button
               className="secondary-btn"
@@ -520,24 +520,24 @@ export function RunBuilderPage({
               }}
               disabled={!runDetails.invite_url}
             >
-              Open link
+              {t('run.openLink')}
             </button>
             {copySuccess ? <span className="muted">{copySuccess}</span> : null}
           </div>
-          <p>Activation state: {runDetails.launchable ? 'accepting new sessions' : 'not accepting new sessions'}</p>
+          <p>{t('run.activationStateLabel')}: {runDetails.launchable ? t('run.acceptingSessions') : t('run.notAcceptingSessions')}</p>
           <p>
-            Selected banks:{' '}
+            {t('run.selectedBanksLabel')}:{' '}
             {runDetails.run_summary?.banks?.map((bank) => `${bank.name} (${bank.role}, ${bank.n_items})`).join(', ') || t('common.na')}
           </p>
-          <p>Selected practice bank: {runDetails.run_summary?.selected_practice_bank?.name ?? runDetails.run_summary?.practice_bank?.name ?? 'none'}</p>
-          <p>Total practice items: {String(runDetails.run_summary?.practice_item_count ?? '0')}</p>
-          <p>Total main items: {String(runDetails.run_summary?.total_main_items ?? t('common.na'))}</p>
-          <p>Expected trial count: {String(runDetails.run_summary?.expected_trial_count ?? t('common.na'))}</p>
+          <p>{t('run.selectedPracticeBank')}: {runDetails.run_summary?.selected_practice_bank?.name ?? runDetails.run_summary?.practice_bank?.name ?? t('run.none')}</p>
+          <p>{t('run.totalPracticeItems')}: {String(runDetails.run_summary?.practice_item_count ?? '0')}</p>
+          <p>{t('run.totalMainItems')}: {String(runDetails.run_summary?.total_main_items ?? t('common.na'))}</p>
+          <p>{t('run.expectedTrialCount')}: {String(runDetails.run_summary?.expected_trial_count ?? t('common.na'))}</p>
         </section>
       ) : null}
 
       <section className="panel">
-        <h3>Recent runs and run details</h3>
+        <h3>{t('run.recentAndDetailsTitle')}</h3>
         <p className="muted">{t('run.recentHint')}</p>
         {recentRuns.length === 0 ? <p>{t('run.emptyNoRuns')}</p> : null}
         {recentRuns.length > 0 ? (
@@ -569,12 +569,12 @@ export function RunBuilderPage({
                         <StatusBadge label={localizeStatus(t, status)} tone={runTone(status)} />
                       </td>
                       <td>{run.public_slug ? `/${run.public_slug}` : t('common.na')}</td>
-                      <td>{run.linked_stimulus_set_ids.join(', ') || t('common.na')} ({run.aggregation_mode ?? 'single'})</td>
+                      <td>{run.linked_stimulus_set_ids.join(', ') || t('common.na')} ({run.aggregation_mode ?? t('run.aggregationModeSingle')})</td>
                       <td>{run.launchability_reason}</td>
                       <td>
                         <div className="toolbar">
                           <button className="secondary-btn" onClick={() => void onDetails(runId)}>
-                            Details
+                            {t('run.detailsAction')}
                           </button>
                           <button
                             className="primary-btn"
