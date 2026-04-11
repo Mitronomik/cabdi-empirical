@@ -22,6 +22,7 @@ This repository does **not** define cloud-specific infrastructure templates; it 
    - `PILOT_RESEARCHER_SESSION_SECRET` (32+ chars)
 4. Keep `PILOT_RESEARCHER_COOKIE_SECURE=true`.
 5. Do not commit `deploy/.env`.
+- Researcher auth CSRF contract in staging/production: state-changing researcher auth requests must carry an `Origin` header that exactly matches `PILOT_RESEARCHER_CORS_ORIGINS`; missing or mismatched origins are blocked.
 
 ## 3) Initial deploy
 

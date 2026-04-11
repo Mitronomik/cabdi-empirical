@@ -95,7 +95,8 @@ Researcher auth request-safety posture:
 
 - Keep researcher web/API on the private bind (`127.0.0.1:8081`) or equivalent private network segment.
 - Configure an explicit `PILOT_RESEARCHER_CORS_ORIGINS` allow-list.
-- Auth endpoints reject cross-origin `Origin` values outside the configured researcher allow-list.
+- Auth endpoints enforce an explicit Origin contract for state-changing requests (`POST`/`PUT`/`PATCH`/`DELETE`).
+- In `PILOT_ENV=staging|production`, missing `Origin` is rejected for state-changing researcher auth requests, and non-allow-listed origins are rejected.
 - This is a minimal cookie-session posture, not enterprise IAM/SSO.
 
 ## 6) Bring-up checks (packaged posture)
