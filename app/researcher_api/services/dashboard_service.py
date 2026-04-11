@@ -51,17 +51,17 @@ class DashboardService:
             "active": 0,
             "paused": 0,
             "closed": 0,
-            "launchable": 0,
-            "not_launchable": 0,
+            "accepting_sessions_now": 0,
+            "not_accepting_sessions_now": 0,
         }
         for run in runs:
             status = str(run.get("status") or "draft")
             if status in run_counts:
                 run_counts[status] += 1
-            if bool(run.get("launchable")):
-                run_counts["launchable"] += 1
+            if bool(run.get("accepting_sessions_now")):
+                run_counts["accepting_sessions_now"] += 1
             else:
-                run_counts["not_launchable"] += 1
+                run_counts["not_accepting_sessions_now"] += 1
 
         rows = self.run_service.store.fetchall(
             """
@@ -128,6 +128,7 @@ class DashboardService:
             "public_slug": run.get("public_slug"),
             "status": run.get("status"),
             "accepting_sessions_now": bool(run.get("accepting_sessions_now")),
+            "activation_ready": bool(run.get("activation_ready")),
             "ready_to_activate": bool(run.get("ready_to_activate")),
             "activation_readiness_reason": run.get("activation_readiness_reason"),
             "launchable": bool(run.get("launchable")),
@@ -149,8 +150,8 @@ class DashboardService:
         blockers: list[dict[str, Any]] = []
         for run in runs:
             status = str(run.get("status") or "draft")
-            ready_to_activate = bool(run.get("ready_to_activate"))
-            if status not in {"draft", "paused"} or ready_to_activate:
+            activation_ready = bool(run.get("activation_ready"))
+            if status not in {"draft", "paused"} or activation_ready:
                 continue
             blockers.append(
                 {
@@ -159,7 +160,8 @@ class DashboardService:
                     "run_id": run["run_id"],
                     "public_slug": run.get("public_slug"),
                     "run_status": status,
-                    "ready_to_activate": ready_to_activate,
+                    "activation_ready": activation_ready,
+                    "ready_to_activate": activation_ready,
                     "reason": run.get("activation_readiness_reason") or "Run is not ready to activate.",
                 }
             )
@@ -168,13 +170,13 @@ class DashboardService:
     def _build_next_actions(self, focus_snapshot: dict[str, Any]) -> list[dict[str, Any]]:
         run_id = str(focus_snapshot["run_id"])
         status = str(focus_snapshot.get("status") or "")
-        ready_to_activate = bool(focus_snapshot.get("ready_to_activate"))
+        activation_ready = bool(focus_snapshot.get("activation_ready"))
         actions: list[dict[str, Any]] = [
             {"action": "inspect_run", "page": "run", "target_run_id": run_id},
             {"action": "monitor_sessions", "page": "sessions", "target_run_id": run_id},
             {"action": "open_diagnostics", "page": "diagnostics", "target_run_id": run_id},
             {"action": "download_exports", "page": "exports", "target_run_id": run_id},
         ]
-        if status in {"draft", "paused"} and ready_to_activate:
+        if status in {"draft", "paused"} and activation_ready:
             actions.insert(0, {"action": "activate_run", "page": "run", "target_run_id": run_id})
         return actions

@@ -110,7 +110,11 @@ export function DashboardPage({
           <h3>{t('dashboard.focusSnapshotTitle')}</h3>
           <div className="summary-grid">
             <SummaryCard label={t('dashboard.focus.runStatus')} value={localizeStatus(t, focusRun.status)} tone="info" />
-            <SummaryCard label={t('dashboard.focus.launchable')} value={String(Boolean(focusRun.launchable))} tone={focusRun.launchable ? 'good' : 'bad'} />
+            <SummaryCard
+              label={t('dashboard.focus.launchable')}
+              value={String(Boolean(focusRun.accepting_sessions_now))}
+              tone={focusRun.accepting_sessions_now ? 'good' : 'bad'}
+            />
             <SummaryCard label={t('dashboard.focus.activeSessions')} value={String(Number(focusCounts.in_progress ?? 0) + Number(focusCounts.paused ?? 0))} tone="warn" />
             <SummaryCard label={t('dashboard.focus.awaitingFinalSubmit')} value={String(focusCounts.awaiting_final_submit ?? 0)} tone={Number(focusCounts.awaiting_final_submit ?? 0) > 0 ? 'warn' : 'good'} />
             <SummaryCard label={t('dashboard.focus.likelyStaleSessions')} value={String(focusRun.stale_session_count ?? focusOperationalSummary.stale_session_count ?? 0)} tone={Number(focusRun.stale_session_count ?? focusOperationalSummary.stale_session_count ?? 0) > 0 ? 'bad' : 'good'} />
@@ -121,7 +125,7 @@ export function DashboardPage({
             />
           </div>
           <p className="muted">{t('dashboard.focus.publicSlug')}: {String(focusRun.public_slug ?? t('common.na'))}</p>
-          <p className="muted">{t('dashboard.focus.launchabilityReason')}: {String(focusRun.launchability_reason ?? t('common.na'))}</p>
+          <p className="muted">{t('dashboard.focus.launchabilityReason')}: {String(focusRun.activation_readiness_reason ?? focusRun.launchability_reason ?? t('common.na'))}</p>
         </section>
       ) : null}
 
