@@ -129,7 +129,6 @@ class DashboardService:
             "status": run.get("status"),
             "accepting_sessions_now": bool(run.get("accepting_sessions_now")),
             "activation_ready": bool(run.get("activation_ready")),
-            "ready_to_activate": bool(run.get("ready_to_activate")),
             "activation_readiness_reason": run.get("activation_readiness_reason"),
             "launchable": bool(run.get("launchable")),
             "launchability_reason": run.get("launchability_reason"),
@@ -161,7 +160,6 @@ class DashboardService:
                     "public_slug": run.get("public_slug"),
                     "run_status": status,
                     "activation_ready": activation_ready,
-                    "ready_to_activate": activation_ready,
                     "reason": run.get("activation_readiness_reason") or "Run is not ready to activate.",
                 }
             )

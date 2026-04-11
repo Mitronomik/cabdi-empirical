@@ -527,7 +527,6 @@ class RunService:
         )
         row["accepting_sessions_now"] = str(row.get("status") or RUN_STATUS_DRAFT) == RUN_STATUS_ACTIVE
         row["activation_ready"], row["activation_readiness_reason"] = self._compute_activation_readiness_fields(row)
-        row["ready_to_activate"] = row["activation_ready"]
         row["launchable"], row["launchability_state"], row["launchability_reason"] = self._compute_launchability_fields(
             row
         )
@@ -560,7 +559,6 @@ class RunService:
             row["stimulus_set_ids"] = row["linked_stimulus_set_ids"]
             row["accepting_sessions_now"] = str(row.get("status") or RUN_STATUS_DRAFT) == RUN_STATUS_ACTIVE
             row["activation_ready"], row["activation_readiness_reason"] = self._compute_activation_readiness_fields(row)
-            row["ready_to_activate"] = row["activation_ready"]
             row["launchable"], row["launchability_state"], row["launchability_reason"] = self._compute_launchability_fields(
                 row
             )
@@ -610,7 +608,6 @@ class RunService:
             "run_status": run["status"],
             "accepting_sessions_now": run["accepting_sessions_now"],
             "activation_ready": run["activation_ready"],
-            "ready_to_activate": run["ready_to_activate"],
             "activation_readiness_reason": run["activation_readiness_reason"],
             "launchable": run["launchable"],
             "launchability_state": run["launchability_state"],
