@@ -13,7 +13,13 @@ function runTone(status: string): 'good' | 'warn' | 'bad' | 'neutral' {
   return 'neutral';
 }
 
-export function RunBuilderPage() {
+export function RunBuilderPage({
+  initialSelectedRunId,
+  onSelectedRunIdChange,
+}: {
+  initialSelectedRunId?: string;
+  onSelectedRunIdChange?: (runId: string) => void;
+}) {
   const [response, setResponse] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -60,7 +66,9 @@ export function RunBuilderPage() {
       setRunDetails(null);
       return;
     }
-    const nextSelected = selectedRunId && parsedRuns.some((run) => run.run_id === selectedRunId) ? selectedRunId : parsedRuns[0].run_id;
+    const hasInitial = Boolean(initialSelectedRunId) && parsedRuns.some((run) => run.run_id === initialSelectedRunId);
+    const hasCurrent = selectedRunId && parsedRuns.some((run) => run.run_id === selectedRunId);
+    const nextSelected = hasInitial ? String(initialSelectedRunId) : hasCurrent ? selectedRunId : parsedRuns[0].run_id;
     setSelectedRunId(nextSelected);
   }
 
@@ -122,6 +130,16 @@ export function RunBuilderPage() {
     if (!selectedRunId) return;
     void loadRunDetails(selectedRunId);
   }, [selectedRunId]);
+
+  useEffect(() => {
+    if (!initialSelectedRunId) return;
+    setSelectedRunId((prev) => (prev === initialSelectedRunId ? prev : initialSelectedRunId));
+  }, [initialSelectedRunId]);
+
+  useEffect(() => {
+    if (!onSelectedRunIdChange) return;
+    onSelectedRunIdChange(selectedRunId);
+  }, [onSelectedRunIdChange, selectedRunId]);
 
   async function onDetails(runId: string) {
     setCopySuccess('');
