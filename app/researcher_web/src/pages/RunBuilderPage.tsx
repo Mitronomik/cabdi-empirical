@@ -228,10 +228,6 @@ export function RunBuilderPage({
     }
   }
 
-  const selectedPracticeStimulus = useMemo(
-    () => validStimulusSets.find((item) => String(item.stimulus_set_id) === selectedPracticeStimulusSetId),
-    [selectedPracticeStimulusSetId, validStimulusSets],
-  );
   const availableMainStimulusSets = useMemo(
     () => validStimulusSets.filter((item) => String(item.stimulus_set_id) !== selectedPracticeStimulusSetId),
     [selectedPracticeStimulusSetId, validStimulusSets],
@@ -245,27 +241,36 @@ export function RunBuilderPage({
     },
     [aggregationEnabled, availableMainStimulusSets, selectedMainStimulusSetIds],
   );
-  const selectedMainBanks = useMemo(
-    () => validStimulusSets.filter((item) => selectedMainSetIds.includes(String(item.stimulus_set_id))),
-    [selectedMainSetIds, validStimulusSets],
-  );
   const availablePracticeStimulusSets = useMemo(
     () => validStimulusSets.filter((item) => !selectedMainSetIds.includes(String(item.stimulus_set_id))),
     [selectedMainSetIds, validStimulusSets],
   );
-  const selectedMainTaskFamilies = useMemo(
-    () => Array.from(new Set(selectedMainBanks.map((item) => String(item.task_family || '').trim()).filter(Boolean))),
-    [selectedMainBanks],
+  const fallbackSelectedMainBanks = useMemo(
+    () => validStimulusSets.filter((item) => selectedMainSetIds.includes(String(item.stimulus_set_id))),
+    [selectedMainSetIds, validStimulusSets],
   );
-  const mainTaskFamilyMixed = selectedMainTaskFamilies.length > 1;
-  const derivedMainTaskFamily = selectedMainTaskFamilies.length === 1 ? selectedMainTaskFamilies[0] : '';
-  const taskFamilyFieldValue = mainTaskFamilyMixed
+  const fallbackSelectedMainTaskFamilies = useMemo(
+    () => Array.from(new Set(fallbackSelectedMainBanks.map((item) => String(item.task_family || '').trim()).filter(Boolean))),
+    [fallbackSelectedMainBanks],
+  );
+  const fallbackTaskFamilyValue = fallbackSelectedMainTaskFamilies.length === 1 ? fallbackSelectedMainTaskFamilies[0] : '';
+  const previewSelectionSummary = (preview?.selection_summary as Record<string, unknown> | undefined) ?? {};
+  const previewMainBanks = Array.isArray(previewSelectionSummary.main_banks)
+    ? previewSelectionSummary.main_banks as Array<Record<string, unknown>>
+    : [];
+  const previewPracticeBank = previewSelectionSummary.practice_bank as Record<string, unknown> | null | undefined;
+  const previewTaskFamilyFieldState = String(previewSelectionSummary.task_family_field_state ?? '');
+  const previewTaskFamilyValue = String(previewSelectionSummary.task_family_field_value ?? preview?.resolved_task_family ?? '').trim();
+  const previewHasMixedTaskFamilyError = Array.isArray(preview?.validation_errors)
+    && preview.validation_errors.some((item) => String(item).toLowerCase().includes('mixed task families'));
+  const taskFamilyFieldValue = previewTaskFamilyFieldState === 'mixed_invalid' || previewHasMixedTaskFamilyError
     ? t('run.taskFamilyMixedInvalid')
-    : selectedMainSetIds.length === 0
-      ? t('run.taskFamilyNoneSelected')
-      : (derivedMainTaskFamily || t('run.taskFamilyNoneSelected'));
-  const selectedMainSummary = selectedMainBanks.map((bank) => `${bank.name} (${bank.n_items})`).join(', ') || t('run.none');
-  const selectedSingleMainBank = !aggregationEnabled && selectedMainBanks.length === 1 ? selectedMainBanks[0] : null;
+    : (previewTaskFamilyValue || fallbackTaskFamilyValue || t('run.taskFamilyNoneSelected'));
+  const fallbackMainSummary = fallbackSelectedMainBanks.map((bank) => `${bank.name} (${bank.n_items})`).join(', ');
+  const selectedMainSummary = String(previewSelectionSummary.main_bank_summary_label ?? '').trim() || fallbackMainSummary || t('run.none');
+  const selectedSingleMainBank = !aggregationEnabled
+    ? (previewMainBanks.length === 1 ? previewMainBanks[0] : (fallbackSelectedMainBanks.length === 1 ? fallbackSelectedMainBanks[0] : null))
+    : null;
   const practiceItemCount = Number(preview?.practice_item_count ?? 0);
   const mainItemCount = Number(preview?.main_item_count ?? 0);
   const expectedTrialCount = Number(preview?.expected_trial_count ?? 0);
@@ -287,7 +292,7 @@ export function RunBuilderPage({
         run_name: runName.trim(),
         public_slug: publicSlug.trim() || null,
         experiment_id: experimentId,
-        task_family: derivedMainTaskFamily || null,
+        task_family: null,
         stimulus_set_ids: selectedMainSetIds,
         aggregation_mode: aggregationEnabled ? 'multi' : 'single',
         practice_stimulus_set_id: selectedPracticeStimulusSetId || null,
@@ -415,7 +420,7 @@ export function RunBuilderPage({
               <SummaryCard label={t('run.expectedTotalTrials')} value={String(expectedTrialCount)} tone="warn" />
               <SummaryCard label={t('run.aggregationModeLabel')} value={aggregationEnabled ? t('run.aggregationModeMulti') : t('run.aggregationModeSingle')} tone={aggregationEnabled ? 'warn' : 'good'} />
             </div>
-            <p>{t('run.selectedPracticeBank')}: {selectedPracticeStimulus ? `${selectedPracticeStimulus.name} (${practiceItemCount})` : t('run.none')}</p>
+            <p>{t('run.selectedPracticeBank')}: {previewPracticeBank ? `${String(previewPracticeBank.name)} (${practiceItemCount})` : t('run.none')}</p>
             <p>{t('run.selectedMainBanks')}: {selectedMainSummary}</p>
             {previewValidationErrors.length > 0 ? (
               <p role="alert" className="alert-error">{previewValidationErrors[0]}</p>
@@ -434,25 +439,18 @@ export function RunBuilderPage({
               </button>
             </div>
           </section>
-          <div className="form-row" style={{ marginTop: 8 }}>
-            {mainTaskFamilyMixed ? (
-                <p role="alert" className="alert-error">
-                  {t('run.mainBankMixedError')}
-                </p>
-              ) : null}
-          </div>
         </form>
       </section>
 
       {selectedSingleMainBank ? (
         <p>
-          {t('run.selectedStimulusSummary')}: {selectedSingleMainBank.name} ({selectedSingleMainBank.n_items} items,{' '}
-          {localizeStatus(t, selectedSingleMainBank.validation_status)}) · <KbdMono>{selectedSingleMainBank.stimulus_set_id}</KbdMono>
+          {t('run.selectedStimulusSummary')}: {String(selectedSingleMainBank.name)} ({String(selectedSingleMainBank.n_items)} items,{' '}
+          {localizeStatus(t, selectedSingleMainBank.validation_status)}) · <KbdMono>{String(selectedSingleMainBank.stimulus_set_id)}</KbdMono>
         </p>
       ) : null}
       <section className="panel">
         <h3>{t('run.preActivationSummaryTitle')}</h3>
-        <p>{t('run.practiceBankLabel')}: {selectedPracticeStimulus ? `${selectedPracticeStimulus.name} (${practiceItemCount})` : t('run.none')}</p>
+        <p>{t('run.practiceBankLabel')}: {previewPracticeBank ? `${String(previewPracticeBank.name)} (${practiceItemCount})` : t('run.none')}</p>
         <p>{t('run.mainBanksLabel')}: {selectedMainSummary}</p>
         <p>{t('run.aggregationLabel')}: {aggregationEnabled ? t('run.aggregationEnabled') : t('run.aggregationDisabled')}</p>
         <p>{t('run.totalPracticeItems')}: {practiceItemCount}</p>

@@ -157,6 +157,9 @@ def test_run_preview_returns_backend_canonical_counts_and_launchability(tmp_path
     assert body["validation_errors"] == []
     assert body["launchability_preview"]["launchable"] is True
     assert body["payload_schema_compatibility"]["compatible"] is True
+    assert body["selection_summary"]["task_family_field_state"] == "resolved"
+    assert body["selection_summary"]["task_family_field_value"] == "scam_detection"
+    assert body["selection_summary"]["main_bank_summary_label"] == "main_bank (6)"
 
 
 def test_create_run_accepts_derivable_task_family_via_shared_preview_core(tmp_path) -> None:

@@ -446,6 +446,11 @@ class RunService:
             ),
             "validation_errors": launchability_validation_errors,
         }
+        selection_summary = self._build_preview_selection_summary(
+            selected_banks=selected_banks,
+            resolved_task_family=resolved_task_family,
+            validation_errors=validation_errors,
+        )
 
         return {
             "resolved_task_family": resolved_task_family,
@@ -462,6 +467,29 @@ class RunService:
             "block_shape_warnings": block_shape_warnings,
             "run_summary": run_summary,
             "resolved_config": resolved_config,
+            "selection_summary": selection_summary,
+        }
+
+    def _build_preview_selection_summary(
+        self,
+        *,
+        selected_banks: list[dict[str, Any]],
+        resolved_task_family: str,
+        validation_errors: list[str],
+    ) -> dict[str, Any]:
+        main_banks = [bank for bank in selected_banks if str(bank.get("role") or "") == "main"]
+        practice_bank = next((bank for bank in selected_banks if str(bank.get("role") or "") == "practice"), None)
+        has_mixed_family_error = any("mixed task families" in str(message).lower() for message in validation_errors)
+        return {
+            "main_banks": main_banks,
+            "practice_bank": practice_bank,
+            "main_bank_summary_label": ", ".join(
+                f"{str(bank.get('name') or '')} ({int(bank.get('n_items') or 0)})" for bank in main_banks
+            ),
+            "task_family_field_state": (
+                "mixed_invalid" if has_mixed_family_error else ("resolved" if resolved_task_family else "unresolved")
+            ),
+            "task_family_field_value": resolved_task_family,
         }
 
     def get_run(self, run_id: str) -> dict[str, Any]:
