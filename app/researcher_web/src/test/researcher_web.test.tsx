@@ -825,6 +825,56 @@ describe('researcher auth shell', () => {
     expect(payload.task_family).toBe('claim_review');
   });
 
+  it('uses backend preview selection summary for main-bank label instead of local stimulus metadata', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith('/auth/me')) {
+          return new Response(JSON.stringify({ authenticated: true, user: { user_id: 'u1', username: 'admin', is_admin: true } }), { status: 200 });
+        }
+        if (url.endsWith('/runs/defaults')) {
+          return new Response(JSON.stringify({ experiment_id: 'exp_1', task_family: 'default_family', config_preset_options: [] }), { status: 200 });
+        }
+        if (url.endsWith('/stimuli')) {
+          return new Response(
+            JSON.stringify([{ stimulus_set_id: 'stim_claim', name: 'Stale Local Name', task_family: 'claim_review', validation_status: 'valid', n_items: 8 }]),
+            { status: 200 },
+          );
+        }
+        if (url.endsWith('/runs/preview')) {
+          return new Response(
+            JSON.stringify({
+              resolved_task_family: 'claim_review',
+              validation_errors: [],
+              operator_warnings: [],
+              practice_item_count: 0,
+              main_item_count: 8,
+              expected_trial_count: 8,
+              selection_summary: {
+                task_family_field_state: 'resolved',
+                task_family_field_value: 'claim_review',
+                main_bank_summary_label: 'Canonical Backend Name (8)',
+                main_banks: [{ stimulus_set_id: 'stim_claim', name: 'Canonical Backend Name', n_items: 8, validation_status: 'valid' }],
+              },
+            }),
+            { status: 200 },
+          );
+        }
+        if (url.endsWith('/runs')) return new Response(JSON.stringify([]), { status: 200 });
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText('Logged in as: admin');
+    await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
+
+    expect(await screen.findByText('Main bank(s): Canonical Backend Name (8)')).toBeInTheDocument();
+    expect(screen.queryByText('Main bank(s): Stale Local Name (8)')).not.toBeInTheDocument();
+  });
+
   it('multi mode derives task family and payload from selected banks only when consistent', async () => {
     const user = userEvent.setup();
     const createPayloadRef: { value: Record<string, unknown> | null } = { value: null };
