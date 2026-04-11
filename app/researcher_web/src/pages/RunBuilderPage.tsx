@@ -41,6 +41,7 @@ export function RunBuilderPage({
   const [publicSlug, setPublicSlug] = useState('');
   const [notes, setNotes] = useState('');
   const [preview, setPreview] = useState<Record<string, unknown> | null>(null);
+  const [previewRefreshError, setPreviewRefreshError] = useState('');
   const { t } = useLocale();
   const latestRunDetailsRequest = useRef(0);
   const latestPreviewRequest = useRef(0);
@@ -274,7 +275,11 @@ export function RunBuilderPage({
 
   async function refreshPreview() {
     const experimentId = String(defaults?.experiment_id ?? '').trim();
-    if (!experimentId) return;
+    if (!experimentId) {
+      setPreview(null);
+      setPreviewRefreshError('');
+      return;
+    }
     const requestId = latestPreviewRequest.current + 1;
     latestPreviewRequest.current = requestId;
     try {
@@ -291,9 +296,13 @@ export function RunBuilderPage({
       });
       if (latestPreviewRequest.current === requestId) {
         setPreview(nextPreview);
+        setPreviewRefreshError('');
       }
-    } catch {
-      // preview errors are surfaced from response payload; network failures are non-fatal for builder inputs
+    } catch (err) {
+      if (latestPreviewRequest.current === requestId) {
+        setPreview(null);
+        setPreviewRefreshError(t('run.previewUnavailable').replace('{detail}', localizeOperatorError(t, err)));
+      }
     }
   }
 
@@ -410,6 +419,9 @@ export function RunBuilderPage({
             <p>Selected main banks: {selectedMainSummary}</p>
             {previewValidationErrors.length > 0 ? (
               <p role="alert" className="alert-error">{previewValidationErrors[0]}</p>
+            ) : null}
+            {previewRefreshError ? (
+              <p role="alert" className="alert-error">{previewRefreshError}</p>
             ) : null}
             {previewWarnings.length > 0 ? <p className="muted">Operator warning: {previewWarnings.join('; ')}</p> : null}
             {previewBlockWarnings.length > 0 ? <p className="muted">Block warning: {previewBlockWarnings.join('; ')}</p> : null}

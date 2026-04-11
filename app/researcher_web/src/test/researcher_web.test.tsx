@@ -1006,6 +1006,61 @@ describe('researcher auth shell', () => {
     expect(createSpy).not.toHaveBeenCalled();
   });
 
+  it('surfaces preview endpoint failures and clears stale preview values', async () => {
+    const user = userEvent.setup();
+    let previewCalls = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith('/auth/me')) {
+          return new Response(JSON.stringify({ authenticated: true, user: { user_id: 'u1', username: 'admin', is_admin: true } }), { status: 200 });
+        }
+        if (url.endsWith('/runs/defaults')) {
+          return new Response(JSON.stringify({ experiment_id: 'exp_1', task_family: 'scam_detection', config_preset_options: [] }), { status: 200 });
+        }
+        if (url.endsWith('/stimuli')) {
+          return new Response(
+            JSON.stringify([{ stimulus_set_id: 'stim_a', name: 'Main A', task_family: 'scam_detection', validation_status: 'valid', n_items: 10 }]),
+            { status: 200 },
+          );
+        }
+        if (url.endsWith('/runs/preview')) {
+          previewCalls += 1;
+          if (previewCalls === 1) {
+            return new Response(
+              JSON.stringify({
+                resolved_task_family: 'scam_detection',
+                validation_errors: [],
+                operator_warnings: [],
+                practice_item_count: 1,
+                main_item_count: 10,
+                expected_trial_count: 11,
+              }),
+              { status: 200 },
+            );
+          }
+          return new Response(JSON.stringify({ detail: 'preview backend unavailable' }), { status: 503 });
+        }
+        if (url.endsWith('/runs')) return new Response(JSON.stringify([]), { status: 200 });
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText('Logged in as: admin');
+    await user.click(screen.getByRole('button', { name: 'Step 2: Create & Control Runs' }));
+
+    expect(await screen.findByText('Expected trial count: 11')).toBeInTheDocument();
+
+    await user.type(screen.getByPlaceholderText('run name'), '-updated');
+
+    const alerts = await screen.findAllByRole('alert');
+    expect(alerts.some((item) => item.textContent?.includes('Run preview is currently unavailable'))).toBe(true);
+    expect(alerts.some((item) => item.textContent?.includes('preview backend unavailable'))).toBe(true);
+    await waitFor(() => expect(screen.getByText('Expected trial count: 0')).toBeInTheDocument());
+  });
+
   it('shows explicit unset task family and blocks submit when no main bank is selected', async () => {
     const user = userEvent.setup();
     const createSpy = vi.fn();
