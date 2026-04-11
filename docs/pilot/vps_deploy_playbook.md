@@ -5,16 +5,21 @@ It is VPS-oriented (single operator + Docker Compose) and keeps explicit public/
 
 ## 1) Deployment boundary model
 
-- **Public participant surface**: `http://<host>:80` on `edge_proxy` (`/`, `/api/*`, `/health`, `/ready`).
-- **Private researcher surface**: `http://127.0.0.1:8081` on `edge_proxy` (`/`, `/admin/api/*`, `/health`, `/ready`).
-- **Database**: internal Compose network only (`postgres:5432`).
-- **TLS termination**: done by an outer host-level reverse proxy (for example Nginx/Caddy/Traefik) that forwards to `127.0.0.1:80` and `127.0.0.1:8081`.
+Supported model in this repository: **external TLS termination (required)**.
+
+- **Compose exposure on VPS host**:
+  - participant edge: `127.0.0.1:8080 -> edge_proxy:8080`
+  - researcher edge: `127.0.0.1:8081 -> edge_proxy:8081`
+- **Public participant surface (user-facing)**: HTTPS on host edge (for example `https://participant.example.org`) forwarded to `http://127.0.0.1:8080` (`/`, `/api/*`, `/health`, `/ready`).
+- **Private researcher surface (operator-facing)**: HTTPS on private edge only (for example VPN/private segment `https://researcher.internal.example.org`) forwarded to `http://127.0.0.1:8081` (`/`, `/admin/api/*`, `/health`, `/ready`).
+- **Database**: internal Compose network only (`postgres:5432`), never host-published.
+- **Not supported by this stack**: in-container TLS cert management/ACME inside `edge_proxy`.
 
 This repository does **not** define cloud-specific infrastructure templates; it defines a VPS-friendly service posture only.
 
 ## 2) HTTPS and secret posture
 
-1. Terminate HTTPS at host edge (outside Compose).
+1. Terminate HTTPS at host edge (outside Compose) and forward internally to `127.0.0.1:8080` (participant) and `127.0.0.1:8081` (researcher).
 2. Keep researcher endpoint private (VPN/SSH tunnel/private segment); do not publish `8081` to the public internet.
 3. Use only strong non-placeholder secrets in `deploy/.env`:
    - `POSTGRES_PASSWORD`
@@ -42,8 +47,8 @@ docker compose --env-file deploy/.env -f deploy/compose.staging.yml ps
 ## 4) Health/readiness checks
 
 ```bash
-curl -fsS http://127.0.0.1/health
-curl -fsS http://127.0.0.1/ready
+curl -fsS http://127.0.0.1:8080/health
+curl -fsS http://127.0.0.1:8080/ready
 curl -fsS http://127.0.0.1:8081/health
 curl -fsS http://127.0.0.1:8081/ready
 ```
@@ -120,7 +125,7 @@ python scripts/pilot_restore.py \
 python scripts/pilot_prelaunch_gate.py \
   --db-target "$PILOT_DB_URL" \
   --run-slug "<active-run-slug>" \
-  --participant-base-url "http://127.0.0.1" \
+  --participant-base-url "http://127.0.0.1:8080" \
   --researcher-base-url "http://127.0.0.1:8081" \
   --researcher-username "${PILOT_RESEARCHER_USERNAME:-admin}" \
   --researcher-password "$PILOT_RESEARCHER_PASSWORD" \
@@ -131,4 +136,3 @@ python scripts/pilot_prelaunch_gate.py \
 Decision:
 - any blocker => NO-GO;
 - zero blockers + acknowledged warnings => GO allowed.
-

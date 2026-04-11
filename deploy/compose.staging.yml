@@ -103,7 +103,9 @@ services:
     volumes:
       - ./nginx/edge.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
-      - "80:8080"
+      # TLS terminates at a host-level reverse proxy outside this Compose stack.
+      # Keep edge_proxy loopback-bound and expose HTTPS publicly at the host edge.
+      - "127.0.0.1:8080:8080"
       - "127.0.0.1:8081:8081"
     logging:
       driver: json-file

@@ -58,7 +58,7 @@ docker compose --env-file deploy/.env -f deploy/compose.staging.yml up --build -
 
 ### Packaged topology (trust boundary)
 
-- **Public participant surface**: `edge_proxy` listener on `:80`
+- **Host-loopback participant edge**: `edge_proxy` listener on `127.0.0.1:8080`
   - participant web (`/`)
   - participant API (`/api/*`)
   - participant liveness (`/health`) and readiness (`/ready`)
@@ -68,7 +68,7 @@ docker compose --env-file deploy/.env -f deploy/compose.staging.yml up --build -
   - researcher liveness/readiness (`/health`, `/ready`) on private bind only
 - **Database**: Postgres internal-only service (`postgres:5432`) used by both APIs.
 
-TLS is expected to terminate at an outer reverse proxy boundary (for example host-level Nginx/Caddy/ALB). The application stack is launched with proxy-header support.
+TLS is expected to terminate at an outer reverse proxy boundary (for example host-level Nginx/Caddy/ALB). The application stack is launched with proxy-header support and does not manage TLS certificates in-container.
 For explicit VPS operator steps, use `docs/pilot/vps_deploy_playbook.md`.
 
 ## 5) Deployment configuration requirements
@@ -102,9 +102,9 @@ Researcher auth request-safety posture:
 ## 6) Bring-up checks (packaged posture)
 
 ```bash
-curl -fsS http://127.0.0.1/health
-curl -fsS http://127.0.0.1/ready
-curl -I http://127.0.0.1/
+curl -fsS http://127.0.0.1:8080/health
+curl -fsS http://127.0.0.1:8080/ready
+curl -I http://127.0.0.1:8080/
 curl -I http://127.0.0.1:8081/
 curl -fsS http://127.0.0.1:8081/health
 curl -fsS http://127.0.0.1:8081/ready
@@ -245,7 +245,7 @@ Run this only against staging / pre-launch environment with a known active run s
 python scripts/pilot_prelaunch_gate.py \
   --db-target "$PILOT_DB_URL" \
   --run-slug "<active-run-slug>" \
-  --participant-base-url "http://127.0.0.1" \
+  --participant-base-url "http://127.0.0.1:8080" \
   --researcher-base-url "http://127.0.0.1:8081" \
   --researcher-username "${PILOT_RESEARCHER_USERNAME:-admin}" \
   --researcher-password "$PILOT_RESEARCHER_PASSWORD" \
@@ -287,7 +287,7 @@ When packaged services are already running (for example through `docker compose 
 python scripts/pilot_prelaunch_gate.py \
   --db-target "$PILOT_DB_URL" \
   --run-slug "<active-run-slug>" \
-  --participant-base-url "http://127.0.0.1" \
+  --participant-base-url "http://127.0.0.1:8080" \
   --researcher-base-url "http://127.0.0.1:8081" \
   --researcher-username "${PILOT_RESEARCHER_USERNAME:-admin}" \
   --researcher-password "$PILOT_RESEARCHER_PASSWORD" \
