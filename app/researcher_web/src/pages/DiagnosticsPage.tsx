@@ -79,6 +79,8 @@ export function DiagnosticsPage({
   const modelWrongShare = ((data?.model_wrong_share as Record<string, unknown> | undefined) ?? {}) as Record<string, unknown>;
   const runLevelFlags = (Array.isArray(data?.run_level_flags) ? data?.run_level_flags : []) as Array<Record<string, unknown>>;
   const cohortLevelFlags = (Array.isArray(data?.cohort_level_flags) ? data?.cohort_level_flags : []) as Array<Record<string, unknown>>;
+  const budgetToleranceFlags = (Array.isArray(data?.budget_tolerance_flags) ? data?.budget_tolerance_flags : []) as Array<Record<string, unknown>>;
+  const warningMessages = (Array.isArray(data?.warnings) ? data?.warnings : []) as unknown[];
   const issues = useMemo(() => buildDiagnosticIssues(data), [data]);
   const groupedIssues = useMemo(() => {
     const groups = new Map<string, { label: string; items: typeof issues }>();
@@ -227,9 +229,28 @@ export function DiagnosticsPage({
                   </p>
                 ))}
               </article>
+              <article className="info-card">
+                <h4>{t('diagnostics.warningMessagesTitle')}</h4>
+                {warningMessages.length === 0 ? <p className="muted">{t('common.na')}</p> : null}
+                {warningMessages.map((warning, index) => (
+                  <p key={`warning-message-${index}`}>{String(warning)}</p>
+                ))}
+              </article>
+              <article className="info-card">
+                <h4>{t('diagnostics.budgetFlagsTitle')}</h4>
+                {budgetToleranceFlags.length === 0 ? <p className="muted">{t('common.na')}</p> : null}
+                {budgetToleranceFlags.map((flag, index) => (
+                  <p key={`budget-flag-${index}`}>
+                    <StatusBadge label={String(flag.severity ?? 'warning')} tone={String(flag.severity) === 'error' ? 'bad' : 'warn'} />{' '}
+                    <KbdMono>{String(flag.kind ?? 'unknown')}</KbdMono>
+                    {flag.condition ? ` · ${t('diagnostics.conditionLabel')}: ${String(flag.condition)}` : ''}: {String(flag.message ?? t('common.na'))}
+                  </p>
+                ))}
+              </article>
             </div>
             <details className="details-panel">
-              <summary>{t('diagnostics.detailsTitle')}</summary>
+              <summary>{t('diagnostics.technicalDetailsTitle')}</summary>
+              <p className="muted">{t('diagnostics.technicalDetailsHint')}</p>
               <pre>{JSON.stringify(data, null, 2)}</pre>
             </details>
           </section>

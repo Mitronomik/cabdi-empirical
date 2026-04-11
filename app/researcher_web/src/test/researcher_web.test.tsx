@@ -1524,7 +1524,15 @@ describe('researcher auth shell', () => {
           return new Response(JSON.stringify([{ run_id: 'run_diag', run_name: 'Diagnostics run', public_slug: 'diag', status: 'active', launchable: true }]), { status: 200 });
         }
         if (url.endsWith('/runs/run_diag/diagnostics')) {
-          return new Response(JSON.stringify({ session_count_total: 0, trial_count_total: 0 }), { status: 200 });
+          return new Response(
+            JSON.stringify({
+              session_count_total: 0,
+              trial_count_total: 0,
+              warnings: ['Missing summary rows for one session.'],
+              budget_tolerance_flags: [{ severity: 'warning', kind: 'missing_reference', condition: 'high_risk', message: 'No contract reference found.' }],
+            }),
+            { status: 200 },
+          );
         }
         return new Response(JSON.stringify([]), { status: 200 });
       }),
@@ -1537,6 +1545,12 @@ describe('researcher auth shell', () => {
     expect(screen.getByRole('combobox')).toHaveValue('run_diag');
     await user.click(screen.getByRole('button', { name: 'Load Diagnostics' }));
     await waitFor(() => expect(fetchCalls.some((url) => url.endsWith('/runs/run_diag/diagnostics'))).toBe(true));
+    expect(await screen.findByRole('heading', { name: 'Operator view' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Warning messages' })).toBeInTheDocument();
+    expect(screen.getAllByText('Missing summary rows for one session.').length).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { name: 'Budget tolerance flags' })).toBeInTheDocument();
+    expect(screen.getByText('missing_reference')).toBeInTheDocument();
+    expect(screen.getByText('Technical/debug payload (JSON)')).toBeInTheDocument();
   });
 
   it('localizes canonical dashboard action keys in EN and RU without backend label fallback', async () => {
