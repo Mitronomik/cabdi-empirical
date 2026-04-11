@@ -505,6 +505,8 @@ def test_dashboard_endpoint_returns_canonical_global_and_focus_snapshots(tmp_pat
     assert focus["run_id"] == run_id
     assert focus["public_slug"] == run_slug
     assert focus["status"] == "active"
+    assert focus["accepting_sessions_now"] is True
+    assert focus["ready_to_activate"] is False
     assert isinstance(focus["stale_session_count"], int)
     assert isinstance(focus["operational_summary"], dict)
     assert "export_availability" in focus
@@ -531,9 +533,9 @@ def test_dashboard_endpoint_returns_canonical_global_and_focus_snapshots(tmp_pat
     assert all("label" not in action for action in actions)
 
 
-def test_dashboard_next_actions_include_activate_for_launchable_draft_snapshot():
+def test_dashboard_next_actions_include_activate_for_ready_draft_snapshot():
     dashboard_service = DashboardService.__new__(DashboardService)
-    actions = dashboard_service._build_next_actions({"run_id": "run_1", "status": "draft", "launchable": True})
+    actions = dashboard_service._build_next_actions({"run_id": "run_1", "status": "draft", "ready_to_activate": True})
     assert [action["action"] for action in actions] == [
         "activate_run",
         "inspect_run",
@@ -543,6 +545,139 @@ def test_dashboard_next_actions_include_activate_for_launchable_draft_snapshot()
     ]
     assert all(action["target_run_id"] == "run_1" for action in actions)
     assert all("label" not in action for action in actions)
+
+
+def test_dashboard_next_actions_include_activate_for_ready_paused_snapshot():
+    dashboard_service = DashboardService.__new__(DashboardService)
+    actions = dashboard_service._build_next_actions({"run_id": "run_2", "status": "paused", "ready_to_activate": True})
+    assert [action["action"] for action in actions] == [
+        "activate_run",
+        "inspect_run",
+        "monitor_sessions",
+        "open_diagnostics",
+        "download_exports",
+    ]
+    assert all(action["target_run_id"] == "run_2" for action in actions)
+    assert all("label" not in action for action in actions)
+
+
+def test_dashboard_blockers_only_include_non_ready_draft_or_paused_runs():
+    dashboard_service = DashboardService.__new__(DashboardService)
+    blockers = dashboard_service._build_blockers(
+        [
+            {"run_id": "run_draft_ok", "status": "draft", "ready_to_activate": True},
+            {"run_id": "run_paused_ok", "status": "paused", "ready_to_activate": True},
+            {"run_id": "run_active", "status": "active", "ready_to_activate": False},
+            {"run_id": "run_closed", "status": "closed", "ready_to_activate": False},
+            {
+                "run_id": "run_draft_bad",
+                "status": "draft",
+                "ready_to_activate": False,
+                "activation_readiness_reason": "run.config must be a non-empty object",
+            },
+        ]
+    )
+
+    assert len(blockers) == 1
+    blocker = blockers[0]
+    assert blocker["run_id"] == "run_draft_bad"
+    assert blocker["ready_to_activate"] is False
+    assert blocker["reason"] == "run.config must be a non-empty object"
+
+
+def test_dashboard_focus_snapshot_marks_draft_invalid_as_blocker_and_no_activate_action(tmp_path):
+    db_path = str(tmp_path / "pilot.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    _login_researcher(researcher)
+
+    stimulus_set_id = _upload_stimulus(researcher)
+    create_run = researcher.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "dashboard invalid draft run",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"n_blocks": 1},
+            "stimulus_set_ids": [stimulus_set_id],
+        },
+    )
+    run_id = create_run.json()["run_id"]
+    researcher.app.state.store.execute(
+        "UPDATE researcher_runs SET config_json = ? WHERE run_id = ?",
+        ("{}", run_id),
+    )
+
+    dashboard_res = researcher.get(f"/admin/api/v1/dashboard?focus_run_id={run_id}")
+    assert dashboard_res.status_code == 200
+    body = dashboard_res.json()
+    focus = body["focus_run_snapshot"]
+    assert focus["status"] == "draft"
+    assert focus["accepting_sessions_now"] is False
+    assert focus["ready_to_activate"] is False
+    assert "run.config must be a non-empty object" in focus["activation_readiness_reason"]
+    assert all(action["action"] != "activate_run" for action in body["next_actions"])
+    assert any(
+        blocker["run_id"] == run_id and "run.config must be a non-empty object" in blocker["reason"]
+        for blocker in body["blockers"]
+    )
+
+
+def test_dashboard_focus_snapshot_marks_draft_ready_for_activation(tmp_path):
+    db_path = str(tmp_path / "pilot.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    _login_researcher(researcher)
+    stimulus_set_id = _upload_stimulus(researcher)
+    create_run = researcher.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "dashboard draft ready run",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"n_blocks": 1},
+            "stimulus_set_ids": [stimulus_set_id],
+        },
+    )
+    run_id = create_run.json()["run_id"]
+
+    dashboard_res = researcher.get(f"/admin/api/v1/dashboard?focus_run_id={run_id}")
+    assert dashboard_res.status_code == 200
+    body = dashboard_res.json()
+    focus = body["focus_run_snapshot"]
+    assert focus["status"] == "draft"
+    assert focus["accepting_sessions_now"] is False
+    assert focus["ready_to_activate"] is True
+    assert any(action["action"] == "activate_run" for action in body["next_actions"])
+    assert all(blocker["run_id"] != run_id for blocker in body["blockers"])
+
+
+def test_dashboard_focus_snapshot_marks_paused_ready_for_activation(tmp_path):
+    db_path = str(tmp_path / "pilot.sqlite3")
+    researcher = TestClient(create_researcher_app(db_path))
+    _login_researcher(researcher)
+    stimulus_set_id = _upload_stimulus(researcher)
+    create_run = researcher.post(
+        "/admin/api/v1/runs",
+        json={
+            "run_name": "dashboard paused ready run",
+            "experiment_id": "toy_v1",
+            "task_family": "scam_detection",
+            "config": {"n_blocks": 1},
+            "stimulus_set_ids": [stimulus_set_id],
+        },
+    )
+    run_id = create_run.json()["run_id"]
+    assert researcher.post(f"/admin/api/v1/runs/{run_id}/activate").status_code == 200
+    assert researcher.post(f"/admin/api/v1/runs/{run_id}/pause").status_code == 200
+
+    dashboard_res = researcher.get(f"/admin/api/v1/dashboard?focus_run_id={run_id}")
+    assert dashboard_res.status_code == 200
+    body = dashboard_res.json()
+    focus = body["focus_run_snapshot"]
+    assert focus["status"] == "paused"
+    assert focus["accepting_sessions_now"] is False
+    assert focus["ready_to_activate"] is True
+    assert any(action["action"] == "activate_run" for action in body["next_actions"])
+    assert all(blocker["run_id"] != run_id for blocker in body["blockers"])
 
 
 def test_stale_session_truth_is_backend_canonical_across_read_models(tmp_path):
